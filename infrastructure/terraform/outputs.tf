@@ -52,4 +52,3 @@ output "firebase_app_id" {
   description = "Firebase App ID"
   value       = module.firebase.app_id
 }
-# trigger
