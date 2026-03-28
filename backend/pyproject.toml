@@ -58,6 +58,9 @@ target-version = "py312"
 line-length = 100
 extend-exclude = ["alembic/versions"]
 
+[tool.ruff.lint.per-file-ignores]
+"app/conversation/persona.py" = ["E501"]  # Prompt templates have natural long lines
+
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B"]
 ignore = ["B008"]  # Depends() in function defaults is standard FastAPI pattern
