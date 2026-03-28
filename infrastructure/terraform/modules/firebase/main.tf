@@ -59,3 +59,4 @@ resource "google_secret_manager_secret_version" "firebase_web_config" {
     appId             = google_firebase_web_app.dashboard.app_id
   })
 }
+# Firebase module added
