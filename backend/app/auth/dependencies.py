@@ -89,7 +89,29 @@ async def get_current_caregiver(
     db: AsyncSession = Depends(get_db),
 ) -> CaregiverContext:
     """Resolve the authenticated caregiver from a Firebase ID token with
-    custom claims (contact_id, user_id, tier)."""
+    custom claims (contact_id, user_id, tier).
+
+    In development/test environments, if no Authorization header is provided
+    a mock caregiver context is returned using the first trusted contact.
+    """
+    # Dev/test bypass: skip auth when no header is provided
+    if (
+        settings.environment in ("development", "test")
+        and authorization is None
+    ):
+        result = await db.execute(select(TrustedContact).limit(1))
+        contact = result.scalar_one_or_none()
+        if contact is None:
+            raise HTTPException(
+                status_code=404,
+                detail="No mock caregiver in dev database",
+            )
+        return CaregiverContext(
+            contact=contact,
+            user_id=contact.user_id,
+            tier=contact.tier,
+        )
+
     decoded = await _extract_bearer_token(authorization)
 
     contact_id = decoded.get("contact_id")
@@ -153,7 +175,22 @@ async def get_current_admin(
     authorization: str | None = Header(None, alias="Authorization"),
     db: AsyncSession = Depends(get_db),
 ) -> AdminUser:
-    """Resolve the authenticated admin from a Firebase ID token."""
+    """Resolve the authenticated admin from a Firebase ID token.
+
+    In development/test environments, if no Authorization header is provided
+    the first admin user in the database is returned as a convenience mock.
+    """
+    # Dev/test bypass: skip auth when no header is provided
+    if (
+        settings.environment in ("development", "test")
+        and authorization is None
+    ):
+        result = await db.execute(select(AdminUser).limit(1))
+        admin = result.scalar_one_or_none()
+        if admin is None:
+            raise HTTPException(status_code=404, detail="No mock admin available in dev database")
+        return admin
+
     decoded = await _extract_bearer_token(authorization)
 
     email: str | None = decoded.get("email")
