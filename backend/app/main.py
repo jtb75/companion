@@ -3,6 +3,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+# Register event handlers
+import app.events  # noqa: F401
 from app.api.admin import router as admin_router
 from app.api.caregiver import router as caregiver_router
 from app.api.pipeline import router as pipeline_router

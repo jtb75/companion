@@ -3,6 +3,8 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.events.publisher import event_publisher
+from app.events.schemas import DocumentReceivedPayload
 from app.models.document import Document
 
 
@@ -65,4 +67,17 @@ async def create_document(
     document = Document(user_id=user_id, **data)
     db.add(document)
     await db.flush()
+
+    await event_publisher.publish(
+        "document.received",
+        user_id=user_id,
+        payload=DocumentReceivedPayload(
+            document_id=document.id,
+            source_channel=getattr(
+                document.source_channel, "value",
+                str(document.source_channel),
+            ),
+        ),
+    )
+
     return document

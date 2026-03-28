@@ -3,6 +3,8 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.events.publisher import event_publisher
+from app.events.schemas import ConfigUpdatedPayload
 from app.models.system_config import ConfigAuditLog, SystemConfig
 
 
@@ -68,6 +70,20 @@ async def update_config(
     )
     db.add(audit_entry)
     await db.flush()
+
+    await event_publisher.publish(
+        "config.updated",
+        user_id=UUID(int=0),  # system event, no user context
+        payload=ConfigUpdatedPayload(
+            config_id=config.id,
+            category=getattr(config.category, "value", str(config.category)),
+            key=config.key,
+            old_value={"value": old_value},
+            new_value={"value": data["value"]},
+            changed_by=changed_by,
+        ),
+    )
+
     return config
 
 

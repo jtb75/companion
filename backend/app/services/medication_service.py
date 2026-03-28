@@ -4,6 +4,8 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.events.publisher import event_publisher
+from app.events.schemas import MedicationConfirmedPayload
 from app.models.medication import Medication, MedicationConfirmation
 
 
@@ -76,6 +78,18 @@ async def confirm_dose(
     )
     db.add(confirmation)
     await db.flush()
+
+    await event_publisher.publish(
+        "medication.confirmed",
+        user_id=user_id,
+        payload=MedicationConfirmedPayload(
+            confirmation_id=confirmation.id,
+            medication_id=medication_id,
+            scheduled_at=confirmation.scheduled_at,
+            confirmed_at=confirmation.confirmed_at,
+        ),
+    )
+
     return confirmation
 
 
