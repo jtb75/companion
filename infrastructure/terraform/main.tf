@@ -109,6 +109,12 @@ module "cicd" {
   cicd_service_account_id = data.google_service_account.cicd.name
 }
 
+module "firebase" {
+  source      = "./modules/firebase"
+  project_id  = var.project_id
+  environment = var.environment
+}
+
 module "monitoring" {
   source               = "./modules/monitoring"
   project_id           = var.project_id

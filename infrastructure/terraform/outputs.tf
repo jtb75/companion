@@ -37,3 +37,18 @@ output "cicd_service_account_email" {
   description = "CI/CD service account email (for GitHub Actions auth)"
   value       = data.google_service_account.cicd.email
 }
+
+output "firebase_api_key" {
+  description = "Firebase API key (public, used in web dashboard)"
+  value       = module.firebase.api_key
+}
+
+output "firebase_auth_domain" {
+  description = "Firebase Auth domain"
+  value       = module.firebase.auth_domain
+}
+
+output "firebase_app_id" {
+  description = "Firebase App ID"
+  value       = module.firebase.app_id
+}
