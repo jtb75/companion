@@ -84,8 +84,7 @@ module "compute" {
   anthropic_api_key_secret_id    = module.secrets.anthropic_api_key_secret_id
   openai_api_key_secret_id       = module.secrets.openai_api_key_secret_id
   firebase_credentials_secret_id = module.secrets.firebase_credentials_secret_id
-  redis_host                     = module.database.redis_host
-  redis_port                     = module.database.redis_port
+  redis_url_secret_id            = module.secrets.redis_url_secret_id
   documents_bucket               = module.storage.documents_bucket_name
   artifact_registry_repo         = module.storage.artifact_registry_repo
   backend_image                  = var.backend_image
@@ -95,6 +94,19 @@ module "compute" {
   web_min_instances              = var.web_min_instances
   backend_cpu                    = var.backend_cpu
   backend_memory                 = var.backend_memory
+}
+
+# Reference the existing CI/CD service account (created by bootstrap script)
+data "google_service_account" "cicd" {
+  account_id = "companion-cicd"
+  project    = var.project_id
+}
+
+module "cicd" {
+  source                  = "./modules/cicd"
+  project_id              = var.project_id
+  github_repo             = var.github_repo
+  cicd_service_account_id = data.google_service_account.cicd.name
 }
 
 module "monitoring" {

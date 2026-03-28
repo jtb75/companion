@@ -80,3 +80,9 @@ variable "notification_email" {
   description = "Email address for monitoring alert notifications"
   type        = string
 }
+
+variable "github_repo" {
+  description = "GitHub repository in owner/repo format"
+  type        = string
+  default     = "jtb75/companion"
+}

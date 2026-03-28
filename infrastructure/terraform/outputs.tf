@@ -27,3 +27,13 @@ output "artifact_registry_repo" {
   description = "Artifact Registry Docker repository path"
   value       = module.storage.artifact_registry_repo
 }
+
+output "wif_provider" {
+  description = "Workload Identity Federation provider (for GitHub Actions auth)"
+  value       = module.cicd.workload_identity_provider
+}
+
+output "cicd_service_account_email" {
+  description = "CI/CD service account email (for GitHub Actions auth)"
+  value       = data.google_service_account.cicd.email
+}

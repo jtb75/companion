@@ -43,14 +43,9 @@ variable "firebase_credentials_secret_id" {
   type        = string
 }
 
-variable "redis_host" {
-  description = "Memorystore Redis host IP"
+variable "redis_url_secret_id" {
+  description = "Secret Manager secret ID for Redis URL"
   type        = string
-}
-
-variable "redis_port" {
-  description = "Memorystore Redis port"
-  type        = number
 }
 
 variable "documents_bucket" {

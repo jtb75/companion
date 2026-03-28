@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 env:
   GCP_REGION: us-central1
@@ -44,7 +45,8 @@ jobs:
       - id: auth
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.STAGING_GCP_SA_KEY }}
+          workload_identity_provider: ${{ secrets.STAGING_WIF_PROVIDER }}
+          service_account: ${{ secrets.STAGING_SA_EMAIL }}
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.9.0"
@@ -79,7 +81,8 @@ jobs:
       - id: auth
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.STAGING_GCP_SA_KEY }}
+          workload_identity_provider: ${{ secrets.STAGING_WIF_PROVIDER }}
+          service_account: ${{ secrets.STAGING_SA_EMAIL }}
       - uses: google-github-actions/setup-gcloud@v2
       - name: Configure Docker
         run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev
@@ -100,7 +103,8 @@ jobs:
       - id: auth
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.STAGING_GCP_SA_KEY }}
+          workload_identity_provider: ${{ secrets.STAGING_WIF_PROVIDER }}
+          service_account: ${{ secrets.STAGING_SA_EMAIL }}
       - uses: google-github-actions/setup-gcloud@v2
       - name: Run Alembic migration
         run: |
@@ -117,7 +121,8 @@ jobs:
       - id: auth
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.STAGING_GCP_SA_KEY }}
+          workload_identity_provider: ${{ secrets.STAGING_WIF_PROVIDER }}
+          service_account: ${{ secrets.STAGING_SA_EMAIL }}
       - uses: google-github-actions/setup-gcloud@v2
       - name: Deploy to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v2
@@ -151,7 +156,8 @@ jobs:
       - id: auth
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.STAGING_GCP_SA_KEY }}
+          workload_identity_provider: ${{ secrets.STAGING_WIF_PROVIDER }}
+          service_account: ${{ secrets.STAGING_SA_EMAIL }}
       - uses: google-github-actions/setup-gcloud@v2
       - name: Configure Docker
         run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev
@@ -172,7 +178,8 @@ jobs:
       - id: auth
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.STAGING_GCP_SA_KEY }}
+          workload_identity_provider: ${{ secrets.STAGING_WIF_PROVIDER }}
+          service_account: ${{ secrets.STAGING_SA_EMAIL }}
       - uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: companion-${{ env.ENVIRONMENT }}-web

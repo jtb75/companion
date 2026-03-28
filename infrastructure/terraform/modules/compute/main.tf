@@ -88,12 +88,17 @@ resource "google_cloud_run_v2_service" "backend" {
         value = var.documents_bucket
       }
 
+      # Secret environment variables
       env {
-        name  = "COMPANION_REDIS_URL"
-        value = "redis://${var.redis_host}:${var.redis_port}/0"
+        name = "COMPANION_REDIS_URL"
+        value_source {
+          secret_key_ref {
+            secret  = var.redis_url_secret_id
+            version = "latest"
+          }
+        }
       }
 
-      # Secret environment variables
       env {
         name = "COMPANION_DATABASE_URL"
         value_source {

@@ -1,4 +1,32 @@
-# GCS bucket for document storage
+# KMS keyring and key for document encryption (CMEK)
+resource "google_kms_key_ring" "companion" {
+  name     = "companion-${var.environment}"
+  project  = var.project_id
+  location = var.region
+}
+
+resource "google_kms_crypto_key" "documents" {
+  name            = "companion-${var.environment}-documents"
+  key_ring        = google_kms_key_ring.companion.id
+  rotation_period = "7776000s" # 90 days
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+# Grant GCS service agent permission to use the KMS key
+data "google_storage_project_service_account" "gcs" {
+  project = var.project_id
+}
+
+resource "google_kms_crypto_key_iam_member" "gcs_encrypt" {
+  crypto_key_id = google_kms_crypto_key.documents.id
+  role          = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+  member        = "serviceAccount:${data.google_storage_project_service_account.gcs.email_address}"
+}
+
+# GCS bucket for document storage — encrypted with CMEK
 resource "google_storage_bucket" "documents" {
   name                        = "companion-${var.environment}-documents"
   project                     = var.project_id
@@ -28,11 +56,11 @@ resource "google_storage_bucket" "documents" {
     }
   }
 
-  # Using Google-managed encryption key by default.
-  # To use CMEK, uncomment and configure:
-  # encryption {
-  #   default_kms_key_name = google_kms_crypto_key.documents.id
-  # }
+  encryption {
+    default_kms_key_name = google_kms_crypto_key.documents.id
+  }
+
+  depends_on = [google_kms_crypto_key_iam_member.gcs_encrypt]
 }
 
 # Artifact Registry Docker repository
