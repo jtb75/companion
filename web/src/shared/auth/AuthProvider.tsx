@@ -50,6 +50,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
 
+    // Skip if already authorized (avoid re-check on token refresh)
+    if (authorized !== null) return
+
     // Check authorization
     const checkAuth = async () => {
       try {
@@ -74,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
     checkAuth()
-  }, [user])
+  }, [user, authorized])
 
   const loginWithGoogle = async () => {
     await signInWithPopup(auth, googleProvider)
