@@ -15,7 +15,7 @@ on:
 
 env:
   GCP_REGION: us-central1
-  GCP_PROJECT_ID: companion-prod
+  GCP_PROJECT_ID: companion-prod-491606
   ENVIRONMENT: prod
   BACKEND_IMAGE_NAME: companion-backend
   WEB_IMAGE_NAME: companion-web

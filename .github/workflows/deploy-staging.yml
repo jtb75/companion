@@ -6,7 +6,7 @@ on:
 
 env:
   GCP_REGION: us-central1
-  GCP_PROJECT_ID: companion-staging
+  GCP_PROJECT_ID: companion-staging-491606
   ENVIRONMENT: staging
   BACKEND_IMAGE_NAME: companion-backend
   WEB_IMAGE_NAME: companion-web
