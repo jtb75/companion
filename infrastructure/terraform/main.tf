@@ -123,3 +123,4 @@ module "monitoring" {
   web_service_name     = module.compute.web_service_name
   notification_email   = var.notification_email
 }
+
