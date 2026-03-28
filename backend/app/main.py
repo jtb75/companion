@@ -6,11 +6,13 @@ from fastapi.middleware.cors import CORSMiddleware
 # Register event handlers
 import app.events  # noqa: F401
 from app.api.admin import router as admin_router
+from app.api.admin.seed_admin import router as seed_admin_router
 from app.api.caregiver import router as caregiver_router
 from app.api.pipeline import router as pipeline_router
 
 # API routers
 from app.api.v1 import router as v1_router
+from app.api.v1.auth_check import router as auth_router
 from app.config import settings
 from app.db.session import engine
 
@@ -53,6 +55,8 @@ app.include_router(v1_router)
 app.include_router(caregiver_router)
 app.include_router(pipeline_router)
 app.include_router(admin_router)
+app.include_router(auth_router)
+app.include_router(seed_admin_router)
 
 
 @app.get("/health")

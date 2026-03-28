@@ -40,7 +40,7 @@ function currentSection(pathname: string): string {
 export function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation()
   const section = currentSection(location.pathname)
-  const { user, logout } = useAuth()
+  const { user, logout, role } = useAuth()
 
   return (
     <div className="flex h-screen bg-companion-cream">
@@ -50,7 +50,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <h1 className="text-lg font-bold tracking-wide">Companion</h1>
         </div>
         <div className="flex-1">
-        {navSections.map((sec) => (
+        {navSections
+          .filter((sec) => {
+            // Caregivers only see the Caregiver section; admins see all
+            if (role === 'admin') return true
+            return sec.label === 'Caregiver'
+          })
+          .map((sec) => (
           <div key={sec.label} className="px-3 py-3">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-companion-blue-light mb-2 px-2">
               {sec.label}

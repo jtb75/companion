@@ -1,10 +1,16 @@
 import { Navigate } from 'react-router-dom'
 import { useAuth } from './AuthProvider'
+import AccessDenied from './AccessDenied'
 
-export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth()
+interface Props {
+  children: React.ReactNode
+  requiredRole?: 'admin' | 'caregiver'
+}
 
-  if (loading) {
+export default function ProtectedRoute({ children, requiredRole }: Props) {
+  const { user, loading, authorized, role } = useAuth()
+
+  if (loading || authorized === null) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-companion-cream">
         <div className="animate-pulse text-companion-blue">Loading...</div>
@@ -14,6 +20,15 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
 
   if (!user) {
     return <Navigate to="/login" replace />
+  }
+
+  if (!authorized) {
+    return <AccessDenied />
+  }
+
+  // Role check: admins can access everything, caregivers only caregiver routes
+  if (requiredRole === 'admin' && role !== 'admin') {
+    return <AccessDenied />
   }
 
   return <>{children}</>
