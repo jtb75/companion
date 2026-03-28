@@ -71,15 +71,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check if web exists
+        id: check
+        run: test -f web/package.json && echo "exists=true" >> "$GITHUB_OUTPUT" || echo "exists=false" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@v4
+        if: steps.check.outputs.exists == 'true'
         with:
           node-version: "20"
       - name: Install dependencies
+        if: steps.check.outputs.exists == 'true'
         working-directory: web
-        run: npm ci || echo "web/ not yet scaffolded — skipping"
+        run: npm ci
       - name: Lint
+        if: steps.check.outputs.exists == 'true'
         working-directory: web
-        run: npm run lint || echo "web/ not yet scaffolded — skipping"
+        run: npm run lint
 
   terraform-validate:
     runs-on: ubuntu-latest
