@@ -36,7 +36,11 @@ export function DashboardPage() {
     },
   })
 
-  const dashboard = data ?? placeholderData
+  const dashboard = {
+    ...(data ?? placeholderData),
+    upcoming_bills: Array.isArray(data?.upcoming_bills) ? data.upcoming_bills : placeholderData.upcoming_bills,
+    upcoming_appointments: Array.isArray(data?.upcoming_appointments) ? data.upcoming_appointments : placeholderData.upcoming_appointments,
+  }
 
   if (isLoading) {
     return <p className="text-gray-500">Loading dashboard...</p>

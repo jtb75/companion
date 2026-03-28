@@ -59,7 +59,7 @@ export function PipelinePage() {
         return {
           documents_in_flight: (raw.documents_in_flight as number) ?? 0,
           stages,
-          recent_failures: (raw.recent_failures as PipelineHealth['recent_failures']) ?? [],
+          recent_failures: Array.isArray(raw.recent_failures) ? (raw.recent_failures as PipelineHealth['recent_failures']) : [],
         }
       } catch {
         return placeholderData

@@ -30,7 +30,9 @@ export function AlertsPage() {
     return <p className="text-red-500">Failed to load alerts.</p>
   }
 
-  if (!alerts || alerts.length === 0) {
+  const safeAlerts = Array.isArray(alerts) ? alerts : []
+
+  if (safeAlerts.length === 0) {
     return (
       <div className="text-center py-16">
         <p className="text-2xl text-companion-sage mb-2">All clear</p>
@@ -42,7 +44,7 @@ export function AlertsPage() {
   return (
     <div className="space-y-3">
       <h1 className="text-xl font-semibold text-gray-900 mb-4">Alerts</h1>
-      {alerts.map((alert) => (
+      {safeAlerts.map((alert) => (
         <div
           key={alert.id}
           className="bg-white border border-gray-200 rounded-lg p-4 flex items-start gap-3 shadow-sm"

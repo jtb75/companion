@@ -25,7 +25,7 @@ export function ActivityPage() {
     },
   })
 
-  const entries = activity ?? placeholderActivity
+  const entries = Array.isArray(activity) ? activity : placeholderActivity
 
   if (isLoading) {
     return <p className="text-gray-500">Loading activity...</p>

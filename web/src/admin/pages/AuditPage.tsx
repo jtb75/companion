@@ -49,7 +49,7 @@ export function AuditPage() {
     },
   })
 
-  const entries = data ?? placeholderAudit
+  const entries = Array.isArray(data) ? data : placeholderAudit
 
   if (isLoading) {
     return <p className="text-gray-500">Loading audit log...</p>

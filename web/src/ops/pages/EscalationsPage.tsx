@@ -46,7 +46,7 @@ export function EscalationsPage() {
     },
   })
 
-  const escalations = data ?? placeholderData
+  const escalations = Array.isArray(data) ? data : placeholderData
 
   if (isLoading) {
     return <p className="text-gray-500">Loading escalations...</p>
