@@ -57,4 +57,8 @@ app.include_router(admin_router)
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "environment": settings.environment}
+    return {
+        "status": "ok",
+        "environment": settings.environment,
+        "version": "0.1.0",
+    }
