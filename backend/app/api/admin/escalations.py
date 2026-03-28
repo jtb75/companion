@@ -1,41 +1,57 @@
 """Admin API — Escalation monitoring."""
 
 from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import AdminUser, require_admin_role
-
-router = APIRouter(prefix="/admin/escalations", tags=["Admin - Escalations"])
+from app.db import get_db
+from app.notifications.escalation import get_open_escalations
 
 _viewer = require_admin_role("viewer")
 
+router = APIRouter(tags=["Admin - Escalations"])
 
-@router.get("")
-async def list_escalations(admin: AdminUser = Depends(_viewer)):
-    """Active escalations."""
-    # TODO: query active escalations
+
+@router.get("/admin/escalations")
+async def list_escalations(
+    admin: AdminUser = Depends(_viewer),
+    db: AsyncSession = Depends(get_db),
+):
+    """Open questions approaching or past thresholds."""
+    items = await get_open_escalations(db)
+    approaching = [i for i in items if i["pct_to_threshold"] >= 75]
     return {
-        "escalations": [],
-        "total": 0,
+        "escalations": items,
+        "total": len(items),
+        "approaching_threshold": len(approaching),
     }
 
 
-@router.get("/history")
-async def escalation_history(admin: AdminUser = Depends(_viewer)):
+@router.get("/admin/escalations/history")
+async def escalation_history(
+    admin: AdminUser = Depends(_viewer),
+    db: AsyncSession = Depends(get_db),
+):
     """Escalation history."""
-    # TODO: query escalation history
-    return {
-        "escalations": [],
-        "total": 0,
-    }
+    # TODO: query historical escalations with date range
+    return {"history": [], "total": 0}
 
 
-@router.get("/stats")
-async def escalation_stats(admin: AdminUser = Depends(_viewer)):
+@router.get("/admin/escalations/stats")
+async def escalation_stats(
+    admin: AdminUser = Depends(_viewer),
+    db: AsyncSession = Depends(get_db),
+):
     """Escalation statistics."""
-    # TODO: compute escalation stats
+    items = await get_open_escalations(db)
+    by_type = {}
+    for item in items:
+        ctx = item["context_type"]
+        by_type[ctx] = by_type.get(ctx, 0) + 1
     return {
-        "total_24h": 0,
-        "total_7d": 0,
-        "by_type": {},
-        "avg_resolution_time_minutes": 0,
+        "total_open": len(items),
+        "by_context_type": by_type,
+        "escalated_count": len(
+            [i for i in items if i["status"] == "ESCALATED"]
+        ),
     }
