@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 env:
   GCP_REGION: us-central1
   GCP_PROJECT_ID: companion-staging-491606

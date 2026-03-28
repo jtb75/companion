@@ -26,7 +26,7 @@ class Settings(BaseSettings):
 
     # App
     environment: str = "development"
-    debug: bool = True
+    debug: bool = False
     api_v1_prefix: str = "/api/v1"
 
 
