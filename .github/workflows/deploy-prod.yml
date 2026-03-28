@@ -90,9 +90,11 @@ jobs:
       - name: Build and push
         id: build
         run: |
-          IMAGE="${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/companion-${{ env.ENVIRONMENT }}/${{ env.BACKEND_IMAGE_NAME }}:${{ github.sha }}"
-          docker build -f infrastructure/Dockerfile.backend -t "$IMAGE" backend/
+          REPO="${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/companion-${{ env.ENVIRONMENT }}"
+          IMAGE="$REPO/${{ env.BACKEND_IMAGE_NAME }}:${{ github.sha }}"
+          docker build -f infrastructure/Dockerfile.backend -t "$IMAGE" -t "$REPO/${{ env.BACKEND_IMAGE_NAME }}:latest" backend/
           docker push "$IMAGE"
+          docker push "$REPO/${{ env.BACKEND_IMAGE_NAME }}:latest"
           echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
 
   # ── Deploy backend ────────────────────────────────────────────────────────
@@ -145,11 +147,13 @@ jobs:
       - name: Build and push
         id: build
         run: |
-          IMAGE="${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/companion-${{ env.ENVIRONMENT }}/${{ env.WEB_IMAGE_NAME }}:${{ github.sha }}"
+          REPO="${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/companion-${{ env.ENVIRONMENT }}"
+          IMAGE="$REPO/${{ env.WEB_IMAGE_NAME }}:${{ github.sha }}"
           docker build -f infrastructure/Dockerfile.web \
             --build-arg VITE_API_BASE_URL=${{ vars.PROD_API_BASE_URL }} \
-            -t "$IMAGE" .
+            -t "$IMAGE" -t "$REPO/${{ env.WEB_IMAGE_NAME }}:latest" .
           docker push "$IMAGE"
+          docker push "$REPO/${{ env.WEB_IMAGE_NAME }}:latest"
           echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
 
   deploy-web:
