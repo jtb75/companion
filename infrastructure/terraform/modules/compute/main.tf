@@ -207,7 +207,7 @@ resource "google_cloud_run_v2_service" "web" {
       }
 
       ports {
-        container_port = 80
+        container_port = 8080
       }
 
       # Pass backend URL so the web app knows where to send API requests
@@ -224,7 +224,7 @@ resource "google_cloud_run_v2_service" "web" {
       startup_probe {
         http_get {
           path = "/"
-          port = 80
+          port = 8080
         }
         initial_delay_seconds = 0
         period_seconds        = 5
