@@ -1,0 +1,194 @@
+from __future__ import annotations
+
+import uuid
+from dataclasses import dataclass
+
+from fastapi import Depends, Header, HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.auth.firebase import verify_firebase_token
+from app.config import settings
+
+# Database session dependency — imported from wherever the app defines it.
+# This is a placeholder import; adjust to match the actual session provider.
+from app.db import get_db
+from app.models.admin_user import AdminUser
+from app.models.enums import AccessTier
+from app.models.trusted_contact import TrustedContact
+from app.models.user import User
+
+
+@dataclass
+class CaregiverContext:
+    contact: TrustedContact
+    user_id: uuid.UUID
+    tier: AccessTier
+
+
+# ---------------------------------------------------------------------------
+# Helper: extract and verify bearer token
+# ---------------------------------------------------------------------------
+
+async def _extract_bearer_token(authorization: str | None) -> dict:
+    """Extract Bearer token from header and verify with Firebase."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    token = authorization.removeprefix("Bearer ")
+    try:
+        decoded = await verify_firebase_token(token)
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e)) from None
+    return decoded
+
+
+# ---------------------------------------------------------------------------
+# App API dependency
+# ---------------------------------------------------------------------------
+
+async def get_current_user(
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Resolve the authenticated user from a Firebase ID token.
+
+    In development/test environments, if no Authorization header is provided
+    the first user in the database is returned as a convenience mock.
+    """
+    # Dev/test bypass: skip auth when no header is provided
+    if (
+        settings.environment in ("development", "test")
+        and authorization is None
+    ):
+        result = await db.execute(select(User).limit(1))
+        user = result.scalar_one_or_none()
+        if user is None:
+            raise HTTPException(status_code=404, detail="No mock user available in dev database")
+        return user
+
+    decoded = await _extract_bearer_token(authorization)
+
+    # Look up by email from Firebase claims
+    email: str | None = decoded.get("email")
+    if not email:
+        raise HTTPException(status_code=401, detail="Firebase token missing email claim")
+
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+# ---------------------------------------------------------------------------
+# Caregiver API dependency
+# ---------------------------------------------------------------------------
+
+async def get_current_caregiver(
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: AsyncSession = Depends(get_db),
+) -> CaregiverContext:
+    """Resolve the authenticated caregiver from a Firebase ID token with
+    custom claims (contact_id, user_id, tier)."""
+    decoded = await _extract_bearer_token(authorization)
+
+    contact_id = decoded.get("contact_id")
+    user_id = decoded.get("user_id")
+    tier_raw = decoded.get("tier")
+
+    if not contact_id or not user_id or not tier_raw:
+        raise HTTPException(
+            status_code=401,
+            detail="Firebase token missing required caregiver claims",
+        )
+
+    try:
+        tier = AccessTier(tier_raw)
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Invalid access tier in token") from None
+
+    result = await db.execute(
+        select(TrustedContact).where(TrustedContact.id == uuid.UUID(contact_id))
+    )
+    contact = result.scalar_one_or_none()
+    if contact is None:
+        raise HTTPException(status_code=401, detail="Trusted contact not found")
+    if not contact.is_active:
+        raise HTTPException(status_code=403, detail="Trusted contact is not active")
+
+    return CaregiverContext(
+        contact=contact,
+        user_id=uuid.UUID(user_id),
+        tier=tier,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Tier enforcement dependency factory
+# ---------------------------------------------------------------------------
+
+def require_tier(minimum_tier: AccessTier):
+    """Returns a dependency that enforces minimum caregiver tier."""
+
+    async def check(
+        caregiver: CaregiverContext = Depends(get_current_caregiver),
+    ) -> CaregiverContext:
+        tier_order = {
+            AccessTier.TIER_1: 1,
+            AccessTier.TIER_2: 2,
+            AccessTier.TIER_3: 3,
+        }
+        if tier_order[caregiver.tier] < tier_order[minimum_tier]:
+            raise HTTPException(status_code=403, detail="Insufficient access tier")
+        return caregiver
+
+    return check
+
+
+# ---------------------------------------------------------------------------
+# Admin API dependency
+# ---------------------------------------------------------------------------
+
+async def get_current_admin(
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: AsyncSession = Depends(get_db),
+) -> AdminUser:
+    """Resolve the authenticated admin from a Firebase ID token."""
+    decoded = await _extract_bearer_token(authorization)
+
+    email: str | None = decoded.get("email")
+    if not email:
+        raise HTTPException(status_code=401, detail="Firebase token missing email claim")
+
+    result = await db.execute(select(AdminUser).where(AdminUser.email == email))
+    admin = result.scalar_one_or_none()
+    if admin is None:
+        raise HTTPException(status_code=403, detail="Not an admin user")
+    if not admin.is_active:
+        raise HTTPException(status_code=403, detail="Admin account is not active")
+    return admin
+
+
+# ---------------------------------------------------------------------------
+# Admin role enforcement dependency factory
+# ---------------------------------------------------------------------------
+
+_ROLE_ORDER = {"viewer": 1, "editor": 2, "admin": 3}
+
+
+def require_admin_role(minimum_role: str):
+    """Returns a dependency that enforces minimum admin role.
+
+    Role hierarchy: viewer < editor < admin.
+    """
+
+    async def check(
+        admin: AdminUser = Depends(get_current_admin),
+    ) -> AdminUser:
+        current_level = _ROLE_ORDER.get(admin.role, 0)
+        required_level = _ROLE_ORDER.get(minimum_role, 0)
+        if current_level < required_level:
+            raise HTTPException(status_code=403, detail="Insufficient admin role")
+        return admin
+
+    return check

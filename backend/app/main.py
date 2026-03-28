@@ -3,6 +3,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.admin import router as admin_router
+from app.api.caregiver import router as caregiver_router
+from app.api.pipeline import router as pipeline_router
+
+# API routers
+from app.api.v1 import router as v1_router
 from app.config import settings
 from app.db.session import engine
 
@@ -39,6 +45,12 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
+
+# Mount API routers
+app.include_router(v1_router)
+app.include_router(caregiver_router)
+app.include_router(pipeline_router)
+app.include_router(admin_router)
 
 
 @app.get("/health")
