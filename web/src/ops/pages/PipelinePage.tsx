@@ -41,7 +41,26 @@ export function PipelinePage() {
     queryKey: ['pipeline-health'],
     queryFn: async () => {
       try {
-        return await api<PipelineHealth>('/admin/pipeline/health')
+        const raw = await api<Record<string, unknown>>('/admin/pipeline/health')
+        // Normalize stages: API may return object or array
+        let stages: StageHealth[] = []
+        if (Array.isArray(raw.stages)) {
+          stages = raw.stages
+        } else if (raw.stages && typeof raw.stages === 'object') {
+          stages = Object.entries(raw.stages as Record<string, Record<string, unknown>>).map(
+            ([name, s]) => ({
+              stage: name.charAt(0).toUpperCase() + name.slice(1),
+              success_rate: (s.success_rate as number) ?? 1,
+              avg_time_ms: (s.avg_ms as number) ?? 0,
+              status: ((s.success_rate as number) >= 0.95 ? 'healthy' : (s.success_rate as number) >= 0.85 ? 'warning' : 'critical') as StageHealth['status'],
+            })
+          )
+        }
+        return {
+          documents_in_flight: (raw.documents_in_flight as number) ?? 0,
+          stages,
+          recent_failures: (raw.recent_failures as PipelineHealth['recent_failures']) ?? [],
+        }
       } catch {
         return placeholderData
       }
