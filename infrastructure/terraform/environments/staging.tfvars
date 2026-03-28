@@ -1,0 +1,11 @@
+project_id            = "companion-staging-491606"
+environment           = "staging"
+db_tier               = "db-f1-micro"
+db_disk_size          = 10
+redis_memory_size     = 1
+backend_min_instances = 0
+backend_max_instances = 10
+web_min_instances     = 0
+backend_cpu           = "1"
+backend_memory        = "512Mi"
+notification_email    = "alerts@companion.app"

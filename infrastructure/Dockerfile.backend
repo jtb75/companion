@@ -1,0 +1,54 @@
+# Stage 1 — builder
+FROM python:3.13-slim AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copy everything needed for pip install (pyproject.toml + source for hatchling)
+COPY pyproject.toml .
+COPY app ./app
+
+RUN pip install --no-cache-dir .
+
+# Copy remaining files (alembic config/migrations)
+COPY alembic.ini .
+COPY alembic ./alembic
+
+# Stage 2 — runtime
+FROM python:3.13-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd --system appuser && useradd --system --gid appuser appuser
+
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+WORKDIR /app
+
+COPY --from=builder /build/app ./app
+COPY --from=builder /build/alembic.ini .
+COPY --from=builder /build/alembic ./alembic
+
+ENV PYTHONPATH="/app"
+ENV PYTHONUNBUFFERED=1
+
+RUN chown -R appuser:appuser /app
+USER appuser
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "2"]

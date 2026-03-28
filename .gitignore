@@ -36,3 +36,12 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+
+# Secrets / credentials
+*-cicd-key.json
+*.pem

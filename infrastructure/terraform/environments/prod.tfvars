@@ -1,0 +1,11 @@
+project_id            = "companion-prod-491606"
+environment           = "prod"
+db_tier               = "db-g1-small"
+db_disk_size          = 20
+redis_memory_size     = 1
+backend_min_instances = 1
+backend_max_instances = 50
+web_min_instances     = 0
+backend_cpu           = "1"
+backend_memory        = "1Gi"
+notification_email    = "alerts@companion.app"
