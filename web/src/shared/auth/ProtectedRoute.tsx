@@ -10,7 +10,7 @@ interface Props {
 export default function ProtectedRoute({ children, requiredRole }: Props) {
   const { user, loading, authorized, role } = useAuth()
 
-  if (loading || authorized === null) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-companion-cream">
         <div className="animate-pulse text-companion-blue">Loading...</div>
@@ -20,6 +20,14 @@ export default function ProtectedRoute({ children, requiredRole }: Props) {
 
   if (!user) {
     return <Navigate to="/login" replace />
+  }
+
+  if (authorized === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-companion-cream">
+        <div className="animate-pulse text-companion-blue">Checking access...</div>
+      </div>
+    )
   }
 
   if (!authorized) {
