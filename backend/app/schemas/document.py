@@ -17,9 +17,13 @@ from app.schemas.common import PaginatedResponse
 
 
 class DocumentScanRequest(BaseModel):
-    source_channel: SourceChannel = Field(description="How the document was captured")
-    # Actual file upload handled at the endpoint level via UploadFile;
-    # this schema covers the metadata portion of the request.
+    source_channel: SourceChannel = Field(
+        description="How the document was captured"
+    )
+    source_metadata: dict | None = Field(
+        default=None,
+        description="Source-specific metadata (raw_text, email headers, etc.)",
+    )
 
 
 class DocumentResponse(BaseModel):

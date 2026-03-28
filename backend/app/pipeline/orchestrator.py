@@ -1,0 +1,191 @@
+"""Pipeline orchestrator — chains all 6 stages, records metrics, and emits events."""
+
+import logging
+import time
+from datetime import datetime
+from uuid import UUID
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.events.publisher import event_publisher
+from app.events.schemas import DocumentProcessedPayload, DocumentRoutedPayload
+from app.models.document import Document
+from app.models.enums import (
+    DocumentClassification,
+    DocumentStatus,
+    RoutingDestination,
+    UrgencyLevel,
+)
+from app.models.pipeline_metrics import PipelineMetric
+from app.pipeline.classification import classify
+from app.pipeline.extraction import extract
+from app.pipeline.ingestion import process_camera_scan, process_email
+from app.pipeline.routing import route
+from app.pipeline.schemas import PipelineResult
+from app.pipeline.summarization import summarize
+from app.pipeline.tracker import create_questions
+
+logger = logging.getLogger(__name__)
+
+
+async def process_document(
+    db: AsyncSession, document_id: UUID, user_id: UUID
+) -> PipelineResult:
+    """Run the full 6-stage pipeline on a document."""
+
+    pipeline_start = time.monotonic()
+    doc = await db.get(Document, document_id)
+    if not doc:
+        raise ValueError(f"Document {document_id} not found")
+
+    # Update status to processing
+    doc.status = DocumentStatus.PROCESSING
+    await db.flush()
+
+    try:
+        # Stage 1: Ingestion
+        stage_start = time.monotonic()
+        source = getattr(
+            doc.source_channel, "value", str(doc.source_channel)
+        )
+        if source == "camera_scan":
+            normalized = await process_camera_scan(db, document_id)
+        else:
+            normalized = await process_email(db, document_id)
+        await _record_metric(db, document_id, "ingestion", "completed", stage_start)
+
+        # Stage 2: Classification
+        stage_start = time.monotonic()
+        classification_result = await classify(normalized)
+
+        # Map string values to enums for the Document model
+        doc.classification = DocumentClassification(classification_result.classification)
+        doc.confidence_score = classification_result.confidence_score
+        doc.urgency_level = UrgencyLevel(classification_result.urgency_level)
+        doc.status = DocumentStatus.CLASSIFIED
+        await db.flush()
+        await _record_metric(db, document_id, "classification", "completed", stage_start, {
+            "classification": classification_result.classification,
+            "confidence": classification_result.confidence_score,
+            "tier": classification_result.classifier_tier,
+        })
+
+        # Stage 3: Extraction
+        stage_start = time.monotonic()
+        extraction_result = await extract(normalized, classification_result)
+        # Convert Decimals to floats for JSONB storage
+        import json
+        doc.extracted_fields = json.loads(
+            json.dumps(extraction_result.extracted_fields, default=str)
+        )
+        await db.flush()
+        await _record_metric(db, document_id, "extraction", "completed", stage_start, {
+            "missing_fields": extraction_result.missing_fields,
+        })
+
+        # Stage 4: Summarization
+        stage_start = time.monotonic()
+        summarization_result = await summarize(classification_result, extraction_result)
+        doc.spoken_summary = summarization_result.spoken_summary
+        doc.card_summary = summarization_result.card_summary
+        doc.status = DocumentStatus.SUMMARIZED
+        await db.flush()
+        await _record_metric(db, document_id, "summarization", "completed", stage_start)
+
+        # Stage 5: Routing
+        stage_start = time.monotonic()
+        routing_result = await route(
+            db, user_id, classification_result,
+            extraction_result, summarization_result,
+        )
+        doc.routing_destination = RoutingDestination(routing_result.routing_destination)
+        doc.status = DocumentStatus.ROUTED
+        await db.flush()
+        await _record_metric(db, document_id, "routing", "completed", stage_start, {
+            "destination": routing_result.routing_destination,
+            "records_created": len(routing_result.records_created),
+        })
+
+        # Stage 6: Question Tracker
+        stage_start = time.monotonic()
+        questions = await create_questions(
+            db, user_id, classification_result, extraction_result
+        )
+        await _record_metric(db, document_id, "tracking", "completed", stage_start, {
+            "questions_created": len(questions),
+        })
+
+        # Calculate total processing time
+        total_ms = int((time.monotonic() - pipeline_start) * 1000)
+        doc.processed_at = datetime.utcnow()
+        await db.flush()
+
+        # Emit events
+        await event_publisher.publish(
+            "document.processed",
+            user_id=user_id,
+            payload=DocumentProcessedPayload(
+                document_id=document_id,
+                classification=classification_result.classification,
+                confidence_score=classification_result.confidence_score,
+                urgency_level=classification_result.urgency_level,
+                extracted_fields=extraction_result.extracted_fields,
+            ),
+        )
+
+        await event_publisher.publish(
+            "document.routed",
+            user_id=user_id,
+            payload=DocumentRoutedPayload(
+                document_id=document_id,
+                routing_destination=routing_result.routing_destination,
+                card_summary=summarization_result.card_summary,
+                spoken_summary=summarization_result.spoken_summary,
+            ),
+        )
+
+        logger.info(
+            "Pipeline complete: doc=%s class=%s conf=%.2f route=%s time=%dms",
+            document_id,
+            classification_result.classification,
+            classification_result.confidence_score,
+            routing_result.routing_destination,
+            total_ms,
+        )
+
+        return PipelineResult(
+            document_id=document_id,
+            classification=classification_result,
+            extraction=extraction_result,
+            summarization=summarization_result,
+            routing=routing_result,
+            processing_time_ms=total_ms,
+        )
+
+    except Exception as e:
+        logger.exception("Pipeline failed for document %s", document_id)
+        await _record_metric(db, document_id, "pipeline", "failed", pipeline_start, {
+            "error": str(e),
+        })
+        raise
+
+
+async def _record_metric(
+    db: AsyncSession,
+    document_id: UUID,
+    stage: str,
+    status: str,
+    start_time: float,
+    metadata: dict | None = None,
+) -> None:
+    """Record a pipeline stage metric."""
+    duration_ms = int((time.monotonic() - start_time) * 1000)
+    metric = PipelineMetric(
+        document_id=document_id,
+        stage=stage,
+        status=status,
+        duration_ms=duration_ms,
+        stage_metadata=metadata,
+    )
+    db.add(metric)
+    await db.flush()

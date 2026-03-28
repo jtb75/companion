@@ -64,6 +64,9 @@ async def delete_document(
 async def create_document(
     db: AsyncSession, user_id: UUID, data: dict
 ) -> Document:
+    # Ensure raw_text_ref has a value (will be set properly by pipeline)
+    if "raw_text_ref" not in data:
+        data["raw_text_ref"] = "pending"
     document = Document(user_id=user_id, **data)
     db.add(document)
     await db.flush()

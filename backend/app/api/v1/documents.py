@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import User, get_current_user
 from app.db import get_db
+from app.pipeline.orchestrator import process_document
 from app.schemas.document import DocumentScanRequest, DocumentStatusUpdate
 from app.services import document_service
 
@@ -21,6 +22,10 @@ async def scan_document(
 ):
     """Submit a camera scan for processing."""
     doc = await document_service.create_document(db, user.id, data.model_dump())
+
+    # Run the document through the 6-stage intelligence pipeline (V1: synchronous)
+    await process_document(db, doc.id, user.id)
+
     return doc
 
 
