@@ -94,28 +94,9 @@ jobs:
           docker push "$IMAGE"
           echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
 
-  # ── Migrate database ──────────────────────────────────────────────────────
-  migrate:
-    needs: build-backend
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - id: auth
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.STAGING_WIF_PROVIDER }}
-          service_account: ${{ secrets.STAGING_SA_EMAIL }}
-      - uses: google-github-actions/setup-gcloud@v2
-      - name: Run Alembic migration
-        run: |
-          gcloud run jobs execute companion-${{ env.ENVIRONMENT }}-migrate \
-            --region ${{ env.GCP_REGION }} \
-            --wait \
-            --project ${{ env.GCP_PROJECT_ID }}
-
   # ── Deploy backend ────────────────────────────────────────────────────────
   deploy-backend:
-    needs: [build-backend, migrate]
+    needs: [build-backend]
     runs-on: ubuntu-latest
     steps:
       - id: auth
