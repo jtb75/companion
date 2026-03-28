@@ -2,9 +2,13 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import User, get_current_user
+from app.db import get_db
+from app.schemas.user import UserUpdate
+from app.services import caregiver_service, memory_service
 
 router = APIRouter(prefix="/me", tags=["Users"])
 
@@ -12,59 +16,51 @@ router = APIRouter(prefix="/me", tags=["Users"])
 @router.get("")
 async def get_profile(user: User = Depends(get_current_user)):
     """Return current user profile."""
-    # TODO: return real user profile from DB
-    return {
-        "id": str(user.id),
-        "display_name": "Dev User",
-        "email": "dev@example.com",
-        "preferences": {},
-        "created_at": "2026-01-01T00:00:00Z",
-    }
+    return user
 
 
 @router.patch("")
-async def update_profile(user: User = Depends(get_current_user)):
+async def update_profile(
+    data: UserUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Update profile/preferences."""
-    # TODO: accept and apply profile update payload
-    return {
-        "id": str(user.id),
-        "display_name": "Dev User",
-        "email": "dev@example.com",
-        "preferences": {},
-        "updated": True,
-    }
+    updates = data.model_dump(exclude_unset=True)
+    for key, value in updates.items():
+        setattr(user, key, value)
+    await db.flush()
+    return user
 
 
 @router.get("/memory")
-async def list_memories(user: User = Depends(get_current_user)):
+async def list_memories(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """List functional memories."""
-    # TODO: query memory store
-    return {
-        "memories": [
-            {
-                "id": str(uuid.uuid4()),
-                "category": "medication",
-                "content": "Takes metformin 500mg twice daily",
-                "source": "user_input",
-                "created_at": "2026-01-15T10:00:00Z",
-            }
-        ],
-        "total": 1,
-    }
+    memories = await memory_service.list_memories(db, user.id)
+    return {"memories": memories, "total": len(memories)}
 
 
 @router.delete("/memory/{memory_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_memory(memory_id: uuid.UUID, user: User = Depends(get_current_user)):
+async def delete_memory(
+    memory_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Delete a specific memory."""
-    # TODO: delete memory from store
+    deleted = await memory_service.delete_memory(db, user.id, memory_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Memory not found")
     return None
 
 
 @router.get("/activity")
-async def get_activity(user: User = Depends(get_current_user)):
+async def get_activity(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Caregiver activity log visible to the user."""
-    # TODO: query caregiver activity log
-    return {
-        "activities": [],
-        "total": 0,
-    }
+    activities = await caregiver_service.get_caregiver_activity(db, user.id)
+    return {"activities": activities, "total": len(activities)}

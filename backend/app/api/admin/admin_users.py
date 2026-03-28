@@ -2,9 +2,14 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import AdminUser, require_admin_role
+from app.db import get_db
+from app.models.admin_user import AdminUser as AdminUserModel
+from app.schemas.admin import AdminUserCreate
 
 router = APIRouter(prefix="/admin/users", tags=["Admin - Users"])
 
@@ -12,44 +17,69 @@ _admin = require_admin_role("admin")
 
 
 @router.get("")
-async def list_admin_users(admin: AdminUser = Depends(_admin)):
+async def list_admin_users(
+    admin: AdminUser = Depends(_admin),
+    db: AsyncSession = Depends(get_db),
+):
     """List all admin users."""
-    # TODO: query admin users from DB
-    return {
-        "users": [],
-        "total": 0,
-    }
+    result = await db.execute(
+        select(AdminUserModel).order_by(AdminUserModel.email)
+    )
+    users = list(result.scalars().all())
+    return {"users": users, "total": len(users)}
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-async def create_admin_user(admin: AdminUser = Depends(_admin)):
+async def create_admin_user(
+    data: AdminUserCreate,
+    admin: AdminUser = Depends(_admin),
+    db: AsyncSession = Depends(get_db),
+):
     """Create a new admin user."""
-    # TODO: accept admin user payload and persist
-    return {
-        "id": str(uuid.uuid4()),
-        "email": "new-admin@example.com",
-        "role": "viewer",
-        "is_active": True,
-        "created": True,
-    }
+    new_user = AdminUserModel(
+        email=data.email,
+        name=data.name,
+        role=data.role,
+    )
+    db.add(new_user)
+    await db.flush()
+    return new_user
 
 
 @router.patch("/{user_id}")
 async def update_admin_user(
-    user_id: uuid.UUID, admin: AdminUser = Depends(_admin)
+    user_id: uuid.UUID,
+    data: AdminUserCreate,
+    admin: AdminUser = Depends(_admin),
+    db: AsyncSession = Depends(get_db),
 ):
     """Update an admin user."""
-    # TODO: accept and apply admin user update payload
-    return {
-        "id": str(user_id),
-        "updated": True,
-    }
+    result = await db.execute(
+        select(AdminUserModel).where(AdminUserModel.id == user_id)
+    )
+    target = result.scalar_one_or_none()
+    if target is None:
+        raise HTTPException(status_code=404, detail="Admin user not found")
+    updates = data.model_dump(exclude_unset=True)
+    for key, value in updates.items():
+        setattr(target, key, value)
+    await db.flush()
+    return target
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_admin_user(
-    user_id: uuid.UUID, admin: AdminUser = Depends(_admin)
+    user_id: uuid.UUID,
+    admin: AdminUser = Depends(_admin),
+    db: AsyncSession = Depends(get_db),
 ):
     """Delete an admin user."""
-    # TODO: deactivate admin user
+    result = await db.execute(
+        select(AdminUserModel).where(AdminUserModel.id == user_id)
+    )
+    target = result.scalar_one_or_none()
+    if target is None:
+        raise HTTPException(status_code=404, detail="Admin user not found")
+    target.is_active = False
+    await db.flush()
     return None

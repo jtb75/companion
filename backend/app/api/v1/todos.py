@@ -2,60 +2,75 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import User, get_current_user
+from app.db import get_db
+from app.schemas.todo import TodoCreate, TodoUpdate
+from app.services import todo_service
 
 router = APIRouter(prefix="/todos", tags=["Todos"])
 
 
 @router.get("")
-async def list_todos(user: User = Depends(get_current_user)):
+async def list_todos(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """List all todos."""
-    # TODO: query todos from DB
-    return {
-        "todos": [],
-        "total": 0,
-    }
+    todos = await todo_service.list_todos(db, user.id)
+    return {"todos": todos, "total": len(todos)}
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-async def create_todo(user: User = Depends(get_current_user)):
+async def create_todo(
+    data: TodoCreate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Create a new todo."""
-    # TODO: accept todo payload and persist
-    return {
-        "id": str(uuid.uuid4()),
-        "title": "Placeholder Todo",
-        "category": "general",
-        "source": "user",
-        "completed": False,
-        "created": True,
-    }
+    todo = await todo_service.create_todo(db, user.id, data.model_dump())
+    return todo
 
 
 @router.patch("/{todo_id}")
-async def update_todo(todo_id: uuid.UUID, user: User = Depends(get_current_user)):
+async def update_todo(
+    todo_id: uuid.UUID,
+    data: TodoUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Update a todo."""
-    # TODO: accept and apply todo update payload
-    return {
-        "id": str(todo_id),
-        "updated": True,
-    }
+    todo = await todo_service.update_todo(
+        db, user.id, todo_id, data.model_dump(exclude_unset=True)
+    )
+    if todo is None:
+        raise HTTPException(status_code=404, detail="Todo not found")
+    return todo
 
 
 @router.delete("/{todo_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_todo(todo_id: uuid.UUID, user: User = Depends(get_current_user)):
+async def delete_todo(
+    todo_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Delete a todo."""
-    # TODO: soft-delete todo
+    deleted = await todo_service.delete_todo(db, user.id, todo_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Todo not found")
     return None
 
 
 @router.post("/{todo_id}/complete")
-async def complete_todo(todo_id: uuid.UUID, user: User = Depends(get_current_user)):
+async def complete_todo(
+    todo_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Mark a todo as complete."""
-    # TODO: mark todo as completed in DB
-    return {
-        "id": str(todo_id),
-        "completed": True,
-        "completed_at": "2026-03-27T12:00:00Z",
-    }
+    todo = await todo_service.complete_todo(db, user.id, todo_id)
+    if todo is None:
+        raise HTTPException(status_code=404, detail="Todo not found")
+    return todo

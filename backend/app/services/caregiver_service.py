@@ -1,0 +1,237 @@
+from datetime import date, datetime, timedelta
+from uuid import UUID
+
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.appointment import Appointment
+from app.models.audit import CaregiverActivityLog
+from app.models.bill import Bill
+from app.models.enums import PaymentStatus
+from app.models.medication import Medication, MedicationConfirmation
+from app.models.todo import Todo
+from app.models.trusted_contact import TrustedContact
+
+
+async def list_contacts(
+    db: AsyncSession, user_id: UUID
+) -> list[TrustedContact]:
+    result = await db.execute(
+        select(TrustedContact)
+        .where(TrustedContact.user_id == user_id)
+        .order_by(TrustedContact.contact_name)
+    )
+    return list(result.scalars().all())
+
+
+async def create_contact(
+    db: AsyncSession, user_id: UUID, data: dict
+) -> TrustedContact:
+    contact = TrustedContact(user_id=user_id, **data)
+    db.add(contact)
+    await db.flush()
+    return contact
+
+
+async def update_contact(
+    db: AsyncSession, user_id: UUID, contact_id: UUID, data: dict
+) -> TrustedContact | None:
+    result = await db.execute(
+        select(TrustedContact).where(
+            TrustedContact.id == contact_id,
+            TrustedContact.user_id == user_id,
+        )
+    )
+    contact = result.scalar_one_or_none()
+    if contact is None:
+        return None
+    for key, value in data.items():
+        setattr(contact, key, value)
+    await db.flush()
+    return contact
+
+
+async def delete_contact(
+    db: AsyncSession, user_id: UUID, contact_id: UUID
+) -> bool:
+    result = await db.execute(
+        select(TrustedContact).where(
+            TrustedContact.id == contact_id,
+            TrustedContact.user_id == user_id,
+        )
+    )
+    contact = result.scalar_one_or_none()
+    if contact is None:
+        return False
+    await db.delete(contact)
+    await db.flush()
+    return True
+
+
+async def pause_contact(
+    db: AsyncSession, user_id: UUID, contact_id: UUID
+) -> TrustedContact | None:
+    result = await db.execute(
+        select(TrustedContact).where(
+            TrustedContact.id == contact_id,
+            TrustedContact.user_id == user_id,
+        )
+    )
+    contact = result.scalar_one_or_none()
+    if contact is None:
+        return None
+    contact.is_active = False
+    await db.flush()
+    return contact
+
+
+async def resume_contact(
+    db: AsyncSession, user_id: UUID, contact_id: UUID
+) -> TrustedContact | None:
+    result = await db.execute(
+        select(TrustedContact).where(
+            TrustedContact.id == contact_id,
+            TrustedContact.user_id == user_id,
+        )
+    )
+    contact = result.scalar_one_or_none()
+    if contact is None:
+        return None
+    contact.is_active = True
+    await db.flush()
+    return contact
+
+
+async def get_caregiver_activity(
+    db: AsyncSession, user_id: UUID, limit: int = 50
+) -> list[CaregiverActivityLog]:
+    result = await db.execute(
+        select(CaregiverActivityLog)
+        .where(CaregiverActivityLog.user_id == user_id)
+        .order_by(CaregiverActivityLog.occurred_at.desc())
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
+async def get_alerts(db: AsyncSession, user_id: UUID) -> list[dict]:
+    """Return active safety alerts: overdue meds, overdue bills, missed doses."""
+    alerts: list[dict] = []
+    today = date.today()
+    now = datetime.utcnow()
+
+    # Missed medication doses (confirmed_at is None and not marked missed, scheduled in the past)
+    missed_result = await db.execute(
+        select(MedicationConfirmation)
+        .join(Medication)
+        .where(
+            Medication.user_id == user_id,
+            Medication.is_active.is_(True),
+            MedicationConfirmation.confirmed_at.is_(None),
+            MedicationConfirmation.missed.is_(False),
+            MedicationConfirmation.scheduled_at < now,
+        )
+        .order_by(MedicationConfirmation.scheduled_at.desc())
+        .limit(10)
+    )
+    for conf in missed_result.scalars().all():
+        alerts.append({
+            "type": "missed_dose",
+            "medication_id": str(conf.medication_id),
+            "scheduled_at": conf.scheduled_at.isoformat(),
+        })
+
+    # Overdue bills
+    overdue_result = await db.execute(
+        select(Bill).where(
+            Bill.user_id == user_id,
+            Bill.payment_status.in_([PaymentStatus.PENDING, PaymentStatus.OVERDUE]),
+            Bill.due_date < today,
+        )
+    )
+    for bill in overdue_result.scalars().all():
+        alerts.append({
+            "type": "overdue_bill",
+            "bill_id": str(bill.id),
+            "sender": bill.sender,
+            "due_date": bill.due_date.isoformat(),
+            "amount": str(bill.amount),
+        })
+
+    return alerts
+
+
+async def get_dashboard_summary(db: AsyncSession, user_id: UUID) -> dict:
+    """Summarized status for caregiver dashboard."""
+    today = date.today()
+    now = datetime.utcnow()
+    tomorrow = today + timedelta(days=1)
+
+    # Active medications count
+    med_count_result = await db.execute(
+        select(func.count())
+        .select_from(Medication)
+        .where(Medication.user_id == user_id, Medication.is_active.is_(True))
+    )
+    active_medications = med_count_result.scalar_one()
+
+    # Upcoming appointments (today or tomorrow)
+    appt_result = await db.execute(
+        select(func.count())
+        .select_from(Appointment)
+        .where(
+            Appointment.user_id == user_id,
+            Appointment.appointment_at >= now,
+            Appointment.appointment_at < datetime.combine(
+                tomorrow + timedelta(days=1), datetime.min.time()
+            ),
+        )
+    )
+    upcoming_appointments = appt_result.scalar_one()
+
+    # Overdue bills
+    overdue_result = await db.execute(
+        select(func.count())
+        .select_from(Bill)
+        .where(
+            Bill.user_id == user_id,
+            Bill.payment_status.in_([PaymentStatus.PENDING, PaymentStatus.OVERDUE]),
+            Bill.due_date < today,
+        )
+    )
+    overdue_bills = overdue_result.scalar_one()
+
+    # Active todos
+    todo_result = await db.execute(
+        select(func.count())
+        .select_from(Todo)
+        .where(
+            Todo.user_id == user_id,
+            Todo.is_active.is_(True),
+            Todo.completed_at.is_(None),
+        )
+    )
+    active_todos = todo_result.scalar_one()
+
+    # Active contacts
+    contact_result = await db.execute(
+        select(func.count())
+        .select_from(TrustedContact)
+        .where(
+            TrustedContact.user_id == user_id,
+            TrustedContact.is_active.is_(True),
+        )
+    )
+    active_contacts = contact_result.scalar_one()
+
+    alerts = await get_alerts(db, user_id)
+
+    return {
+        "active_medications": active_medications,
+        "upcoming_appointments": upcoming_appointments,
+        "overdue_bills": overdue_bills,
+        "active_todos": active_todos,
+        "active_contacts": active_contacts,
+        "alert_count": len(alerts),
+        "alerts": alerts,
+    }

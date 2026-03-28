@@ -2,79 +2,88 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import User, get_current_user
+from app.db import get_db
+from app.schemas.contact import ContactCreate, ContactUpdate
+from app.services import caregiver_service
 
 router = APIRouter(prefix="/contacts", tags=["Trusted Contacts"])
 
 
 @router.get("")
-async def list_contacts(user: User = Depends(get_current_user)):
+async def list_contacts(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """List trusted contacts."""
-    # TODO: query trusted contacts from DB
-    return {
-        "contacts": [],
-        "total": 0,
-    }
+    contacts = await caregiver_service.list_contacts(db, user.id)
+    return {"contacts": contacts, "total": len(contacts)}
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-async def add_contact(user: User = Depends(get_current_user)):
+async def add_contact(
+    data: ContactCreate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Add a trusted contact."""
-    # TODO: accept contact payload and persist
-    return {
-        "id": str(uuid.uuid4()),
-        "name": "Placeholder Contact",
-        "relationship": "family",
-        "tier": "tier_1",
-        "is_active": True,
-        "created": True,
-    }
+    contact = await caregiver_service.create_contact(db, user.id, data.model_dump())
+    return contact
 
 
 @router.patch("/{contact_id}")
 async def update_contact(
-    contact_id: uuid.UUID, user: User = Depends(get_current_user)
+    contact_id: uuid.UUID,
+    data: ContactUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Update a trusted contact (change tier, scope, etc.)."""
-    # TODO: accept and apply contact update payload
-    return {
-        "id": str(contact_id),
-        "updated": True,
-    }
+    contact = await caregiver_service.update_contact(
+        db, user.id, contact_id, data.model_dump(exclude_unset=True)
+    )
+    if contact is None:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    return contact
 
 
 @router.delete("/{contact_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_contact(
-    contact_id: uuid.UUID, user: User = Depends(get_current_user)
+    contact_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Remove a trusted contact."""
-    # TODO: deactivate/remove contact
+    deleted = await caregiver_service.delete_contact(db, user.id, contact_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Contact not found")
     return None
 
 
 @router.post("/{contact_id}/pause")
 async def pause_contact(
-    contact_id: uuid.UUID, user: User = Depends(get_current_user)
+    contact_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Pause a trusted contact's access."""
-    # TODO: set contact is_active = false
-    return {
-        "id": str(contact_id),
-        "is_active": False,
-        "paused": True,
-    }
+    contact = await caregiver_service.pause_contact(db, user.id, contact_id)
+    if contact is None:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    return contact
 
 
 @router.post("/{contact_id}/resume")
 async def resume_contact(
-    contact_id: uuid.UUID, user: User = Depends(get_current_user)
+    contact_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Resume a trusted contact's access."""
-    # TODO: set contact is_active = true
-    return {
-        "id": str(contact_id),
-        "is_active": True,
-        "resumed": True,
-    }
+    contact = await caregiver_service.resume_contact(db, user.id, contact_id)
+    if contact is None:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    return contact
