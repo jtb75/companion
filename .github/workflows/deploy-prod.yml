@@ -97,9 +97,35 @@ jobs:
           docker push "$REPO/${{ env.BACKEND_IMAGE_NAME }}:latest"
           echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
 
+  # ── Run database migrations ───────────────────────────────────────────────
+  migrate:
+    needs: build-backend
+    runs-on: ubuntu-latest
+    steps:
+      - id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.PROD_WIF_PROVIDER }}
+          service_account: ${{ secrets.PROD_SA_EMAIL }}
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Update migration job image
+        run: |
+          gcloud run jobs update companion-${{ env.ENVIRONMENT }}-migrate \
+            --image ${{ needs.build-backend.outputs.image }} \
+            --region ${{ env.GCP_REGION }} \
+            --project ${{ env.GCP_PROJECT_ID }} \
+            --command alembic --args "upgrade,head" \
+            --quiet
+      - name: Run migrations
+        run: |
+          gcloud run jobs execute companion-${{ env.ENVIRONMENT }}-migrate \
+            --region ${{ env.GCP_REGION }} \
+            --project ${{ env.GCP_PROJECT_ID }} \
+            --wait
+
   # ── Deploy backend ────────────────────────────────────────────────────────
   deploy-backend:
-    needs: [build-backend]
+    needs: [build-backend, migrate]
     runs-on: ubuntu-latest
     steps:
       - id: auth
