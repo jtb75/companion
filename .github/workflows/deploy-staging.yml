@@ -171,9 +171,13 @@ jobs:
         with:
           workload_identity_provider: ${{ secrets.STAGING_WIF_PROVIDER }}
           service_account: ${{ secrets.STAGING_SA_EMAIL }}
-      - uses: google-github-actions/deploy-cloudrun@v3
-        with:
-          service: companion-${{ env.ENVIRONMENT }}-web
-          image: ${{ needs.build-web.outputs.image }}
-          region: ${{ env.GCP_REGION }}
-          project_id: ${{ env.GCP_PROJECT_ID }}
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy companion-${{ env.ENVIRONMENT }}-web \
+            --image ${{ needs.build-web.outputs.image }} \
+            --region ${{ env.GCP_REGION }} \
+            --project ${{ env.GCP_PROJECT_ID }} \
+            --port 8080 \
+            --allow-unauthenticated \
+            --quiet
