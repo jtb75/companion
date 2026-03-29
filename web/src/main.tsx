@@ -31,7 +31,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             <Route path="/caregiver/*" element={<ProtectedRoute><CaregiverLayout /></ProtectedRoute>} />
             <Route path="/ops/*" element={<ProtectedRoute requiredRole="admin"><OpsLayout /></ProtectedRoute>} />
             <Route path="/admin/*" element={<ProtectedRoute requiredRole="admin"><AdminLayout /></ProtectedRoute>} />
-            <Route path="/" element={<Navigate to="/ops" replace />} />
+            <Route path="/" element={<Navigate to="/login" replace />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

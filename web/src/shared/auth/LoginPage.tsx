@@ -3,7 +3,7 @@ import { useAuth } from './AuthProvider'
 import { Navigate } from 'react-router-dom'
 
 export default function LoginPage() {
-  const { user, loading, loginWithGoogle, loginWithEmail, registerWithEmail } = useAuth()
+  const { user, loading, role, authorized, loginWithGoogle, loginWithEmail, registerWithEmail } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -17,8 +17,14 @@ export default function LoginPage() {
     )
   }
 
-  if (user) {
-    return <Navigate to="/ops" replace />
+  if (user && authorized) {
+    // Route based on role: admins to ops, caregivers to caregiver pages
+    const destination = role === 'admin' ? '/ops' : '/caregiver/alerts'
+    return <Navigate to={destination} replace />
+  }
+
+  if (user && authorized === false) {
+    return <Navigate to="/unauthorized" replace />
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
