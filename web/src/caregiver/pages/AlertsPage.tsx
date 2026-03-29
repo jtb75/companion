@@ -16,10 +16,15 @@ const typeIcons: Record<string, string> = {
   default: '\u{1F514}',
 }
 
-export function AlertsPage() {
-  const { data: alerts, isLoading, error } = useQuery({
-    queryKey: ['caregiver-alerts'],
-    queryFn: () => api<Alert[]>('/api/v1/caregiver/alerts'),
+interface Props {
+  userId: string
+}
+
+export function AlertsPage({ userId }: Props) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['caregiver-alerts', userId],
+    queryFn: () => api<{ alerts: Alert[] }>(`/api/v1/caregiver/alerts?user_id=${userId}`),
+    enabled: !!userId,
   })
 
   if (isLoading) {
@@ -30,7 +35,7 @@ export function AlertsPage() {
     return <p className="text-red-500">Failed to load alerts.</p>
   }
 
-  const safeAlerts = Array.isArray(alerts) ? alerts : []
+  const safeAlerts = Array.isArray(data?.alerts) ? data.alerts : []
 
   if (safeAlerts.length === 0) {
     return (

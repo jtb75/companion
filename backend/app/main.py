@@ -13,6 +13,7 @@ from app.api.pipeline import router as pipeline_router
 # API routers
 from app.api.v1 import router as v1_router
 from app.api.v1.auth_check import router as auth_router
+from app.api.v1.charges import router as charges_router
 from app.config import settings
 from app.db.session import engine
 
@@ -58,6 +59,7 @@ app.include_router(pipeline_router)
 app.include_router(admin_router)
 app.include_router(auth_router)
 app.include_router(seed_admin_router)
+app.include_router(charges_router)
 
 
 @app.get("/health")

@@ -13,16 +13,21 @@ const placeholderActivity: ActivityEntry[] = [
   { id: '3', action: 'You reviewed upcoming bills', timestamp: '2026-03-26T16:45:00Z' },
 ]
 
-export function ActivityPage() {
+interface Props {
+  userId: string
+}
+
+export function ActivityPage({ userId }: Props) {
   const { data: activity, isLoading } = useQuery({
-    queryKey: ['caregiver-activity'],
+    queryKey: ['caregiver-activity', userId],
     queryFn: async () => {
       try {
-        return await api<ActivityEntry[]>('/api/v1/caregiver/activity')
+        return await api<ActivityEntry[]>(`/api/v1/caregiver/activity?user_id=${userId}`)
       } catch {
         return placeholderActivity
       }
     },
+    enabled: !!userId,
   })
 
   const entries = Array.isArray(activity) ? activity : placeholderActivity

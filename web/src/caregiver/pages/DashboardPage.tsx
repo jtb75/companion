@@ -24,16 +24,21 @@ const placeholderData: DashboardData = {
   ],
 }
 
-export function DashboardPage() {
+interface Props {
+  userId: string
+}
+
+export function DashboardPage({ userId }: Props) {
   const { data, isLoading } = useQuery({
-    queryKey: ['caregiver-dashboard'],
+    queryKey: ['caregiver-dashboard', userId],
     queryFn: async () => {
       try {
-        return await api<DashboardData>('/api/v1/caregiver/dashboard')
+        return await api<DashboardData>(`/api/v1/caregiver/dashboard?user_id=${userId}`)
       } catch {
         return placeholderData
       }
     },
+    enabled: !!userId,
   })
 
   const dashboard = {
