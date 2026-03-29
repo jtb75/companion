@@ -115,19 +115,12 @@ async def get_current_caregiver(
     decoded = await _extract_bearer_token(authorization)
 
     contact_id = decoded.get("contact_id")
-    user_id = decoded.get("user_id")
-    tier_raw = decoded.get("tier")
 
-    if not contact_id or not user_id or not tier_raw:
+    if not contact_id:
         raise HTTPException(
             status_code=401,
             detail="Firebase token missing required caregiver claims",
         )
-
-    try:
-        tier = AccessTier(tier_raw)
-    except ValueError:
-        raise HTTPException(status_code=401, detail="Invalid access tier in token") from None
 
     result = await db.execute(
         select(TrustedContact).where(TrustedContact.id == uuid.UUID(contact_id))
@@ -140,8 +133,8 @@ async def get_current_caregiver(
 
     return CaregiverContext(
         contact=contact,
-        user_id=uuid.UUID(user_id),
-        tier=tier,
+        user_id=contact.user_id,
+        tier=contact.access_tier,
     )
 
 
@@ -222,8 +215,19 @@ def require_admin_role(minimum_role: str):
     async def check(
         admin: AdminUser = Depends(get_current_admin),
     ) -> AdminUser:
-        current_level = _ROLE_ORDER.get(admin.role, 0)
-        required_level = _ROLE_ORDER.get(minimum_role, 0)
+        current_level = _ROLE_ORDER.get(admin.role)
+        required_level = _ROLE_ORDER.get(minimum_role)
+
+        if current_level is None:
+            raise HTTPException(
+                status_code=403,
+                detail="Invalid admin role",
+            )
+        if required_level is None:
+            raise HTTPException(
+                status_code=500,
+                detail="Invalid required role configuration",
+            )
         if current_level < required_level:
             raise HTTPException(status_code=403, detail="Insufficient admin role")
         return admin

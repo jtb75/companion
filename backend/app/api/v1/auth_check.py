@@ -64,16 +64,8 @@ async def check_auth(
         response["admin_role"] = auth_result.admin_role
 
     if auth_result.is_caregiver:
-        response["caregiver_users"] = [
-            {
-                "user_id": str(c.user_id),
-                "contact_name": c.contact_name,
-                "access_tier": getattr(
-                    c.access_tier, "value", str(c.access_tier)
-                ),
-            }
-            for c in auth_result.caregiver_contacts
-        ]
+        response["caregiver_count"] = len(auth_result.caregiver_contacts)
+        response["has_charges"] = len(auth_result.caregiver_contacts) > 0
 
     # Check if user has a complete profile
     user_result = await db.execute(

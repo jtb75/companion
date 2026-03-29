@@ -52,7 +52,7 @@ async def get_dashboard(
     if not contact:
         raise HTTPException(
             status_code=403,
-            detail="You are not assigned as a caregiver for this user",
+            detail="Access denied",
         )
 
     return await caregiver_service.get_dashboard_summary(db, user_id)

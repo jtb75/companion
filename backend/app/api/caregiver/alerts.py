@@ -53,7 +53,7 @@ async def get_alerts(
     if not contact:
         raise HTTPException(
             status_code=403,
-            detail="You are not assigned as a caregiver for this user",
+            detail="Access denied",
         )
 
     alerts = await caregiver_service.get_alerts(db, user_id)

@@ -70,7 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setAdminRole(data.admin_role || null)
           setAuthorized(true)
           setProfileComplete(data.profile_complete ?? true)
-          setCaregiverUsers(data.caregiver_users || null)
+          setCaregiverUsers(data.has_charges ? [] : null)
         } else {
           setRole('unauthorized')
           setAuthorized(false)

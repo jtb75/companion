@@ -36,37 +36,22 @@ async def complete_profile(
     if not email:
         raise HTTPException(401, "No email")
 
-    # Find or create user record
+    # Find existing user record — never create new ones
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
     if not user:
-        # Create new user record
-        first = data.get("first_name", "")
-        last = data.get("last_name", "")
-        user = User(
-            email=email,
-            first_name=first,
-            last_name=last,
-            phone=data.get("phone"),
-            preferred_name=data.get("preferred_name", first),
-            display_name=f"{first} {last}".strip() or email,
-            primary_language="en",
-            voice_id="warm",
-            pace_setting="normal",
-            warmth_level="warm",
-        )
-        db.add(user)
-    else:
-        # Update existing
-        user.first_name = data.get("first_name", user.first_name)
-        user.last_name = data.get("last_name", user.last_name)
-        user.phone = data.get("phone", user.phone)
-        if data.get("preferred_name"):
-            user.preferred_name = data["preferred_name"]
-        first = user.first_name or ""
-        last = user.last_name or ""
-        user.display_name = f"{first} {last}".strip() or email
+        raise HTTPException(404, "No account found. Contact your administrator.")
+
+    # Update existing
+    user.first_name = data.get("first_name", user.first_name)
+    user.last_name = data.get("last_name", user.last_name)
+    user.phone = data.get("phone", user.phone)
+    if data.get("preferred_name"):
+        user.preferred_name = data["preferred_name"]
+    first = user.first_name or ""
+    last = user.last_name or ""
+    user.display_name = f"{first} {last}".strip() or email
 
     await db.flush()
     return {"completed": True, "user_id": str(user.id)}
