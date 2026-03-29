@@ -5,6 +5,8 @@ import { ThresholdsPage } from './pages/ThresholdsPage'
 import { VoicesPage } from './pages/VoicesPage'
 import { NotificationsPage } from './pages/NotificationsPage'
 import { AuditPage } from './pages/AuditPage'
+import { AdminUsersPage } from './pages/AdminUsersPage'
+import { ContactsPage } from './pages/ContactsPage'
 
 export function AdminLayout() {
   return (
@@ -15,6 +17,8 @@ export function AdminLayout() {
         <Route path="voices" element={<VoicesPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="audit" element={<AuditPage />} />
+        <Route path="admin-users" element={<AdminUsersPage />} />
+        <Route path="contacts" element={<ContactsPage />} />
         <Route path="" element={<Navigate to="prompts" replace />} />
       </Routes>
     </Layout>

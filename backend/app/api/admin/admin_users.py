@@ -11,7 +11,7 @@ from app.db import get_db
 from app.models.admin_user import AdminUser as AdminUserModel
 from app.schemas.admin import AdminUserCreate
 
-router = APIRouter(prefix="/admin/users", tags=["Admin - Users"])
+router = APIRouter(prefix="/admin/admin-users", tags=["Admin - Users"])
 
 _admin = require_admin_role("admin")
 
@@ -26,7 +26,20 @@ async def list_admin_users(
         select(AdminUserModel).order_by(AdminUserModel.email)
     )
     users = list(result.scalars().all())
-    return {"users": users, "total": len(users)}
+    return {
+        "users": [
+            {
+                "id": str(u.id),
+                "email": u.email,
+                "name": u.name,
+                "role": u.role,
+                "is_active": u.is_active,
+                "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,
+            }
+            for u in users
+        ],
+        "total": len(users),
+    }
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
