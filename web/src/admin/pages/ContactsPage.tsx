@@ -68,6 +68,7 @@ function tierLabel(value: string): string {
 export function ContactsPage() {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
+  const [searchMode, setSearchMode] = useState<'user' | 'caregiver'>('user')
   const [expandedUser, setExpandedUser] = useState<string | null>(null)
   const [addingFor, setAddingFor] = useState<string | null>(null)
   const [newContact, setNewContact] = useState({
@@ -90,11 +91,24 @@ export function ContactsPage() {
   const users = Array.isArray(usersData?.users) ? usersData.users : []
   const contacts = Array.isArray(contactsData?.contacts) ? contactsData.contacts : []
 
-  const filteredUsers = users.filter(
-    (u) =>
-      u.name.toLowerCase().includes(search.toLowerCase()) ||
-      u.email.toLowerCase().includes(search.toLowerCase())
-  )
+  const searchLower = search.toLowerCase()
+
+  const filteredUsers = users.filter((u) => {
+    if (!search) return true
+    if (searchMode === 'user') {
+      return (
+        u.name.toLowerCase().includes(searchLower) ||
+        u.email.toLowerCase().includes(searchLower)
+      )
+    }
+    // Caregiver search: show users who have a caregiver matching the search
+    return contacts.some(
+      (c) =>
+        c.user_id === u.id &&
+        (c.contact_name.toLowerCase().includes(searchLower) ||
+          (c.contact_email?.toLowerCase().includes(searchLower) ?? false))
+    )
+  })
 
   const contactsByUser = (userId: string) =>
     contacts.filter((c) => c.user_id === userId)
@@ -182,11 +196,39 @@ export function ContactsPage() {
         </div>
         <input
           type="text"
-          placeholder="Search users by name or email..."
+          placeholder={
+            searchMode === 'user'
+              ? 'Search users by name or email...'
+              : 'Search by caregiver name or email...'
+          }
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="block w-full rounded-lg border border-gray-300 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-900 placeholder-gray-400 focus:border-companion-blue-light focus:outline-none focus:ring-2 focus:ring-companion-blue-light"
         />
+      </div>
+
+      {/* Search mode toggle */}
+      <div className="flex gap-1 text-xs">
+        <button
+          onClick={() => { setSearchMode('user'); setSearch('') }}
+          className={`px-3 py-1 rounded-full transition ${
+            searchMode === 'user'
+              ? 'bg-companion-blue text-white'
+              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+          }`}
+        >
+          Search by User
+        </button>
+        <button
+          onClick={() => { setSearchMode('caregiver'); setSearch('') }}
+          className={`px-3 py-1 rounded-full transition ${
+            searchMode === 'caregiver'
+              ? 'bg-companion-blue text-white'
+              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+          }`}
+        >
+          Search by Caregiver
+        </button>
       </div>
 
       {/* User list */}
