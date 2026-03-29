@@ -20,11 +20,11 @@ output "database_password" {
 }
 
 output "redis_host" {
-  description = "Memorystore Redis host IP"
-  value       = google_redis_instance.redis.host
+  description = "Memorystore Redis host IP (empty if Redis disabled)"
+  value       = var.enable_redis ? google_redis_instance.redis[0].host : ""
 }
 
 output "redis_port" {
-  description = "Memorystore Redis port"
-  value       = google_redis_instance.redis.port
+  description = "Memorystore Redis port (0 if Redis disabled)"
+  value       = var.enable_redis ? google_redis_instance.redis[0].port : 0
 }

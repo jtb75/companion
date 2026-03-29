@@ -2,8 +2,8 @@ locals {
   # Build the database URL for Cloud SQL via Unix socket
   database_url = "postgresql+asyncpg://${var.database_user}:${var.database_password}@/${var.database_name}?host=/cloudsql/${var.database_connection_name}"
 
-  # Build the Redis URL
-  redis_url = "redis://${var.redis_host}:${var.redis_port}/0"
+  # Build the Redis URL (empty if Redis disabled)
+  redis_url = var.redis_host != "" ? "redis://${var.redis_host}:${var.redis_port}/0" : ""
 
   # Secrets that are created empty (values set manually or via CI)
   manual_secrets = {

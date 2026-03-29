@@ -36,6 +36,12 @@ variable "redis_memory_size" {
   default     = 1
 }
 
+variable "enable_redis" {
+  description = "Whether to create Memorystore Redis (set false to save cost)"
+  type        = bool
+  default     = false
+}
+
 variable "backend_image" {
   description = "Full Artifact Registry path for the backend Docker image"
   type        = string

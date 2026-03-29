@@ -32,3 +32,9 @@ variable "redis_memory_size" {
   description = "Memorystore Redis memory size in GB"
   type        = number
 }
+
+variable "enable_redis" {
+  description = "Whether to create Memorystore Redis"
+  type        = bool
+  default     = false
+}

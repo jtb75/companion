@@ -45,6 +45,7 @@ module "database" {
   db_tier           = var.db_tier
   db_disk_size      = var.db_disk_size
   redis_memory_size = var.redis_memory_size
+  enable_redis      = var.enable_redis
 }
 
 module "storage" {

@@ -71,8 +71,9 @@ resource "google_sql_user" "companion" {
   password = random_password.db_password.result
 }
 
-# Memorystore Redis instance
+# Memorystore Redis instance (optional — set enable_redis=false to save cost)
 resource "google_redis_instance" "redis" {
+  count              = var.enable_redis ? 1 : 0
   name               = "companion-${var.environment}-redis"
   project            = var.project_id
   region             = var.region
