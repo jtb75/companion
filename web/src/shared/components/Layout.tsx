@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 
 const navSections = [
@@ -43,6 +43,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation()
   const section = currentSection(location.pathname)
   const { user, logout, role, getToken } = useAuth()
+  const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -143,6 +144,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
                       {role === 'admin' ? 'Administrator' : 'Caregiver'}
                     </p>
                   </div>
+                  <button
+                    onClick={() => { setMenuOpen(false); navigate('/profile') }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <span className="text-gray-400">👤</span> My Profile
+                  </button>
                   {role === 'admin' && (
                     <>
                       <div className="px-4 py-1.5 mt-1">
