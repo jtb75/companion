@@ -20,7 +20,7 @@ async def complete_profile(
 ):
     """Complete user profile with first name, last name, phone."""
     # Dev bypass
-    if settings.environment in ("development", "test") and not authorization:
+    if settings.dev_auth_bypass and not authorization:
         return {"completed": True}
 
     if not authorization or not authorization.startswith("Bearer "):

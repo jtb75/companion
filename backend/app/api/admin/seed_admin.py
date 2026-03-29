@@ -13,6 +13,9 @@ from app.models.admin_user import AdminUser
 
 router = APIRouter(tags=["Bootstrap"])
 
+_bootstrap_attempts = 0
+_MAX_BOOTSTRAP_ATTEMPTS = 3
+
 
 @router.post("/api/v1/auth/bootstrap-admin")
 async def bootstrap_first_admin(
@@ -20,6 +23,11 @@ async def bootstrap_first_admin(
     email: str = "joe.buhr@gmail.com",
 ):
     """Create the first admin user. Only works when no admins exist."""
+    global _bootstrap_attempts
+    _bootstrap_attempts += 1
+    if _bootstrap_attempts > _MAX_BOOTSTRAP_ATTEMPTS:
+        raise HTTPException(429, "Too many bootstrap attempts")
+
     # Check if any admins exist
     result = await db.execute(
         select(func.count()).select_from(AdminUser)

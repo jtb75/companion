@@ -57,7 +57,7 @@ async def get_current_user(
     """
     # Dev/test bypass: skip auth when no header is provided
     if (
-        settings.environment in ("development", "test")
+        settings.dev_auth_bypass
         and authorization is None
     ):
         result = await db.execute(select(User).limit(1))
@@ -96,7 +96,7 @@ async def get_current_caregiver(
     """
     # Dev/test bypass: skip auth when no header is provided
     if (
-        settings.environment in ("development", "test")
+        settings.dev_auth_bypass
         and authorization is None
     ):
         result = await db.execute(select(TrustedContact).limit(1))
@@ -182,7 +182,7 @@ async def get_current_admin(
     """
     # Dev/test bypass: skip auth when no header is provided
     if (
-        settings.environment in ("development", "test")
+        settings.dev_auth_bypass
         and authorization is None
     ):
         result = await db.execute(select(AdminUser).limit(1))

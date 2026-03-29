@@ -24,6 +24,13 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     llm_provider: str = "anthropic"  # "anthropic" or "openai"
 
+    # Pipeline service-to-service auth
+    pipeline_api_key: str = ""  # Required in production
+
+    # Auth bypass for local development ONLY.
+    # Must be explicitly set to true. Never enable in production.
+    dev_auth_bypass: bool = False
+
     # App
     environment: str = "development"
     debug: bool = False

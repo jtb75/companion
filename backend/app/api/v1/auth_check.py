@@ -21,7 +21,7 @@ async def check_auth(
     """Check authorization for the current Firebase user."""
 
     # Dev/test bypass
-    if settings.environment in ("development", "test"):
+    if settings.dev_auth_bypass:
         if authorization is None:
             return {
                 "authorized": True,

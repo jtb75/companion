@@ -26,7 +26,7 @@ async def get_dashboard(
     Requires the caller to be assigned as a trusted contact for this user.
     """
     # Dev bypass
-    if settings.environment in ("development", "test") and not authorization:
+    if settings.dev_auth_bypass and not authorization:
         return await caregiver_service.get_dashboard_summary(db, user_id)
 
     if not authorization or not authorization.startswith("Bearer "):

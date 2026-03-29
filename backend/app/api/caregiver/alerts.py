@@ -26,7 +26,7 @@ async def get_alerts(
     Requires the caller to be assigned as a trusted contact for this user.
     """
     # Dev bypass
-    if settings.environment in ("development", "test") and not authorization:
+    if settings.dev_auth_bypass and not authorization:
         alerts = await caregiver_service.get_alerts(db, user_id)
         return {"alerts": alerts}
 

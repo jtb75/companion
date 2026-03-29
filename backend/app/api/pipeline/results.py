@@ -1,14 +1,31 @@
 """Pipeline API — Internal service endpoints for document processing results.
 
 These endpoints are called by the pipeline workers to post processing results.
-No user auth required — will use internal service auth in production.
+Authenticated via X-Pipeline-Key header (service-to-service auth).
 """
 
 import uuid
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 
-router = APIRouter(tags=["Pipeline"])
+from app.config import settings
+
+
+async def verify_pipeline_key(
+    x_pipeline_key: str | None = Header(None, alias="X-Pipeline-Key"),
+):
+    """Verify pipeline API key for service-to-service auth."""
+    # Allow in dev/test if no key configured
+    if not settings.pipeline_api_key:
+        if settings.environment in ("development", "test"):
+            return
+        raise HTTPException(503, "Pipeline API key not configured")
+
+    if x_pipeline_key != settings.pipeline_api_key:
+        raise HTTPException(401, "Invalid pipeline API key")
+
+
+router = APIRouter(tags=["Pipeline"], dependencies=[Depends(verify_pipeline_key)])
 
 
 @router.post(

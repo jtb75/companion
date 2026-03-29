@@ -24,7 +24,7 @@ async def get_my_charges(
     and returns the list of users they're assigned to.
     """
     # Dev bypass
-    if settings.environment in ("development", "test"):
+    if settings.dev_auth_bypass:
         if authorization is None:
             # Return all users in dev mode
             result = await db.execute(select(User))
