@@ -472,7 +472,7 @@ export function PeoplePage() {
                             onChange={(e) =>
                               setEditForm({ ...editForm, preferred_name: e.target.value })
                             }
-                            placeholder="What Arlo calls them"
+                            placeholder="What D.D. calls them"
                             className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-companion-blue-light focus:outline-none focus:ring-1 focus:ring-companion-blue-light"
                           />
                         </div>

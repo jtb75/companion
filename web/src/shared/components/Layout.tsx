@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
+import { BRAND_SHORT } from '../branding'
 
 const navSections = [
   {
@@ -36,7 +37,7 @@ function currentSection(pathname: string): string {
   if (pathname.startsWith('/caregiver')) return 'Caregiver'
   if (pathname.startsWith('/ops')) return 'Ops'
   if (pathname.startsWith('/admin')) return 'Admin'
-  return 'Companion'
+  return 'D.D.'
 }
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -73,7 +74,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Sidebar */}
       <nav className="w-56 bg-companion-blue text-white flex-shrink-0 overflow-y-auto flex flex-col">
         <div className="p-4 border-b border-companion-blue-mid">
-          <h1 className="text-lg font-bold tracking-wide">Companion</h1>
+          <h1 className="text-lg font-bold tracking-wide">{BRAND_SHORT}</h1>
         </div>
         <div className="flex-1">
         {navSections

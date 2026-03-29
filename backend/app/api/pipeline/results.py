@@ -101,7 +101,7 @@ async def post_status(document_id: uuid.UUID):
 @router.post("/pipeline/questions", status_code=status.HTTP_201_CREATED)
 async def post_questions():
     """Receive generated questions from pipeline."""
-    # TODO: accept questions payload and persist for Arlo
+    # TODO: accept questions payload and persist for D.D.
     return {
         "accepted": True,
         "questions_count": 0,

@@ -27,7 +27,7 @@ class User(TimestampMixin, Base):
         Text, nullable=False, server_default="en"
     )
 
-    # Arlo personality preferences
+    # D.D. personality preferences
     voice_id: Mapped[str] = mapped_column(
         Text, nullable=False, server_default="arlo_default"
     )

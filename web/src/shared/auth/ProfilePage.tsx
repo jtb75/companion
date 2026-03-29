@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from './AuthProvider'
 import { api } from '../api/client'
 import { useQuery, useMutation } from '@tanstack/react-query'
+import { BRAND_SHORT } from '../branding'
 
 interface UserProfile {
   email: string
@@ -115,7 +116,7 @@ export default function ProfilePage() {
             type="text"
             value={preferredName}
             onChange={(e) => setPreferredName(e.target.value)}
-            placeholder="What Arlo calls you (defaults to first name)"
+            placeholder={`What ${BRAND_SHORT} calls you (defaults to first name)`}
             className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-companion-blue focus:outline-none focus:ring-2 focus:ring-companion-blue-light"
           />
         </div>

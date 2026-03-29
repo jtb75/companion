@@ -13,6 +13,7 @@ from app.api.v1 import router as v1_router
 from app.api.v1.auth_check import router as auth_router
 from app.api.v1.charges import router as charges_router
 from app.api.v1.profile import router as profile_router
+from app.branding import BRAND_LONG, BRAND_MID
 from app.config import settings
 from app.db.session import engine
 
@@ -28,8 +29,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Companion API",
-    description="Independence Assistant for Adults with Developmental Disabilities",
+    title=f"{BRAND_MID} API",
+    description=f"{BRAND_LONG} — Independence Assistant for Adults with Developmental Disabilities",
     version="0.1.0",
     lifespan=lifespan,
 )

@@ -62,7 +62,7 @@ async def deliver_in_app(
 async def deliver_voice(
     user_id: UUID, text: str, voice_id: str = "warm"
 ) -> bool:
-    """Queue a voice notification for Arlo to speak.
+    """Queue a voice notification for D.D. to speak.
 
     Used when the app is open and active.
     """

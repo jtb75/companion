@@ -1,4 +1,4 @@
-"""App API — Conversation (Arlo) routes."""
+"""App API — Conversation (D.D.) routes."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,10 +22,10 @@ async def start_conversation(
     user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
-    """Start an Arlo conversation session."""
+    """Start a D.D. conversation session."""
     session = await state_manager.create_session(str(user.id))
 
-    # Generate Arlo's greeting
+    # Generate D.D.'s greeting
     trigger = "user_initiated"
     if data and data.initial_context:
         trigger = data.initial_context
@@ -58,7 +58,7 @@ async def send_message(
     user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
-    """Send a message to Arlo and get a response."""
+    """Send a message to D.D. and get a response."""
     # Find active session
     session = await state_manager.get_active_session(str(user.id))
     if session is None:
@@ -122,7 +122,7 @@ async def conversation_state(
 async def end_conversation(
     user: User = Depends(require_complete_profile),
 ):
-    """End the current Arlo session."""
+    """End the current D.D. session."""
     session = await state_manager.get_active_session(str(user.id))
     if session is None:
         return {"status": "no_active_session"}

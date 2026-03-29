@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../shared/api/client'
 import { Card } from '../../shared/components/Card'
+import { BRAND_SHORT, BRAND_LONG } from '../../shared/branding'
 
 interface ConfigEntry {
   id: string
@@ -15,9 +16,9 @@ interface ConfigEntry {
 
 const placeholderPrompt: ConfigEntry = {
   id: '',
-  category: 'arlo_persona',
+  category: 'dd_persona',
   key: 'system_prompt',
-  value: `You are Arlo, a warm and patient digital companion for older adults. You help with daily tasks like managing mail, paying bills, and keeping track of appointments. You speak clearly, avoid jargon, and always confirm before taking action. You are not a replacement for human connection - you are a helpful tool that makes daily life a little easier.`,
+  value: `You are ${BRAND_SHORT}, a warm and patient ${BRAND_LONG.toLowerCase()} for adults with developmental disabilities. You help with daily tasks like managing mail, paying bills, and keeping track of appointments. You speak clearly, avoid jargon, and always confirm before taking action. You are not a replacement for human connection - you are a helpful tool that makes daily life a little easier.`,
   version: 3,
   updated_by: 'admin@companion.dev',
   updated_at: '2026-03-25T10:00:00Z',
@@ -30,10 +31,10 @@ export function PromptsPage() {
   const [configId, setConfigId] = useState<string | null>(null)
 
   const { data: config, isLoading } = useQuery({
-    queryKey: ['config-arlo-persona'],
+    queryKey: ['config-dd-persona'],
     queryFn: async () => {
       try {
-        const entries = await api<ConfigEntry[]>('/admin/config?category=arlo_persona')
+        const entries = await api<ConfigEntry[]>('/admin/config?category=dd_persona')
         if (entries.length > 0) {
           setConfigId(entries[0].id)
           return entries[0]
@@ -61,10 +62,10 @@ export function PromptsPage() {
         await api('/admin/config', {
           method: 'POST',
           body: JSON.stringify({
-            category: 'arlo_persona',
+            category: 'dd_persona',
             key: 'system_prompt',
             value: { prompt: value },
-            description: 'Arlo persona system prompt',
+            description: `${BRAND_SHORT} persona system prompt`,
           }),
         })
       }
@@ -72,7 +73,7 @@ export function PromptsPage() {
     onSuccess: () => {
       setSaveStatus('Saved successfully')
       setEditValue(null)
-      queryClient.invalidateQueries({ queryKey: ['config-arlo-persona'] })
+      queryClient.invalidateQueries({ queryKey: ['config-dd-persona'] })
       setTimeout(() => setSaveStatus(null), 3000)
     },
     onError: () => {
@@ -89,7 +90,7 @@ export function PromptsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold text-gray-900">Arlo Prompt Config</h1>
+      <h1 className="text-xl font-semibold text-gray-900">{BRAND_SHORT} Prompt Config</h1>
 
       <Card
         title="System Prompt"

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from './AuthProvider'
 import { Navigate } from 'react-router-dom'
+import { BRAND_MID } from '../branding'
 
 export default function LoginPage() {
   const { user, loading, role, authorized, loginWithGoogle, loginWithEmail, registerWithEmail } = useAuth()
@@ -47,7 +48,7 @@ export default function LoginPage() {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="text-4xl mb-2">&#x1F31F;</div>
-          <h1 className="text-2xl font-bold text-companion-blue">Companion</h1>
+          <h1 className="text-2xl font-bold text-companion-blue">{BRAND_MID}</h1>
           <p className="text-gray-500 text-sm mt-1">Dashboard Login</p>
         </div>
 

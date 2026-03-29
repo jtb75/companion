@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from './AuthProvider'
+import { BRAND_MID } from '../branding'
 
 export default function AccessDenied() {
   const { user, logout } = useAuth()
@@ -20,7 +21,7 @@ export default function AccessDenied() {
         {deniedEmail && (
           <p className="text-gray-500 mb-2">
             <span className="font-medium">{deniedEmail}</span> does not have
-            access to the Companion Dashboard.
+            access to the {BRAND_MID} Dashboard.
           </p>
         )}
         <p className="text-gray-400 text-sm mb-6">

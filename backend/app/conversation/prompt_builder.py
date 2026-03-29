@@ -6,7 +6,8 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.conversation.persona import ARLO_PERSONA, DEFAULT_CONSTRAINTS
+from app.branding import BRAND_MID
+from app.conversation.persona import DD_PERSONA, DEFAULT_CONSTRAINTS
 from app.models.appointment import Appointment
 from app.models.bill import Bill
 from app.models.functional_memory import FunctionalMemory
@@ -24,7 +25,7 @@ async def build_system_prompt(
     """Assemble the 5-component system prompt.
 
     Components:
-    1. Arlo persona definition (fixed)
+    1. D.D. persona definition (fixed)
     2. User's functional memory (dynamic)
     3. Session context (dynamic)
     4. Active alerts and pending items (dynamic)
@@ -33,7 +34,7 @@ async def build_system_prompt(
     parts = []
 
     # 1. Persona (fixed)
-    parts.append(ARLO_PERSONA)
+    parts.append(DD_PERSONA)
 
     # 2. User's functional memory
     memory_context = await _build_memory_context(db, user)
@@ -104,7 +105,7 @@ def _build_session_context(user: User, trigger: str) -> str:
             "Address the specific item they tapped."
         ),
     }
-    return triggers.get(trigger, f"{name} is interacting with Companion.")
+    return triggers.get(trigger, f"{name} is interacting with {BRAND_MID}.")
 
 
 async def _build_alerts_context(db: AsyncSession, user_id: UUID) -> str:
