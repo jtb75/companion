@@ -1,12 +1,14 @@
 """Auth check endpoint — called by web dashboard after Firebase login."""
 
 from fastapi import APIRouter, Depends, Header, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.authorize import authorize_by_email
 from app.auth.firebase import verify_firebase_token
 from app.config import settings
 from app.db import get_db
+from app.models.user import User as UserModel
 
 router = APIRouter(tags=["Auth"])
 
@@ -26,6 +28,8 @@ async def check_auth(
                 "role": "admin",
                 "admin_role": "admin",
                 "email": "dev@companion.app",
+                "profile_complete": True,
+                "has_account": True,
             }
 
     if not authorization or not authorization.startswith("Bearer "):
@@ -70,5 +74,16 @@ async def check_auth(
             }
             for c in auth_result.caregiver_contacts
         ]
+
+    # Check if user has a complete profile
+    user_result = await db.execute(
+        select(UserModel).where(UserModel.email == email)
+    )
+    user_record = user_result.scalar_one_or_none()
+
+    response["profile_complete"] = bool(
+        user_record and user_record.first_name and user_record.last_name
+    )
+    response["has_account"] = user_record is not None
 
     return response

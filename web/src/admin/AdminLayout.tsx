@@ -7,6 +7,7 @@ import { NotificationsPage } from './pages/NotificationsPage'
 import { AuditPage } from './pages/AuditPage'
 import { AdminUsersPage } from './pages/AdminUsersPage'
 import { ContactsPage } from './pages/ContactsPage'
+import { UsersPage } from './pages/UsersPage'
 
 export function AdminLayout() {
   return (
@@ -18,6 +19,7 @@ export function AdminLayout() {
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="audit" element={<AuditPage />} />
         <Route path="admin-users" element={<AdminUsersPage />} />
+        <Route path="users" element={<UsersPage />} />
         <Route path="contacts" element={<ContactsPage />} />
         <Route path="" element={<Navigate to="prompts" replace />} />
       </Routes>

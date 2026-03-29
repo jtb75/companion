@@ -1,6 +1,7 @@
 import { Navigate } from 'react-router-dom'
 import { useAuth } from './AuthProvider'
 import AccessDenied from './AccessDenied'
+import CompleteProfilePage from './CompleteProfilePage'
 
 interface Props {
   children: React.ReactNode
@@ -8,7 +9,7 @@ interface Props {
 }
 
 export default function ProtectedRoute({ children, requiredRole }: Props) {
-  const { user, loading, authorized, role } = useAuth()
+  const { user, loading, authorized, role, profileComplete } = useAuth()
 
   if (loading) {
     return (
@@ -32,6 +33,10 @@ export default function ProtectedRoute({ children, requiredRole }: Props) {
 
   if (!authorized) {
     return <AccessDenied />
+  }
+
+  if (profileComplete === false) {
+    return <CompleteProfilePage />
   }
 
   // Role check: admins can access everything, caregivers only caregiver routes

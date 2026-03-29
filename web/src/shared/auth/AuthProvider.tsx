@@ -15,6 +15,7 @@ interface AuthContextType {
   role: string | null        // "admin", "caregiver", "unauthorized", null (checking)
   adminRole: string | null   // "viewer", "editor", "admin"
   authorized: boolean | null // null = still checking, true/false = result
+  profileComplete: boolean | null
   caregiverUsers: Array<{ user_id: string; contact_name: string; access_tier: string }> | null
   loginWithGoogle: () => Promise<void>
   loginWithEmail: (email: string, password: string) => Promise<void>
@@ -31,6 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<string | null>(null)
   const [adminRole, setAdminRole] = useState<string | null>(null)
   const [authorized, setAuthorized] = useState<boolean | null>(null)
+  const [profileComplete, setProfileComplete] = useState<boolean | null>(null)
   const [caregiverUsers, setCaregiverUsers] = useState<Array<{ user_id: string; contact_name: string; access_tier: string }> | null>(null)
 
   useEffect(() => {
@@ -45,6 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) {
       setRole(null)
       setAuthorized(null)
+      setProfileComplete(null)
       setAdminRole(null)
       setCaregiverUsers(null)
       return
@@ -66,6 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setRole(data.role)
           setAdminRole(data.admin_role || null)
           setAuthorized(true)
+          setProfileComplete(data.profile_complete ?? true)
           setCaregiverUsers(data.caregiver_users || null)
         } else {
           setRole('unauthorized')
@@ -102,7 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      user, loading, role, adminRole, authorized, caregiverUsers,
+      user, loading, role, adminRole, authorized, profileComplete, caregiverUsers,
       loginWithGoogle, loginWithEmail,
       registerWithEmail, logout, getToken,
     }}>

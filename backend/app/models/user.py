@@ -18,6 +18,8 @@ class User(TimestampMixin, Base):
     phone: Mapped[str | None] = mapped_column(Text, unique=True, nullable=True)
     preferred_name: Mapped[str] = mapped_column(Text, nullable=False)
     display_name: Mapped[str] = mapped_column(Text, nullable=False)
+    first_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
     address: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
