@@ -68,6 +68,7 @@ jobs:
           COMPANION_DATABASE_URL: postgresql+asyncpg://companion:test@localhost:5432/companion_test
           COMPANION_REDIS_URL: redis://localhost:6379/0
           COMPANION_ENVIRONMENT: test
+          COMPANION_DEV_AUTH_BYPASS: "true"
         run: pytest -v
 
   lint-web:
