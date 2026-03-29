@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { api } from '../../shared/api/client'
 import { Card } from '../../shared/components/Card'
 
 interface VoiceProfile {
@@ -16,12 +18,94 @@ const defaultVoices: VoiceProfile[] = [
 ]
 
 export function VoicesPage() {
+  const queryClient = useQueryClient()
   const [voices, setVoices] = useState<VoiceProfile[]>(defaultVoices)
+  const [configIds, setConfigIds] = useState<Record<string, string>>({})
+  const [saveStatus, setSaveStatus] = useState<string | null>(null)
+  const [dirty, setDirty] = useState(false)
+
+  const { isLoading } = useQuery({
+    queryKey: ['config-voice-profiles'],
+    queryFn: async () => {
+      try {
+        const entries = await api<{ id: string; key: string; value: string }[]>(
+          '/admin/config?category=voice_profile'
+        )
+        if (entries.length > 0) {
+          const ids: Record<string, string> = {}
+          const loaded: VoiceProfile[] = entries.map((e) => {
+            ids[e.key] = e.id
+            const parsed = typeof e.value === 'string' ? JSON.parse(e.value) : e.value
+            return {
+              id: e.key,
+              name: parsed.name ?? e.key,
+              pitch: parsed.pitch ?? 0,
+              speaking_rate: parsed.speaking_rate ?? 1.0,
+            }
+          })
+          setConfigIds(ids)
+          setVoices(loaded)
+          return loaded
+        }
+        return defaultVoices
+      } catch {
+        return defaultVoices
+      }
+    },
+  })
 
   const updateVoice = (id: string, field: keyof VoiceProfile, value: number) => {
     setVoices((prev) =>
       prev.map((v) => (v.id === id ? { ...v, [field]: value } : v))
     )
+    setDirty(true)
+  }
+
+  const mutation = useMutation({
+    mutationFn: async (voiceList: VoiceProfile[]) => {
+      await Promise.all(
+        voiceList.map(async (voice) => {
+          const payload = {
+            name: voice.name,
+            pitch: voice.pitch,
+            speaking_rate: voice.speaking_rate,
+          }
+          if (configIds[voice.id]) {
+            await api(`/admin/config/${configIds[voice.id]}`, {
+              method: 'PATCH',
+              body: JSON.stringify({
+                value: payload,
+                reason: 'Updated via admin dashboard',
+              }),
+            })
+          } else {
+            await api('/admin/config', {
+              method: 'POST',
+              body: JSON.stringify({
+                category: 'voice_profile',
+                key: voice.id,
+                value: payload,
+                description: `Voice profile: ${voice.name}`,
+              }),
+            })
+          }
+        })
+      )
+    },
+    onSuccess: () => {
+      setSaveStatus('Saved successfully')
+      setDirty(false)
+      queryClient.invalidateQueries({ queryKey: ['config-voice-profiles'] })
+      setTimeout(() => setSaveStatus(null), 3000)
+    },
+    onError: () => {
+      setSaveStatus('Failed to save (API may not be connected)')
+      setTimeout(() => setSaveStatus(null), 3000)
+    },
+  })
+
+  if (isLoading) {
+    return <p className="text-gray-500">Loading voice profiles...</p>
   }
 
   return (
@@ -69,6 +153,23 @@ export function VoicesPage() {
             </div>
           </Card>
         ))}
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div>
+          {saveStatus && (
+            <p className={`text-sm ${saveStatus.includes('Failed') ? 'text-red-600' : 'text-green-600'}`}>
+              {saveStatus}
+            </p>
+          )}
+        </div>
+        <button
+          onClick={() => mutation.mutate(voices)}
+          disabled={mutation.isPending || !dirty}
+          className="px-4 py-2 bg-companion-blue text-white rounded-lg text-sm font-medium hover:bg-companion-blue-mid disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {mutation.isPending ? 'Saving...' : 'Save Voices'}
+        </button>
       </div>
     </div>
   )

@@ -17,18 +17,22 @@ export function ThresholdsPage() {
   const queryClient = useQueryClient()
   const [values, setValues] = useState<ThresholdConfig | null>(null)
   const [saveStatus, setSaveStatus] = useState<string | null>(null)
+  const [configIds, setConfigIds] = useState<Record<string, string>>({})
 
   const { data: config, isLoading } = useQuery({
     queryKey: ['config-pipeline-threshold'],
     queryFn: async () => {
       try {
-        const entries = await api<{ key: string; value: string }[]>(
+        const entries = await api<{ id: string; key: string; value: string }[]>(
           '/admin/config?category=pipeline_threshold'
         )
         const obj: Record<string, number> = {}
+        const ids: Record<string, string> = {}
         for (const e of entries) {
           obj[e.key] = parseFloat(e.value)
+          ids[e.key] = e.id
         }
+        setConfigIds(ids)
         return {
           classification_confidence: obj.classification_confidence ?? placeholderThresholds.classification_confidence,
           junk_cutoff: obj.junk_cutoff ?? placeholderThresholds.junk_cutoff,
@@ -41,25 +45,33 @@ export function ThresholdsPage() {
 
   const thresholds = values ?? config ?? placeholderThresholds
 
+  const saveEntry = async (key: string, value: string) => {
+    if (configIds[key]) {
+      await api(`/admin/config/${configIds[key]}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          value: { threshold: value },
+          reason: 'Updated via admin dashboard',
+        }),
+      })
+    } else {
+      await api('/admin/config', {
+        method: 'POST',
+        body: JSON.stringify({
+          category: 'pipeline_threshold',
+          key,
+          value: { threshold: value },
+          description: `Pipeline threshold: ${key}`,
+        }),
+      })
+    }
+  }
+
   const mutation = useMutation({
     mutationFn: async (vals: ThresholdConfig) => {
       await Promise.all([
-        api('/admin/config', {
-          method: 'PATCH',
-          body: JSON.stringify({
-            category: 'pipeline_threshold',
-            key: 'classification_confidence',
-            value: String(vals.classification_confidence),
-          }),
-        }),
-        api('/admin/config', {
-          method: 'PATCH',
-          body: JSON.stringify({
-            category: 'pipeline_threshold',
-            key: 'junk_cutoff',
-            value: String(vals.junk_cutoff),
-          }),
-        }),
+        saveEntry('classification_confidence', String(vals.classification_confidence)),
+        saveEntry('junk_cutoff', String(vals.junk_cutoff)),
       ])
     },
     onSuccess: () => {

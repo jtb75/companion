@@ -4,6 +4,7 @@ import { api } from '../../shared/api/client'
 import { Card } from '../../shared/components/Card'
 
 interface ConfigEntry {
+  id: string
   category: string
   key: string
   value: string
@@ -13,6 +14,7 @@ interface ConfigEntry {
 }
 
 const placeholderPrompt: ConfigEntry = {
+  id: '',
   category: 'arlo_persona',
   key: 'system_prompt',
   value: `You are Arlo, a warm and patient digital companion for older adults. You help with daily tasks like managing mail, paying bills, and keeping track of appointments. You speak clearly, avoid jargon, and always confirm before taking action. You are not a replacement for human connection - you are a helpful tool that makes daily life a little easier.`,
@@ -25,13 +27,18 @@ export function PromptsPage() {
   const queryClient = useQueryClient()
   const [editValue, setEditValue] = useState<string | null>(null)
   const [saveStatus, setSaveStatus] = useState<string | null>(null)
+  const [configId, setConfigId] = useState<string | null>(null)
 
   const { data: config, isLoading } = useQuery({
     queryKey: ['config-arlo-persona'],
     queryFn: async () => {
       try {
         const entries = await api<ConfigEntry[]>('/admin/config?category=arlo_persona')
-        return entries[0] ?? placeholderPrompt
+        if (entries.length > 0) {
+          setConfigId(entries[0].id)
+          return entries[0]
+        }
+        return placeholderPrompt
       } catch {
         return placeholderPrompt
       }
@@ -42,14 +49,25 @@ export function PromptsPage() {
 
   const mutation = useMutation({
     mutationFn: async (value: string) => {
-      await api('/admin/config', {
-        method: 'PATCH',
-        body: JSON.stringify({
-          category: 'arlo_persona',
-          key: 'system_prompt',
-          value,
-        }),
-      })
+      if (configId) {
+        await api(`/admin/config/${configId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            value: { prompt: value },
+            reason: 'Updated via admin dashboard',
+          }),
+        })
+      } else {
+        await api('/admin/config', {
+          method: 'POST',
+          body: JSON.stringify({
+            category: 'arlo_persona',
+            key: 'system_prompt',
+            value: { prompt: value },
+            description: 'Arlo persona system prompt',
+          }),
+        })
+      }
     },
     onSuccess: () => {
       setSaveStatus('Saved successfully')

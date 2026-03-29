@@ -58,7 +58,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           })
           .map((sec) => (
           <div key={sec.label} className="px-3 py-3">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-companion-blue-light mb-2 px-2">
+            <h2 className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/40 mb-2 px-2 mt-1">
               {sec.label}
             </h2>
             {sec.links.map((link) => {

@@ -4,10 +4,8 @@ import os
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import pool, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy import pool
-
 
 DATABASE_URL = os.environ.get(
     "COMPANION_DATABASE_URL",
@@ -20,14 +18,9 @@ async def seed():
     factory = async_sessionmaker(engine, expire_on_commit=False)
 
     # Import models
-    import sys
     # Running inside backend container
-    from app.models.user import User
-    from app.models.trusted_contact import TrustedContact
-    from app.models.medication import Medication
-    from app.models.bill import Bill
     from app.models.appointment import Appointment
-    from app.models.todo import Todo
+    from app.models.bill import Bill
     from app.models.enums import (
         AccessTier,
         PaymentStatus,
@@ -35,6 +28,10 @@ async def seed():
         TodoCategory,
         TodoSource,
     )
+    from app.models.medication import Medication
+    from app.models.todo import Todo
+    from app.models.trusted_contact import TrustedContact
+    from app.models.user import User
 
     async with factory() as db:
         result = await db.execute(
