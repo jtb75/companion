@@ -17,9 +17,10 @@ COPY app ./app
 
 RUN pip install --no-cache-dir .
 
-# Copy remaining files (alembic config/migrations)
+# Copy remaining files (alembic config/migrations, seed scripts)
 COPY alembic.ini .
 COPY alembic ./alembic
+COPY seed_staging.py .
 
 # Stage 2 — runtime
 FROM python:3.13-slim
@@ -39,6 +40,7 @@ WORKDIR /app
 COPY --from=builder /build/app ./app
 COPY --from=builder /build/alembic.ini .
 COPY --from=builder /build/alembic ./alembic
+COPY --from=builder /build/seed_staging.py .
 
 ENV PYTHONPATH="/app"
 ENV PYTHONUNBUFFERED=1
