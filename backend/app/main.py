@@ -38,10 +38,12 @@ app = FastAPI(
 CORS_ORIGINS = {
     "development": ["http://localhost:5173", "http://localhost:3000"],
     "staging": [
+        "https://app.mydailydignity.com",
         "https://companion-staging-web-44gbcsdrnq-uc.a.run.app",
         "https://companion-staging-web-381910341082.us-central1.run.app",
     ],
     "prod": [
+        "https://app.mydailydignity.com",
         "https://companion-prod-web-mtfid4sksa-uc.a.run.app",
     ],
 }
