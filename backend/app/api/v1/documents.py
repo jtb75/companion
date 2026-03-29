@@ -5,7 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import User, get_current_user
+from app.auth.dependencies import User, require_complete_profile
 from app.db import get_db
 from app.pipeline.orchestrator import process_document
 from app.schemas.document import DocumentScanRequest, DocumentStatusUpdate
@@ -17,7 +17,7 @@ router = APIRouter(prefix="/documents", tags=["Documents"])
 @router.post("/scan", status_code=status.HTTP_201_CREATED)
 async def scan_document(
     data: DocumentScanRequest,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """Submit a camera scan for processing."""
@@ -34,7 +34,7 @@ async def list_documents(
     document_status: str | None = Query(None, alias="status"),
     classification: str | None = None,
     urgency: str | None = None,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """List documents with optional filters."""
@@ -47,7 +47,7 @@ async def list_documents(
 @router.get("/{document_id}")
 async def get_document(
     document_id: uuid.UUID,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """Get document detail."""
@@ -61,7 +61,7 @@ async def get_document(
 async def update_document(
     document_id: uuid.UUID,
     data: DocumentStatusUpdate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """Update document status."""
@@ -76,7 +76,7 @@ async def update_document(
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_document(
     document_id: uuid.UUID,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a document."""

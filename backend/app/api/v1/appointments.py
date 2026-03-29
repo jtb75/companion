@@ -5,7 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import User, get_current_user
+from app.auth.dependencies import User, require_complete_profile
 from app.db import get_db
 from app.schemas.appointment import AppointmentCreate, AppointmentUpdate
 from app.services import appointment_service
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/appointments", tags=["Appointments"])
 
 @router.get("")
 async def list_appointments(
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """List all appointments."""
@@ -26,7 +26,7 @@ async def list_appointments(
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_appointment(
     data: AppointmentCreate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new appointment."""
@@ -40,7 +40,7 @@ async def create_appointment(
 async def update_appointment(
     appointment_id: uuid.UUID,
     data: AppointmentUpdate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """Update an appointment."""
@@ -55,7 +55,7 @@ async def update_appointment(
 @router.delete("/{appointment_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_appointment(
     appointment_id: uuid.UUID,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """Delete an appointment."""
@@ -68,7 +68,7 @@ async def delete_appointment(
 @router.post("/{appointment_id}/travel", status_code=status.HTTP_201_CREATED)
 async def request_travel_plan(
     appointment_id: uuid.UUID,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
 ):
     """Request a travel plan for an appointment.
 

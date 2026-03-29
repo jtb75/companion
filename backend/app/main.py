@@ -45,9 +45,17 @@ CORS_ORIGINS = {
     ],
 }
 
+_cors_origins = CORS_ORIGINS.get(settings.environment, [])
+if not _cors_origins:
+    logger.error(
+        f"No CORS origins configured for environment '{settings.environment}'. "
+        "Cross-origin requests will be blocked. "
+        f"Valid environments: {list(CORS_ORIGINS.keys())}"
+    )
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS.get(settings.environment, []),
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],

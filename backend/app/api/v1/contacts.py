@@ -5,7 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import User, get_current_user
+from app.auth.dependencies import User, require_complete_profile
 from app.db import get_db
 from app.schemas.contact import ContactCreate, ContactUpdate
 from app.services import caregiver_service
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/contacts", tags=["Trusted Contacts"])
 
 @router.get("")
 async def list_contacts(
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """List trusted contacts."""
@@ -26,7 +26,7 @@ async def list_contacts(
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def add_contact(
     data: ContactCreate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """Add a trusted contact."""
@@ -38,7 +38,7 @@ async def add_contact(
 async def update_contact(
     contact_id: uuid.UUID,
     data: ContactUpdate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """Update a trusted contact (change tier, scope, etc.)."""
@@ -53,7 +53,7 @@ async def update_contact(
 @router.delete("/{contact_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_contact(
     contact_id: uuid.UUID,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """Remove a trusted contact."""
@@ -66,7 +66,7 @@ async def remove_contact(
 @router.post("/{contact_id}/pause")
 async def pause_contact(
     contact_id: uuid.UUID,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """Pause a trusted contact's access."""
@@ -79,7 +79,7 @@ async def pause_contact(
 @router.post("/{contact_id}/resume")
 async def resume_contact(
     contact_id: uuid.UUID,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """Resume a trusted contact's access."""

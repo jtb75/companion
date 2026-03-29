@@ -5,7 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import User, get_current_user
+from app.auth.dependencies import User, require_complete_profile
 from app.db import get_db
 from app.schemas.todo import TodoCreate, TodoUpdate
 from app.services import todo_service
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/todos", tags=["Todos"])
 
 @router.get("")
 async def list_todos(
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """List all todos."""
@@ -26,7 +26,7 @@ async def list_todos(
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_todo(
     data: TodoCreate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new todo."""
@@ -38,7 +38,7 @@ async def create_todo(
 async def update_todo(
     todo_id: uuid.UUID,
     data: TodoUpdate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """Update a todo."""
@@ -53,7 +53,7 @@ async def update_todo(
 @router.delete("/{todo_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_todo(
     todo_id: uuid.UUID,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a todo."""
@@ -66,7 +66,7 @@ async def delete_todo(
 @router.post("/{todo_id}/complete")
 async def complete_todo(
     todo_id: uuid.UUID,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """Mark a todo as complete."""

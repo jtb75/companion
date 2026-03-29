@@ -37,9 +37,16 @@ async def _ensure_test_user():
     """Create a test user if the database is empty (e.g., fresh CI database)."""
     async with _test_session_factory() as session:
         result = await session.execute(select(User).limit(1))
-        if result.scalar_one_or_none() is None:
+        existing = result.scalar_one_or_none()
+        if existing and not existing.first_name:
+            existing.first_name = "Test"
+            existing.last_name = "User"
+            await session.commit()
+        if existing is None:
             user = User(
                 email="test@companion.app",
+                first_name="Test",
+                last_name="User",
                 preferred_name="Test",
                 display_name="Test User",
                 primary_language="en",

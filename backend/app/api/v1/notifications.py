@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import User, get_current_user
+from app.auth.dependencies import User, require_complete_profile
 from app.db import get_db
 from app.notifications.morning_checkin import assemble_morning_checkin
 
@@ -12,7 +12,7 @@ router = APIRouter(prefix="/notifications", tags=["Notifications"])
 
 @router.get("")
 async def list_notifications(
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """List notifications including morning check-in."""
@@ -28,7 +28,7 @@ async def list_notifications(
 @router.patch("/{notification_id}")
 async def acknowledge_notification(
     notification_id: str,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """Acknowledge/dismiss a notification."""
@@ -38,7 +38,7 @@ async def acknowledge_notification(
 
 @router.get("/preferences")
 async def get_preferences(
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
 ):
     """Get notification preferences."""
     return {
@@ -50,7 +50,7 @@ async def get_preferences(
 
 @router.patch("/preferences")
 async def update_preferences(
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """Update notification preferences."""

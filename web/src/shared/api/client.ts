@@ -10,7 +10,6 @@ export async function api<T>(
     'Content-Type': 'application/json',
   }
 
-  // Add Firebase auth token if user is logged in
   const user = auth.currentUser
   if (user) {
     const token = await user.getIdToken()
@@ -21,6 +20,20 @@ export async function api<T>(
     headers: { ...headers, ...options?.headers },
     ...options,
   })
+
+  // On 401, try refreshing the token and retry once
+  if (res.status === 401 && user) {
+    const freshToken = await user.getIdToken(true) // force refresh
+    headers['Authorization'] = `Bearer ${freshToken}`
+    const retry = await fetch(`${API_BASE}${path}`, {
+      headers: { ...headers, ...options?.headers },
+      ...options,
+    })
+    if (!retry.ok) {
+      throw new Error(`API error: ${retry.status}`)
+    }
+    return retry.json()
+  }
 
   if (!res.ok) {
     throw new Error(`API error: ${res.status}`)

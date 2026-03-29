@@ -6,7 +6,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import User, get_current_user
+from app.auth.dependencies import User, require_complete_profile
 from app.db import get_db
 from app.schemas.bill import BillCreate, BillUpdate
 from app.services import bill_service
@@ -19,7 +19,7 @@ async def list_bills(
     bill_status: str | None = Query(None, alias="status"),
     due_after: date | None = Query(None),
     due_before: date | None = Query(None),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """List bills with optional filters."""
@@ -32,7 +32,7 @@ async def list_bills(
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_bill(
     data: BillCreate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new bill."""
@@ -44,7 +44,7 @@ async def create_bill(
 async def update_bill(
     bill_id: uuid.UUID,
     data: BillUpdate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """Update a bill."""
@@ -58,7 +58,7 @@ async def update_bill(
 
 @router.get("/summary")
 async def bill_summary(
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """Monthly bill summary."""

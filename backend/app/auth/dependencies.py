@@ -81,6 +81,22 @@ async def get_current_user(
 
 
 # ---------------------------------------------------------------------------
+# Profile-completion gate
+# ---------------------------------------------------------------------------
+
+async def require_complete_profile(
+    user: User = Depends(get_current_user),
+) -> User:
+    """Ensure the authenticated user has completed their profile."""
+    if not user.first_name or not user.last_name:
+        raise HTTPException(
+            status_code=403,
+            detail="Profile incomplete. Complete your profile first.",
+        )
+    return user
+
+
+# ---------------------------------------------------------------------------
 # Caregiver API dependency
 # ---------------------------------------------------------------------------
 

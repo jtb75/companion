@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import User, get_current_user
+from app.auth.dependencies import User, require_complete_profile
 from app.conversation.llm import get_llm_client
 from app.conversation.prompt_builder import build_system_prompt
 from app.conversation.state_manager import state_manager
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/conversation", tags=["Conversation"])
 @router.post("/start", status_code=status.HTTP_201_CREATED)
 async def start_conversation(
     data: ConversationStartRequest | None = None,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """Start an Arlo conversation session."""
@@ -55,7 +55,7 @@ async def start_conversation(
 @router.post("/message")
 async def send_message(
     data: ConversationMessageRequest,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
     """Send a message to Arlo and get a response."""
@@ -98,7 +98,7 @@ async def send_message(
 
 @router.get("/state")
 async def conversation_state(
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
 ):
     """Get current conversation state."""
     session = await state_manager.get_active_session(str(user.id))
@@ -120,7 +120,7 @@ async def conversation_state(
 
 @router.post("/end")
 async def end_conversation(
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_complete_profile),
 ):
     """End the current Arlo session."""
     session = await state_manager.get_active_session(str(user.id))
