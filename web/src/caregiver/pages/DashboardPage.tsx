@@ -41,10 +41,15 @@ export function DashboardPage({ userId }: Props) {
     enabled: !!userId,
   })
 
+  const raw = data ?? placeholderData
   const dashboard = {
-    ...(data ?? placeholderData),
-    upcoming_bills: Array.isArray(data?.upcoming_bills) ? data.upcoming_bills : placeholderData.upcoming_bills,
-    upcoming_appointments: Array.isArray(data?.upcoming_appointments) ? data.upcoming_appointments : placeholderData.upcoming_appointments,
+    status: raw.status ?? 'managing_well',
+    tasks: raw.tasks ?? { completed: 0, total: 0 },
+    medication_adherence: raw.medication_adherence ?? 0,
+    upcoming_bills: Array.isArray(raw.upcoming_bills)
+      ? raw.upcoming_bills : [],
+    upcoming_appointments: Array.isArray(raw.upcoming_appointments)
+      ? raw.upcoming_appointments : [],
   }
 
   if (isLoading) {
@@ -71,7 +76,7 @@ export function DashboardPage({ userId }: Props) {
           <div className="w-full bg-gray-200 rounded-full h-2.5">
             <div
               className="bg-companion-sage h-2.5 rounded-full"
-              style={{ width: `${(dashboard.tasks.completed / dashboard.tasks.total) * 100}%` }}
+              style={{ width: `${dashboard.tasks.total > 0 ? (dashboard.tasks.completed / dashboard.tasks.total) * 100 : 0}%` }}
             />
           </div>
         </Card>
