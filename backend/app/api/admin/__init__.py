@@ -8,6 +8,7 @@ from app.api.admin import (
     contacts,
     escalations,
     metrics,
+    people,
     pipeline_health,
     users_management,
 )
@@ -21,3 +22,4 @@ router.include_router(metrics.router)
 router.include_router(admin_users.router)
 router.include_router(contacts.router)
 router.include_router(users_management.router)
+router.include_router(people.router)
