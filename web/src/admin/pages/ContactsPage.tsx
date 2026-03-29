@@ -1,9 +1,14 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../shared/api/client'
-import { Card } from '../../shared/components/Card'
 
-interface ContactEntry {
+interface User {
+  id: string
+  name: string
+  email: string
+}
+
+interface Contact {
   id: string
   user_id: string
   user_name: string
@@ -15,232 +20,386 @@ interface ContactEntry {
   is_active: boolean
 }
 
-interface ContactsResponse {
-  contacts: ContactEntry[]
-  total: number
-}
-
-interface UserOption {
-  id: string
-  email: string
-  name: string
-}
-
-interface UsersResponse {
-  users: UserOption[]
-}
-
-const RELATIONSHIP_TYPES = [
-  { value: 'family', label: 'Family' },
-  { value: 'case_worker', label: 'Case Worker' },
-  { value: 'support_coordinator', label: 'Support Coordinator' },
-  { value: 'group_home_staff', label: 'Group Home Staff' },
-  { value: 'paid_support', label: 'Paid Support' },
+const RELATIONSHIPS = [
+  { value: 'FAMILY', label: 'Family' },
+  { value: 'CASE_WORKER', label: 'Case Worker' },
+  { value: 'SUPPORT_COORDINATOR', label: 'Support Coordinator' },
+  { value: 'GROUP_HOME_STAFF', label: 'Group Home Staff' },
+  { value: 'PAID_SUPPORT', label: 'Paid Support' },
 ]
 
-const ACCESS_TIERS = [
-  { value: 'tier_1', label: 'Tier 1' },
-  { value: 'tier_2', label: 'Tier 2' },
-  { value: 'tier_3', label: 'Tier 3' },
+const TIERS = [
+  { value: 'TIER_1', label: 'Tier 1 — Alerts Only' },
+  { value: 'TIER_2', label: 'Tier 2 — Read-Only Dashboard' },
+  { value: 'TIER_3', label: 'Tier 3 — Scoped Collaboration' },
 ]
+
+const RELATIONSHIP_COLORS: Record<string, string> = {
+  FAMILY: 'bg-emerald-100 text-emerald-800',
+  CASE_WORKER: 'bg-sky-100 text-sky-800',
+  SUPPORT_COORDINATOR: 'bg-violet-100 text-violet-800',
+  GROUP_HOME_STAFF: 'bg-amber-100 text-amber-800',
+  PAID_SUPPORT: 'bg-orange-100 text-orange-800',
+}
+
+const TIER_COLORS: Record<string, string> = {
+  TIER_1: 'bg-gray-100 text-gray-700',
+  TIER_2: 'bg-blue-100 text-blue-700',
+  TIER_3: 'bg-indigo-100 text-indigo-700',
+}
+
+function relationshipLabel(value: string): string {
+  return RELATIONSHIPS.find((r) => r.value === value)?.label ?? value
+}
+
+function tierLabel(value: string): string {
+  return TIERS.find((t) => t.value === value)?.label ?? value
+}
 
 export function ContactsPage() {
   const queryClient = useQueryClient()
-  const [userId, setUserId] = useState('')
-  const [contactName, setContactName] = useState('')
-  const [contactEmail, setContactEmail] = useState('')
-  const [relationshipType, setRelationshipType] = useState('family')
-  const [accessTier, setAccessTier] = useState('tier_1')
-  const [status, setStatus] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [expandedUser, setExpandedUser] = useState<string | null>(null)
+  const [addingFor, setAddingFor] = useState<string | null>(null)
+  const [newContact, setNewContact] = useState({
+    contact_name: '',
+    contact_email: '',
+    relationship_type: 'FAMILY',
+    access_tier: 'TIER_1',
+  })
+
+  const { data: usersData, isLoading: usersLoading } = useQuery({
+    queryKey: ['admin-companion-users'],
+    queryFn: () => api<{ users: User[] }>('/admin/users'),
+  })
 
   const { data: contactsData, isLoading: contactsLoading } = useQuery({
     queryKey: ['admin-contacts'],
-    queryFn: () => api<ContactsResponse>('/admin/contacts'),
+    queryFn: () => api<{ contacts: Contact[] }>('/admin/contacts'),
   })
 
-  const { data: usersData } = useQuery({
-    queryKey: ['admin-all-users'],
-    queryFn: () => api<UsersResponse>('/admin/users'),
-  })
+  const users = Array.isArray(usersData?.users) ? usersData.users : []
+  const contacts = Array.isArray(contactsData?.contacts) ? contactsData.contacts : []
+
+  const filteredUsers = users.filter(
+    (u) =>
+      u.name.toLowerCase().includes(search.toLowerCase()) ||
+      u.email.toLowerCase().includes(search.toLowerCase())
+  )
+
+  const contactsByUser = (userId: string) =>
+    contacts.filter((c) => c.user_id === userId)
 
   const addMutation = useMutation({
-    mutationFn: async () => {
-      await api('/admin/contacts', {
+    mutationFn: (data: Record<string, string>) =>
+      api('/admin/contacts', {
         method: 'POST',
-        body: JSON.stringify({
-          user_id: userId,
-          contact_name: contactName,
-          contact_email: contactEmail || undefined,
-          relationship_type: relationshipType,
-          access_tier: accessTier,
-        }),
-      })
-    },
+        body: JSON.stringify(data),
+      }),
     onSuccess: () => {
-      setStatus('Contact added')
-      setContactName('')
-      setContactEmail('')
-      setRelationshipType('family')
-      setAccessTier('tier_1')
       queryClient.invalidateQueries({ queryKey: ['admin-contacts'] })
-      setTimeout(() => setStatus(null), 3000)
-    },
-    onError: () => {
-      setStatus('Failed to add contact')
-      setTimeout(() => setStatus(null), 3000)
+      setAddingFor(null)
+      setNewContact({
+        contact_name: '',
+        contact_email: '',
+        relationship_type: 'FAMILY',
+        access_tier: 'TIER_1',
+      })
     },
   })
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await api(`/admin/contacts/${id}`, { method: 'DELETE' })
-    },
+    mutationFn: (contactId: string) =>
+      api(`/admin/contacts/${contactId}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-contacts'] })
     },
   })
 
-  const contacts = Array.isArray(contactsData?.contacts) ? contactsData.contacts : []
-  const users = Array.isArray(usersData?.users) ? usersData.users : []
+  const toggleExpand = (userId: string) => {
+    if (expandedUser === userId) {
+      setExpandedUser(null)
+      setAddingFor(null)
+    } else {
+      setExpandedUser(userId)
+      setAddingFor(null)
+    }
+  }
 
-  if (contactsLoading) {
-    return <p className="text-gray-500">Loading contacts...</p>
+  const handleAdd = (userId: string) => {
+    addMutation.mutate({
+      user_id: userId,
+      ...newContact,
+    })
+  }
+
+  const startAdding = (userId: string) => {
+    setAddingFor(userId)
+    setNewContact({
+      contact_name: '',
+      contact_email: '',
+      relationship_type: 'FAMILY',
+      access_tier: 'TIER_1',
+    })
+  }
+
+  const isLoading = usersLoading || contactsLoading
+
+  if (isLoading) {
+    return <p className="text-gray-500 p-6">Loading contacts...</p>
   }
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold text-gray-900">Trusted Contacts Management</h1>
+      <h1 className="text-xl font-semibold text-gray-900">
+        Trusted Contacts Management
+      </h1>
 
-      <Card title="Add Trusted Contact">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <select
-            value={userId}
-            onChange={(e) => setUserId(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-companion-blue-light focus:border-companion-blue-light"
+      {/* Search bar */}
+      <div className="relative">
+        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+          <svg
+            className="h-5 w-5 text-gray-400"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            aria-hidden="true"
           >
-            <option value="">Select user...</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name} ({u.email})
-              </option>
-            ))}
-          </select>
-          <input
-            type="text"
-            placeholder="Contact name"
-            value={contactName}
-            onChange={(e) => setContactName(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-companion-blue-light focus:border-companion-blue-light"
-          />
-          <input
-            type="email"
-            placeholder="Contact email (optional)"
-            value={contactEmail}
-            onChange={(e) => setContactEmail(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-companion-blue-light focus:border-companion-blue-light"
-          />
-          <select
-            value={relationshipType}
-            onChange={(e) => setRelationshipType(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-companion-blue-light focus:border-companion-blue-light"
-          >
-            {RELATIONSHIP_TYPES.map((r) => (
-              <option key={r.value} value={r.value}>
-                {r.label}
-              </option>
-            ))}
-          </select>
-          <select
-            value={accessTier}
-            onChange={(e) => setAccessTier(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-companion-blue-light focus:border-companion-blue-light"
-          >
-            {ACCESS_TIERS.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={() => addMutation.mutate()}
-            disabled={addMutation.isPending || !userId || !contactName}
-            className="px-4 py-2 bg-companion-blue text-white rounded-lg text-sm font-medium hover:bg-companion-blue-mid disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {addMutation.isPending ? 'Adding...' : 'Add Contact'}
-          </button>
+            <path
+              fillRule="evenodd"
+              d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z"
+              clipRule="evenodd"
+            />
+          </svg>
         </div>
-        {status && (
-          <p
-            className={`text-sm mt-2 ${status.includes('Failed') ? 'text-red-600' : 'text-green-600'}`}
-          >
-            {status}
-          </p>
+        <input
+          type="text"
+          placeholder="Search users by name or email..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="block w-full rounded-lg border border-gray-300 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-900 placeholder-gray-400 focus:border-companion-blue-light focus:outline-none focus:ring-2 focus:ring-companion-blue-light"
+        />
+      </div>
+
+      {/* User list */}
+      <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+        {filteredUsers.length === 0 ? (
+          <div className="px-6 py-12 text-center text-sm text-gray-400">
+            No users found
+          </div>
+        ) : (
+          filteredUsers.map((user) => {
+            const userContacts = contactsByUser(user.id)
+            const isExpanded = expandedUser === user.id
+            const isAdding = addingFor === user.id
+            const caregiverCount = userContacts.length
+
+            return (
+              <div key={user.id} className="border-b border-gray-100 last:border-b-0">
+                {/* User row */}
+                <button
+                  type="button"
+                  onClick={() => toggleExpand(user.id)}
+                  className="flex w-full items-center justify-between px-5 py-3.5 text-left transition-colors hover:bg-gray-50"
+                >
+                  <div className="min-w-0 flex-1">
+                    <span className="text-sm font-medium text-gray-900">
+                      {user.name}
+                    </span>
+                    <span className="ml-3 text-sm text-gray-500">
+                      {user.email}
+                    </span>
+                  </div>
+                  <div className="ml-4 flex items-center gap-3">
+                    <span className="text-xs text-gray-400">
+                      {caregiverCount === 0
+                        ? 'No caregivers'
+                        : caregiverCount === 1
+                          ? '1 caregiver'
+                          : `${caregiverCount} caregivers`}
+                    </span>
+                    <span className="text-xs text-gray-400 transition-transform duration-200">
+                      {isExpanded ? '\u25BC' : '\u25B6'}
+                    </span>
+                  </div>
+                </button>
+
+                {/* Expanded section */}
+                {isExpanded && (
+                  <div className="border-t border-gray-100 bg-gray-50 px-5 py-4">
+                    {/* Caregiver list */}
+                    {userContacts.length > 0 ? (
+                      <div className="space-y-2">
+                        {userContacts.map((c) => (
+                          <div
+                            key={c.id}
+                            className="flex items-center justify-between rounded-md bg-white px-4 py-2.5 shadow-sm ring-1 ring-gray-100"
+                          >
+                            <div className="flex min-w-0 flex-1 items-center gap-3">
+                              <span className="text-sm font-medium text-gray-800">
+                                {c.contact_name}
+                              </span>
+                              <span className="text-sm text-gray-500">
+                                {c.contact_email ?? ''}
+                              </span>
+                              <span
+                                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                                  RELATIONSHIP_COLORS[c.relationship_type] ??
+                                  'bg-gray-100 text-gray-700'
+                                }`}
+                              >
+                                {relationshipLabel(c.relationship_type)}
+                              </span>
+                              <span
+                                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                                  TIER_COLORS[c.access_tier] ??
+                                  'bg-gray-100 text-gray-700'
+                                }`}
+                              >
+                                {tierLabel(c.access_tier)}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => deleteMutation.mutate(c.id)}
+                              disabled={deleteMutation.isPending}
+                              className="ml-3 flex-shrink-0 text-sm text-gray-400 transition-colors hover:text-companion-rose disabled:opacity-50"
+                              title="Remove caregiver"
+                            >
+                              &#10005;
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-400">
+                        No caregivers assigned yet.
+                      </p>
+                    )}
+
+                    {/* Add Caregiver section */}
+                    {!isAdding ? (
+                      <button
+                        type="button"
+                        onClick={() => startAdding(user.id)}
+                        className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-companion-blue px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-companion-blue-mid"
+                      >
+                        <span className="text-sm leading-none">+</span>
+                        Add Caregiver
+                      </button>
+                    ) : (
+                      <div className="mt-3 rounded-md border border-gray-200 bg-white p-4">
+                        <div className="flex flex-wrap items-end gap-3">
+                          <div className="flex-1 min-w-[160px]">
+                            <label className="mb-1 block text-xs font-medium text-gray-600">
+                              Contact Name
+                            </label>
+                            <input
+                              type="text"
+                              value={newContact.contact_name}
+                              onChange={(e) =>
+                                setNewContact({
+                                  ...newContact,
+                                  contact_name: e.target.value,
+                                })
+                              }
+                              placeholder="Full name"
+                              className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-companion-blue-light focus:outline-none focus:ring-1 focus:ring-companion-blue-light"
+                            />
+                          </div>
+                          <div className="flex-1 min-w-[180px]">
+                            <label className="mb-1 block text-xs font-medium text-gray-600">
+                              Contact Email
+                            </label>
+                            <input
+                              type="email"
+                              value={newContact.contact_email}
+                              onChange={(e) =>
+                                setNewContact({
+                                  ...newContact,
+                                  contact_email: e.target.value,
+                                })
+                              }
+                              placeholder="email@example.com"
+                              className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-companion-blue-light focus:outline-none focus:ring-1 focus:ring-companion-blue-light"
+                            />
+                          </div>
+                          <div className="min-w-[150px]">
+                            <label className="mb-1 block text-xs font-medium text-gray-600">
+                              Relationship
+                            </label>
+                            <select
+                              value={newContact.relationship_type}
+                              onChange={(e) =>
+                                setNewContact({
+                                  ...newContact,
+                                  relationship_type: e.target.value,
+                                })
+                              }
+                              className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-companion-blue-light focus:outline-none focus:ring-1 focus:ring-companion-blue-light"
+                            >
+                              {RELATIONSHIPS.map((r) => (
+                                <option key={r.value} value={r.value}>
+                                  {r.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="min-w-[200px]">
+                            <label className="mb-1 block text-xs font-medium text-gray-600">
+                              Access Tier
+                            </label>
+                            <select
+                              value={newContact.access_tier}
+                              onChange={(e) =>
+                                setNewContact({
+                                  ...newContact,
+                                  access_tier: e.target.value,
+                                })
+                              }
+                              className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-companion-blue-light focus:outline-none focus:ring-1 focus:ring-companion-blue-light"
+                            >
+                              {TIERS.map((t) => (
+                                <option key={t.value} value={t.value}>
+                                  {t.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleAdd(user.id)}
+                              disabled={
+                                addMutation.isPending ||
+                                !newContact.contact_name.trim()
+                              }
+                              className="rounded-md bg-companion-blue px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-companion-blue-mid disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {addMutation.isPending ? 'Saving...' : 'Save'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setAddingFor(null)}
+                              className="rounded-md px-3 py-1.5 text-sm font-medium text-gray-500 transition-colors hover:text-gray-700"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                        {addMutation.isError && (
+                          <p className="mt-2 text-xs text-companion-rose">
+                            Failed to add caregiver. Please try again.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })
         )}
-      </Card>
-
-      <Card title="All Trusted Contacts" subtitle={`${contacts.length} contact(s)`}>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
-            <thead>
-              <tr className="border-b border-gray-200 text-gray-500">
-                <th className="py-2 pr-4 font-medium">User</th>
-                <th className="py-2 pr-4 font-medium">Contact Name</th>
-                <th className="py-2 pr-4 font-medium">Email</th>
-                <th className="py-2 pr-4 font-medium">Relationship</th>
-                <th className="py-2 pr-4 font-medium">Tier</th>
-                <th className="py-2 pr-4 font-medium">Active</th>
-                <th className="py-2 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {contacts.map((c) => (
-                <tr key={c.id} className="border-b border-gray-100">
-                  <td className="py-2 pr-4 text-gray-900">{c.user_name}</td>
-                  <td className="py-2 pr-4 text-gray-700">{c.contact_name}</td>
-                  <td className="py-2 pr-4 text-gray-500">{c.contact_email ?? '-'}</td>
-                  <td className="py-2 pr-4">
-                    <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
-                      {c.relationship_type}
-                    </span>
-                  </td>
-                  <td className="py-2 pr-4">
-                    <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">
-                      {c.access_tier}
-                    </span>
-                  </td>
-                  <td className="py-2 pr-4">
-                    <span
-                      className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
-                        c.is_active
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-red-100 text-red-700'
-                      }`}
-                    >
-                      {c.is_active ? 'Yes' : 'No'}
-                    </span>
-                  </td>
-                  <td className="py-2">
-                    <button
-                      onClick={() => deleteMutation.mutate(c.id)}
-                      disabled={deleteMutation.isPending}
-                      className="text-xs text-red-600 hover:text-red-800 font-medium"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {contacts.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="py-4 text-center text-gray-400">
-                    No trusted contacts found
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      </div>
     </div>
   )
 }
