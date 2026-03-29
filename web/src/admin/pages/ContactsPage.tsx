@@ -21,35 +21,44 @@ interface Contact {
 }
 
 const RELATIONSHIPS = [
-  { value: 'FAMILY', label: 'Family' },
-  { value: 'CASE_WORKER', label: 'Case Worker' },
-  { value: 'SUPPORT_COORDINATOR', label: 'Support Coordinator' },
-  { value: 'GROUP_HOME_STAFF', label: 'Group Home Staff' },
-  { value: 'PAID_SUPPORT', label: 'Paid Support' },
+  { value: 'family', label: 'Family' },
+  { value: 'case_worker', label: 'Case Worker' },
+  { value: 'support_coordinator', label: 'Support Coordinator' },
+  { value: 'group_home_staff', label: 'Group Home Staff' },
+  { value: 'paid_support', label: 'Paid Support' },
 ]
 
 const TIERS = [
-  { value: 'TIER_1', label: 'Tier 1 — Alerts Only' },
-  { value: 'TIER_2', label: 'Tier 2 — Read-Only Dashboard' },
-  { value: 'TIER_3', label: 'Tier 3 — Scoped Collaboration' },
+  { value: 'tier_1', label: 'Tier 1 — Alerts Only' },
+  { value: 'tier_2', label: 'Tier 2 — Read-Only Dashboard' },
+  { value: 'tier_3', label: 'Tier 3 — Scoped Collaboration' },
 ]
 
 const RELATIONSHIP_COLORS: Record<string, string> = {
+  family: 'bg-emerald-100 text-emerald-800',
   FAMILY: 'bg-emerald-100 text-emerald-800',
+  case_worker: 'bg-sky-100 text-sky-800',
   CASE_WORKER: 'bg-sky-100 text-sky-800',
+  support_coordinator: 'bg-violet-100 text-violet-800',
   SUPPORT_COORDINATOR: 'bg-violet-100 text-violet-800',
+  group_home_staff: 'bg-amber-100 text-amber-800',
   GROUP_HOME_STAFF: 'bg-amber-100 text-amber-800',
+  paid_support: 'bg-orange-100 text-orange-800',
   PAID_SUPPORT: 'bg-orange-100 text-orange-800',
 }
 
 const TIER_COLORS: Record<string, string> = {
+  tier_1: 'bg-gray-100 text-gray-700',
   TIER_1: 'bg-gray-100 text-gray-700',
+  tier_2: 'bg-blue-100 text-blue-700',
   TIER_2: 'bg-blue-100 text-blue-700',
+  tier_3: 'bg-indigo-100 text-indigo-700',
   TIER_3: 'bg-indigo-100 text-indigo-700',
 }
 
 function relationshipLabel(value: string): string {
-  return RELATIONSHIPS.find((r) => r.value === value)?.label ?? value
+  const v = value.toLowerCase()
+  return RELATIONSHIPS.find((r) => r.value === v)?.label ?? value
 }
 
 function tierLabel(value: string): string {
@@ -64,8 +73,8 @@ export function ContactsPage() {
   const [newContact, setNewContact] = useState({
     contact_name: '',
     contact_email: '',
-    relationship_type: 'FAMILY',
-    access_tier: 'TIER_1',
+    relationship_type: 'family',
+    access_tier: 'tier_1',
   })
 
   const { data: usersData, isLoading: usersLoading } = useQuery({
@@ -102,8 +111,8 @@ export function ContactsPage() {
       setNewContact({
         contact_name: '',
         contact_email: '',
-        relationship_type: 'FAMILY',
-        access_tier: 'TIER_1',
+        relationship_type: 'family',
+        access_tier: 'tier_1',
       })
     },
   })
@@ -138,8 +147,8 @@ export function ContactsPage() {
     setNewContact({
       contact_name: '',
       contact_email: '',
-      relationship_type: 'FAMILY',
-      access_tier: 'TIER_1',
+      relationship_type: 'family',
+      access_tier: 'tier_1',
     })
   }
 
