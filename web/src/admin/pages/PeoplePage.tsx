@@ -75,10 +75,11 @@ export function PeoplePage() {
   const [editForm, setEditForm] = useState<{
     first_name: string
     last_name: string
+    preferred_name: string
     phone: string
     is_admin: boolean
     admin_role: string
-  }>({ first_name: '', last_name: '', phone: '', is_admin: false, admin_role: 'viewer' })
+  }>({ first_name: '', last_name: '', preferred_name: '', phone: '', is_admin: false, admin_role: 'viewer' })
 
   // New person form state
   const [newPerson, setNewPerson] = useState({
@@ -193,6 +194,7 @@ export function PeoplePage() {
       setEditForm({
         first_name: person.first_name || '',
         last_name: person.last_name || '',
+        preferred_name: person.preferred_name || '',
         phone: person.phone || '',
         is_admin: person.is_admin,
         admin_role: person.admin_role || 'viewer',
@@ -206,6 +208,7 @@ export function PeoplePage() {
       data: {
         first_name: editForm.first_name,
         last_name: editForm.last_name,
+        preferred_name: editForm.preferred_name,
         phone: editForm.phone,
         is_admin: editForm.is_admin,
         admin_role: editForm.admin_role,
@@ -456,6 +459,20 @@ export function PeoplePage() {
                             onChange={(e) =>
                               setEditForm({ ...editForm, last_name: e.target.value })
                             }
+                            className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-companion-blue-light focus:outline-none focus:ring-1 focus:ring-companion-blue-light"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-gray-500">
+                            Preferred Name
+                          </label>
+                          <input
+                            type="text"
+                            value={editForm.preferred_name}
+                            onChange={(e) =>
+                              setEditForm({ ...editForm, preferred_name: e.target.value })
+                            }
+                            placeholder="What Arlo calls them"
                             className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-companion-blue-light focus:outline-none focus:ring-1 focus:ring-companion-blue-light"
                           />
                         </div>

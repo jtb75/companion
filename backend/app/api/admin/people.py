@@ -52,7 +52,7 @@ async def list_all_people(
             caregiver_map[email].append({
                 "contact_id": str(contact.id),
                 "user_id": str(contact.user_id),
-                "user_name": user.preferred_name or user.display_name,
+                "user_name": user.display_name or user.preferred_name,
                 "contact_name": contact.contact_name,
                 "relationship": getattr(
                     contact.relationship_type, "value",

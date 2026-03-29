@@ -22,6 +22,7 @@ export default function ProfilePage() {
 
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
+  const [preferredName, setPreferredName] = useState('')
   const [phone, setPhone] = useState('')
   const [saved, setSaved] = useState(false)
 
@@ -29,6 +30,7 @@ export default function ProfilePage() {
     if (data) {
       setFirstName(data.first_name || '')
       setLastName(data.last_name || '')
+      setPreferredName(data.preferred_name || '')
       setPhone(data.phone || '')
     }
   }, [data])
@@ -50,6 +52,7 @@ export default function ProfilePage() {
     mutation.mutate({
       first_name: firstName.trim(),
       last_name: lastName.trim(),
+      preferred_name: preferredName.trim() || firstName.trim(),
       phone: phone.trim() || null,
     })
   }
@@ -102,6 +105,19 @@ export default function ProfilePage() {
               className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-companion-blue focus:outline-none focus:ring-2 focus:ring-companion-blue-light"
             />
           </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Preferred Name
+          </label>
+          <input
+            type="text"
+            value={preferredName}
+            onChange={(e) => setPreferredName(e.target.value)}
+            placeholder="What Arlo calls you (defaults to first name)"
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-companion-blue focus:outline-none focus:ring-2 focus:ring-companion-blue-light"
+          />
         </div>
 
         <div>
