@@ -1,0 +1,8 @@
+terraform:
+  dynamicBackends:
+    staging:
+      bucket: "companion-terraform-state"
+      prefix: "staging"
+    prod:
+      bucket: "companion-terraform-state"
+      prefix: "prod"
