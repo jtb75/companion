@@ -41,6 +41,7 @@ CORS_ORIGINS = {
         "https://app.mydailydignity.com",
         "https://companion-staging-web-44gbcsdrnq-uc.a.run.app",
         "https://companion-staging-web-381910341082.us-central1.run.app",
+        "http://localhost:5173",
     ],
     "prod": [
         "https://app.mydailydignity.com",
