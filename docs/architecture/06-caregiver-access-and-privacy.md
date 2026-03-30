@@ -18,6 +18,47 @@ This is **architecturally enforced**, not policy-enforced. There is no configura
 
 ---
 
+## 1a. Care Model
+
+Members (end users) operate under one of two care models, stored as `care_model` on the `users` table:
+
+| Mode | Description | Who controls caregiver list |
+|---|---|---|
+| `self_directed` (default) | Member controls their own caregiver assignments. Caregiver or admin-initiated assignments require member approval. | Member |
+| `managed` | Organization (group home, day program) controls the account. Admin assigns caregivers directly. | Admin/Organization |
+
+**Important:** The care model controls only the **assignment approval flow**. It does NOT override the hard restrictions in Section 4 — even managed members retain all privacy protections. Payment does not grant access, regardless of care model.
+
+## 1b. Invitation and Assignment Flow
+
+Getting a caregiver connected to a member is a two-part process:
+
+### Part 1: Platform Invitation
+
+Two paths to get someone onto the platform:
+
+1. **Admin invites** — Admin uses `/admin/people/{email}/invite`. A stub `User` record is created with `account_status='invited'`. Invitation email sent via Gmail SMTP.
+2. **Member invites** — Member uses `/api/v1/invitations`. A `TrustedContact` is created immediately (with `invitation_status='pending'`), and a stub user is created if needed. The email includes a token-based acceptance link.
+
+Either way, if the invitee already has an active account, no stub is created — just a notification.
+
+### Part 2: Caregiver-to-Member Assignment
+
+- **Member-initiated invite** — Assignment happens in Part 1 (TrustedContact created immediately, pending acceptance).
+- **Admin-initiated, managed member** — TrustedContact created directly, no approval needed.
+- **Admin-initiated, self-directed member** — A `CaregiverAssignmentRequest` is created with `status='pending_approval'`. The member is notified and must approve or reject.
+- **Caregiver-initiated** — Caregiver requests assignment via `/api/v1/caregiver/assignments/request`. For managed members, auto-approved. For self-directed, pending member approval.
+
+### Invitation Acceptance
+
+Invitation emails include a link: `https://app.mydailydignity.com/invite/accept?token={token}`. The token is a 48-character URL-safe random string with a 14-day TTL. On acceptance:
+1. The caregiver signs in with Google (Firebase Auth).
+2. The `invitation_status` on `TrustedContact` is set to `accepted`, `is_active` is set to `true`.
+3. If the user was a stub (`account_status='invited'`), they're upgraded to `active`.
+4. The member is notified.
+
+---
+
 ## 2. Caregiver Types
 
 | Type | Legitimate Need | Typical Default Access |

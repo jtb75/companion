@@ -54,6 +54,14 @@ class User(TimestampMixin, Base):
         nullable=True
     )
 
+    # Care model & account status
+    care_model: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default="self_directed"
+    )
+    account_status: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default="active"
+    )
+
     # Relationships
     trusted_contacts = relationship(
         "TrustedContact", back_populates="user", cascade="all, delete-orphan"

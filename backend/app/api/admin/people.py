@@ -8,11 +8,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import AdminUser, require_admin_role
 from app.db import get_db
-from app.integrations.email_service import send_caregiver_invitation
+from app.integrations.email_service import (
+    send_assignment_request_notification,
+    send_caregiver_invitation,
+    send_platform_invitation,
+)
 from app.models.admin_user import AdminUser as AdminUserModel
-from app.models.enums import AccessTier, RelationshipType
+from app.models.assignment_request import CaregiverAssignmentRequest
+from app.models.enums import AccessTier, CareModel, RelationshipType
 from app.models.trusted_contact import TrustedContact
 from app.models.user import User
+from app.schemas.invitation import AdminPlatformInvite, AdminPlatformInviteResponse
+from app.services import assignment_service, invitation_service
 
 _editor = require_admin_role("editor")
 
@@ -64,6 +71,7 @@ async def list_all_people(
                     str(contact.access_tier),
                 ),
                 "is_active": contact.is_active,
+                "invitation_status": contact.invitation_status,
             })
 
     # Build consolidated people list
@@ -88,6 +96,8 @@ async def list_all_people(
             "is_admin": admin_record is not None,
             "admin_id": str(admin_record.id) if admin_record else None,
             "admin_role": admin_record.role if admin_record else None,
+            "care_model": u.care_model,
+            "account_status": u.account_status,
             "caregiver_for": caregiver_map.get(email, []),
             "created_at": u.created_at.isoformat() if u.created_at else None,
         })
@@ -108,6 +118,8 @@ async def list_all_people(
                 "is_admin": True,
                 "admin_id": str(a.id),
                 "admin_role": a.role,
+                "care_model": None,
+                "account_status": None,
                 "caregiver_for": caregiver_map.get(a.email, []),
                 "created_at": a.created_at.isoformat() if a.created_at else None,
             })
@@ -128,6 +140,8 @@ async def list_all_people(
                 "is_admin": False,
                 "admin_id": None,
                 "admin_role": None,
+                "care_model": None,
+                "account_status": None,
                 "caregiver_for": assignments,
                 "created_at": None,
             })
@@ -160,6 +174,7 @@ async def create_person(
         if existing:
             raise HTTPException(409, "User with this email already exists")
 
+        care_model = data.get("care_model", CareModel.SELF_DIRECTED)
         user = User(
             email=email,
             first_name=first_name,
@@ -171,6 +186,7 @@ async def create_person(
             voice_id="warm",
             pace_setting="normal",
             warmth_level="warm",
+            care_model=care_model,
         )
         db.add(user)
         await db.flush()
@@ -209,7 +225,7 @@ async def update_person(
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
     if user:
-        for field in ["first_name", "last_name", "phone", "preferred_name"]:
+        for field in ["first_name", "last_name", "phone", "preferred_name", "care_model"]:
             if field in data:
                 setattr(user, field, data[field])
         if "first_name" in data or "last_name" in data:
@@ -243,6 +259,32 @@ async def update_person(
     return {"updated": True}
 
 
+@router.post("/admin/people/{email}/invite", status_code=status.HTTP_201_CREATED)
+async def invite_to_platform(
+    email: str,
+    data: AdminPlatformInvite,
+    admin: AdminUser = Depends(_editor),
+    db: AsyncSession = Depends(get_db),
+):
+    """Invite someone to the platform (Part 1 — no member assignment)."""
+    user, created = await invitation_service.create_admin_platform_invitation(
+        db=db, admin_id=admin.id, email=email, name=data.name,
+    )
+
+    email_sent = await send_platform_invitation(
+        to_email=email,
+        to_name=data.name,
+        invited_by=admin.name,
+    )
+
+    return AdminPlatformInviteResponse(
+        user_id=user.id,
+        account_status=user.account_status,
+        email_sent=email_sent,
+        already_existed=not created,
+    )
+
+
 @router.post("/admin/people/{email}/caregiver")
 async def add_caregiver_assignment(
     email: str,
@@ -250,37 +292,68 @@ async def add_caregiver_assignment(
     admin: AdminUser = Depends(_editor),
     db: AsyncSession = Depends(get_db),
 ):
-    """Assign this person as a caregiver for a user."""
+    """Assign this person as a caregiver for a member.
+
+    For managed members: creates TrustedContact immediately.
+    For self-directed members: creates an assignment request pending member approval.
+    """
     user_id = data.get("user_id")
     if not user_id:
         raise HTTPException(400, "user_id required")
 
-    user = await db.get(User, uuid.UUID(user_id))
-    if not user:
-        raise HTTPException(404, "User not found")
+    member = await db.get(User, uuid.UUID(user_id))
+    if not member:
+        raise HTTPException(404, "Member not found")
 
-    contact = TrustedContact(
-        user_id=user.id,
-        contact_name=data.get("contact_name", email),
-        contact_email=email,
-        contact_phone=data.get("contact_phone"),
-        relationship_type=RelationshipType(
-            data.get("relationship", "family")
-        ),
-        access_tier=AccessTier(data.get("tier", "tier_1")),
-    )
-    db.add(contact)
-    await db.flush()
+    contact_name = data.get("contact_name", email)
+    relationship = data.get("relationship", "family")
+    tier = data.get("tier", "tier_1")
 
-    await send_caregiver_invitation(
-        to_email=email,
-        to_name=data.get("contact_name", email),
-        user_name=user.preferred_name or user.display_name or "your charge",
-        relationship=data.get("relationship", "caregiver"),
-        invited_by="a D.D. Companion administrator",
-    )
+    # Ensure caregiver has a stub account
+    await invitation_service.get_or_create_stub_user(db, email, contact_name)
 
-    return {"created": True, "contact_id": str(contact.id)}
+    try:
+        result = await assignment_service.create_assignment_request(
+            db=db,
+            member_id=member.id,
+            caregiver_email=email,
+            caregiver_name=contact_name,
+            relationship_type=relationship,
+            access_tier=tier,
+            initiated_by="admin",
+            admin_id=admin.id,
+        )
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+
+    member_name = member.preferred_name or member.display_name
+
+    if isinstance(result, TrustedContact):
+        # Managed — direct assignment, send invitation email
+        await send_caregiver_invitation(
+            to_email=email,
+            to_name=contact_name,
+            user_name=member_name,
+            relationship=relationship,
+            invited_by=admin.name,
+        )
+        return {"created": True, "contact_id": str(result.id), "status": "assigned"}
+    else:
+        # Self-directed — pending approval, notify both parties
+        await send_caregiver_invitation(
+            to_email=email,
+            to_name=contact_name,
+            user_name=member_name,
+            relationship=relationship,
+            invited_by=admin.name,
+        )
+        await send_assignment_request_notification(
+            to_email=member.email,
+            to_name=member_name,
+            caregiver_name=contact_name,
+            relationship=relationship,
+        )
+        return {"created": True, "request_id": str(result.id), "status": "pending_approval"}
 
 
 @router.delete("/admin/people/caregiver/{contact_id}")

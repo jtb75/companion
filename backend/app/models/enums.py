@@ -116,6 +116,30 @@ class QuestionStatus(enum.StrEnum):
     EXPIRED = "expired"
 
 
+class CareModel(enum.StrEnum):
+    SELF_DIRECTED = "self_directed"
+    MANAGED = "managed"
+
+
+class AccountStatus(enum.StrEnum):
+    ACTIVE = "active"
+    INVITED = "invited"
+
+
+class InvitationStatus(enum.StrEnum):
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    DECLINED = "declined"
+    EXPIRED = "expired"
+
+
+class AssignmentRequestStatus(enum.StrEnum):
+    PENDING_APPROVAL = "pending_approval"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    EXPIRED = "expired"
+
+
 class CaregiverAction(enum.StrEnum):
     VIEWED_DASHBOARD = "viewed_dashboard"
     RECEIVED_ALERT = "received_alert"

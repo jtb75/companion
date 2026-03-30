@@ -11,6 +11,8 @@ import { Layout } from './shared/components/Layout'
 import { CaregiverLayout } from './caregiver/CaregiverLayout'
 import { OpsLayout } from './ops/OpsLayout'
 import { AdminLayout } from './admin/AdminLayout'
+import AcceptInvitationPage from './shared/invite/AcceptInvitationPage'
+import InvitationExpiredPage from './shared/invite/InvitationExpiredPage'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -29,6 +31,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/invite/accept" element={<AcceptInvitationPage />} />
+            <Route path="/invite/expired" element={<InvitationExpiredPage />} />
             <Route path="/unauthorized" element={<AccessDenied />} />
             <Route path="/profile" element={<ProtectedRoute><Layout><ProfilePage /></Layout></ProtectedRoute>} />
             <Route path="/caregiver/*" element={<ProtectedRoute><CaregiverLayout /></ProtectedRoute>} />

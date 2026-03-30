@@ -172,6 +172,34 @@ CREATE TYPE deletion_reason AS ENUM (
     'ttl_expiry',
     'retention_policy'
 );
+
+-- Care model for member accounts
+CREATE TYPE care_model AS ENUM (
+    'self_directed',  -- Member controls caregiver list (default)
+    'managed'         -- Organization controls caregiver assignments
+);
+
+-- Account status
+CREATE TYPE account_status AS ENUM (
+    'active',
+    'invited'         -- Stub account created via invitation, not yet signed in
+);
+
+-- Invitation status for trusted contacts
+CREATE TYPE invitation_status AS ENUM (
+    'pending',
+    'accepted',
+    'declined',
+    'expired'
+);
+
+-- Assignment request status
+CREATE TYPE assignment_request_status AS ENUM (
+    'pending_approval',
+    'approved',
+    'rejected',
+    'expired'
+);
 ```
 
 ### 2.2 users
@@ -204,6 +232,10 @@ CREATE TABLE users (
     -- Away mode (pauses reminders, extends deadlines)
     away_mode         BOOLEAN NOT NULL DEFAULT FALSE,
     away_expires_at   TIMESTAMPTZ,
+
+    -- Care model & account status
+    care_model        TEXT NOT NULL DEFAULT 'self_directed',
+    account_status    TEXT NOT NULL DEFAULT 'active',
 
     -- V2 extension point: agency/organization ownership
     -- agency_id     UUID REFERENCES agencies(id),
@@ -243,6 +275,14 @@ CREATE TABLE trusted_contacts (
         -- Example: { "allowed_sections": ["bills"], "expires_at": "2026-04-01T00:00:00Z" }
     is_active         BOOLEAN NOT NULL DEFAULT TRUE,
 
+    -- Invitation tracking
+    invitation_status TEXT NOT NULL DEFAULT 'accepted',
+    invitation_token  TEXT UNIQUE,
+    invited_at        TIMESTAMPTZ,
+    invited_by_admin_id UUID REFERENCES admin_users(id),
+    invited_by_user_id  UUID REFERENCES users(id) ON DELETE SET NULL,
+    accepted_at       TIMESTAMPTZ,
+
     -- V2 extension point: link to agency staff
     -- agency_staff_id UUID REFERENCES agency_staff(id),
 
@@ -253,6 +293,31 @@ CREATE TABLE trusted_contacts (
         access_tier != 'tier_3' OR tier_3_scope IS NOT NULL
     )
 );
+```
+
+### 2.3a caregiver_assignment_requests
+
+Tracks pending caregiver-to-member assignment requests for self-directed members.
+
+```sql
+CREATE TABLE caregiver_assignment_requests (
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    member_id           UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    caregiver_email     TEXT NOT NULL,
+    caregiver_name      TEXT NOT NULL,
+    relationship_type   TEXT NOT NULL,
+    access_tier         TEXT NOT NULL DEFAULT 'tier_1',
+    status              TEXT NOT NULL DEFAULT 'pending_approval',
+    initiated_by        TEXT NOT NULL,     -- 'caregiver', 'member', or 'admin'
+    initiated_by_admin_id UUID REFERENCES admin_users(id),
+    requested_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    resolved_at         TIMESTAMPTZ,
+    resolved_by         TEXT,              -- 'member', 'admin', or 'system'
+    expires_at          TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX ix_assignment_requests_member_status
+    ON caregiver_assignment_requests (member_id, status);
 ```
 
 ### 2.4 documents

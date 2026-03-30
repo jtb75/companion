@@ -1036,6 +1036,55 @@ Re-enable a paused caregiver's access.
 
 **Response `200 OK`:** Returns contact object with `status: "active"`.
 
+#### `POST /api/v1/invitations`
+
+Member invites a caregiver. Creates a TrustedContact (pending) and a stub user if needed. Sends invitation email with acceptance link.
+
+**Request body:**
+```json
+{
+  "email": "caregiver@example.com",
+  "contact_name": "Jane Doe",
+  "relationship_type": "family",
+  "access_tier": "tier_1"
+}
+```
+
+**Response `201 Created`:**
+```json
+{
+  "contact_id": "uuid",
+  "invitation_status": "pending",
+  "email_sent": true
+}
+```
+
+#### `GET /api/v1/invitations/validate?token={token}`
+
+Public endpoint (no auth). Validates an invitation token and returns invitation details for the frontend landing page. Returns 404 if invalid or expired.
+
+#### `POST /api/v1/invitations/accept`
+
+Caregiver accepts an invitation. Requires Firebase auth. Activates the TrustedContact and upgrades stub user to active.
+
+**Request body:** `{ "token": "abc123..." }`
+
+#### `POST /api/v1/invitations/decline`
+
+Caregiver declines an invitation. Same auth and body as accept.
+
+#### `GET /api/v1/assignments/pending`
+
+List pending caregiver assignment requests for the authenticated member.
+
+#### `POST /api/v1/assignments/:id/approve`
+
+Member approves a pending assignment request. Creates the TrustedContact. Returns 403 for managed accounts (they cannot reject, only approve is available via admin).
+
+#### `POST /api/v1/assignments/:id/reject`
+
+Member rejects a pending assignment request. Returns 403 for managed accounts.
+
 ---
 
 ### 3.9 Conversation
@@ -1974,3 +2023,6 @@ Delivery will use HTTPS POST with HMAC-SHA256 signature verification.
 | POST   | `/users`                               | admin    | Create admin user               |
 | PATCH  | `/users/:id`                           | admin    | Update admin role               |
 | DELETE | `/users/:id`                           | admin    | Deactivate admin user           |
+| POST   | `/people/:email/invite`                | editor+  | Invite to platform (Part 1)     |
+| POST   | `/people/:email/caregiver`             | editor+  | Assign caregiver (respects care_model) |
+| PATCH  | `/people/:email`                       | editor+  | Update person (incl. care_model)|

@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
-from app.models.enums import AccessTier, RelationshipType
+from app.models.enums import AccessTier, InvitationStatus, RelationshipType
 
 
 class TrustedContact(Base):
@@ -33,6 +33,22 @@ class TrustedContact(Base):
         nullable=False, server_default="now()"
     )
     last_viewed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+    # Invitation tracking
+    invitation_status: Mapped[str] = mapped_column(
+        Text, nullable=False, server_default="accepted"
+    )
+    invitation_token: Mapped[str | None] = mapped_column(
+        Text, unique=True, nullable=True
+    )
+    invited_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    invited_by_admin_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("admin_users.id"), nullable=True
+    )
+    invited_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    accepted_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
     # Relationships
     user = relationship("User", back_populates="trusted_contacts")
