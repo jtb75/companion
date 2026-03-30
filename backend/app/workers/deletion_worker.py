@@ -4,7 +4,7 @@ Runs nightly. Each user deletion commits independently so failures don't block o
 """
 
 import logging
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy import select
 
@@ -20,7 +20,7 @@ async def run_deletion_worker():
     """Execute pending account deletions past their grace period."""
     async with async_session_factory() as db:
         try:
-            now = datetime.now(UTC)
+            now = datetime.utcnow()
             result = await db.execute(
                 select(User).where(
                     User.account_status == "pending_deletion",

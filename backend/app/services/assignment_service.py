@@ -1,6 +1,6 @@
 """Service layer for caregiver-to-member assignment (Part 2)."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import select
@@ -60,7 +60,7 @@ async def create_assignment_request(
     if pending.scalar_one_or_none():
         raise ValueError("A pending assignment request already exists")
 
-    now = datetime.now(UTC)
+    now = datetime.utcnow()
 
     if member.care_model == CareModel.MANAGED:
         # Auto-approve: create TrustedContact directly
@@ -100,7 +100,7 @@ async def list_pending_assignments(
     db: AsyncSession, member_id: UUID
 ) -> list[CaregiverAssignmentRequest]:
     """List pending assignment requests for a member."""
-    now = datetime.now(UTC)
+    now = datetime.utcnow()
     result = await db.execute(
         select(CaregiverAssignmentRequest).where(
             CaregiverAssignmentRequest.member_id == member_id,
@@ -126,7 +126,7 @@ async def approve_assignment(
     if request is None:
         raise ValueError("Assignment request not found or already resolved")
 
-    now = datetime.now(UTC)
+    now = datetime.utcnow()
 
     # Resolve the request
     request.status = AssignmentRequestStatus.APPROVED
@@ -171,7 +171,7 @@ async def reject_assignment(
         raise ValueError("Assignment request not found or already resolved")
 
     request.status = AssignmentRequestStatus.REJECTED
-    request.resolved_at = datetime.now(UTC)
+    request.resolved_at = datetime.utcnow()
     request.resolved_by = "member"
     await db.flush()
     return request
