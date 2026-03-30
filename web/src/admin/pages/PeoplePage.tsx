@@ -742,7 +742,6 @@ export function PeoplePage() {
           <div className="px-6 py-12 text-center text-sm text-gray-400">No people found</div>
         ) : (
           filteredPeople.map((person) => {
-            const assignments = Array.isArray(person.caregiver_for) ? person.caregiver_for : []
             return (
               <button
                 key={person.email}
@@ -756,21 +755,10 @@ export function PeoplePage() {
                   </span>
                   <span className="ml-3 text-sm text-gray-500">{person.email}</span>
                 </div>
-                <div className="ml-4 flex items-center gap-2">
-                  {person.is_user && (
-                    <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800">User</span>
-                  )}
-                  {person.is_admin && (
-                    <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
-                      Admin{person.admin_role ? ` (${person.admin_role})` : ''}
-                    </span>
-                  )}
-                  {statusBadge(person.account_status)}
-                  {assignments.length > 0 && (
-                    <span className="inline-flex items-center rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-medium text-sky-800">
-                      Caregiver ({assignments.length})
-                    </span>
-                  )}
+                <div className="ml-4">
+                  <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                  </svg>
                 </div>
               </button>
             )
