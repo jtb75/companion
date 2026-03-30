@@ -36,22 +36,38 @@ async def complete_profile(
     if not email:
         raise HTTPException(401, "No email")
 
-    # Find existing user record — never create new ones
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
-    if not user:
-        raise HTTPException(404, "No account found. Contact your administrator.")
+    first_name = data.get("first_name", "")
+    last_name = data.get("last_name", "")
+    phone = data.get("phone") or None
+    display = f"{first_name} {last_name}".strip() or email
 
-    # Update existing
-    user.first_name = data.get("first_name", user.first_name)
-    user.last_name = data.get("last_name", user.last_name)
-    user.phone = data.get("phone", user.phone)
-    if data.get("preferred_name"):
-        user.preferred_name = data["preferred_name"]
-    first = user.first_name or ""
-    last = user.last_name or ""
-    user.display_name = f"{first} {last}".strip() or email
+    if user:
+        # Update existing
+        user.first_name = first_name or user.first_name
+        user.last_name = last_name or user.last_name
+        if phone:
+            user.phone = phone
+        if data.get("preferred_name"):
+            user.preferred_name = data["preferred_name"]
+        user.display_name = display
+    else:
+        # Create new user record (admin or invited user signing in for first time)
+        user = User(
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            phone=phone,
+            preferred_name=data.get("preferred_name", first_name),
+            display_name=display,
+            primary_language="en",
+            voice_id="warm",
+            pace_setting="normal",
+            warmth_level="warm",
+        )
+        db.add(user)
 
     await db.flush()
     return {"completed": True, "user_id": str(user.id)}
