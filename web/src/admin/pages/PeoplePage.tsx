@@ -229,18 +229,21 @@ function PersonDrawer({
 
         {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
-          {/* Status badges */}
+          {/* Role badge */}
           <div className="flex items-center gap-2 flex-wrap">
-            {person.is_user && (
-              <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800">
-                User
-              </span>
-            )}
-            {person.is_admin && (
+            {person.is_admin ? (
               <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
                 Admin{person.admin_role ? ` (${person.admin_role})` : ''}
               </span>
-            )}
+            ) : assignments.length > 0 ? (
+              <span className="inline-flex items-center rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-medium text-sky-800">
+                Caregiver
+              </span>
+            ) : person.is_user ? (
+              <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800">
+                Member
+              </span>
+            ) : null}
             {statusBadge(person.account_status)}
             {person.care_model === 'managed' && (
               <span className="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800">
