@@ -594,6 +594,16 @@ export function PeoplePage() {
   const [search, setSearch] = useState('')
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
+  const [roleFilters, setRoleFilters] = useState<Set<string>>(new Set())
+
+  const toggleFilter = (role: string) => {
+    setRoleFilters((prev) => {
+      const next = new Set(prev)
+      if (next.has(role)) next.delete(role)
+      else next.add(role)
+      return next
+    })
+  }
 
   const [newPerson, setNewPerson] = useState({
     email: '',
@@ -618,16 +628,22 @@ export function PeoplePage() {
   const people = Array.isArray(peopleData?.people) ? peopleData.people : []
   const userOptions = Array.isArray(usersData?.users) ? usersData.users : []
 
+  const getPersonRole = (p: Person): string => {
+    if (p.is_admin) return 'admin'
+    if (Array.isArray(p.caregiver_for) && p.caregiver_for.length > 0) return 'caregiver'
+    if (p.is_user) return 'member'
+    return 'member'
+  }
+
   const searchLower = search.toLowerCase()
   const filteredPeople = people.filter((p) => {
+    // Role filter
+    if (roleFilters.size > 0 && !roleFilters.has(getPersonRole(p))) return false
+    // Text search
     if (!search) return true
     const name = (p.display_name || p.first_name || '').toLowerCase()
     const email = (p.email || '').toLowerCase()
-    const roles: string[] = []
-    if (p.is_user) roles.push('user')
-    if (p.is_admin) roles.push('admin', p.admin_role || '')
-    if (Array.isArray(p.caregiver_for) && p.caregiver_for.length > 0) roles.push('caregiver')
-    return name.includes(searchLower) || email.includes(searchLower) || roles.join(' ').includes(searchLower)
+    return name.includes(searchLower) || email.includes(searchLower)
   })
 
   const createMutation = useMutation({
@@ -735,6 +751,36 @@ export function PeoplePage() {
           onChange={(e) => setSearch(e.target.value)}
           className="block w-full rounded-lg border border-gray-300 bg-white py-2.5 pl-10 pr-4 text-sm placeholder-gray-400 focus:border-companion-blue-light focus:outline-none focus:ring-2 focus:ring-companion-blue-light"
         />
+      </div>
+
+      {/* Role filters */}
+      <div className="flex items-center gap-2">
+        {([
+          { key: 'admin', label: 'Admin', activeClass: 'bg-red-100 text-red-800 ring-red-300', count: people.filter((p) => getPersonRole(p) === 'admin').length },
+          { key: 'caregiver', label: 'Caregiver', activeClass: 'bg-sky-100 text-sky-800 ring-sky-300', count: people.filter((p) => getPersonRole(p) === 'caregiver').length },
+          { key: 'member', label: 'Member', activeClass: 'bg-emerald-100 text-emerald-800 ring-emerald-300', count: people.filter((p) => getPersonRole(p) === 'member').length },
+        ] as const).map(({ key, label, activeClass, count }) => (
+          <button
+            key={key}
+            onClick={() => toggleFilter(key)}
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ring-1 transition-colors ${
+              roleFilters.has(key)
+                ? activeClass
+                : 'bg-white text-gray-500 ring-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            {label}
+            <span className={`${roleFilters.has(key) ? 'opacity-70' : 'text-gray-400'}`}>{count}</span>
+          </button>
+        ))}
+        {roleFilters.size > 0 && (
+          <button
+            onClick={() => setRoleFilters(new Set())}
+            className="text-xs text-gray-400 hover:text-gray-600"
+          >
+            Clear
+          </button>
+        )}
       </div>
 
       <p className="text-xs text-gray-400">{filteredPeople.length} of {people.length} people</p>
