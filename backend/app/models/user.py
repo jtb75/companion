@@ -66,7 +66,8 @@ class User(TimestampMixin, Base):
 
     # Relationships
     trusted_contacts = relationship(
-        "TrustedContact", back_populates="user", cascade="all, delete-orphan"
+        "TrustedContact", back_populates="user", cascade="all, delete-orphan",
+        foreign_keys="[TrustedContact.user_id]",
     )
     documents = relationship(
         "Document", back_populates="user", cascade="all, delete-orphan"
