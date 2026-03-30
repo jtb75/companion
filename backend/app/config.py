@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     # Must be explicitly set to true. Never enable in production.
     dev_auth_bypass: bool = False
 
+    # Mailjet
+    mailjet_api_key: str = ""
+    mailjet_secret_key: str = ""
+
     # App
     environment: str = "development"
     debug: bool = False

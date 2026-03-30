@@ -30,6 +30,9 @@ dependencies = [
     "google-cloud-speech>=2.27.0",
     "google-cloud-documentai>=2.32.0",
 
+    # Email
+    "mailjet-rest>=1.3.0",
+
     # HTTP client
     "httpx>=0.27.0",
 
@@ -60,6 +63,7 @@ extend-exclude = ["alembic/versions"]
 
 [tool.ruff.lint.per-file-ignores]
 "app/conversation/persona.py" = ["E501"]  # Prompt templates have natural long lines
+"app/integrations/email_service.py" = ["E501"]  # HTML email templates have natural long lines
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B"]

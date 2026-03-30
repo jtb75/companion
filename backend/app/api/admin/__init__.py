@@ -10,6 +10,7 @@ from app.api.admin import (
     metrics,
     people,
     pipeline_health,
+    test_email,
     users_management,
 )
 
@@ -23,3 +24,4 @@ router.include_router(admin_users.router)
 router.include_router(contacts.router)
 router.include_router(users_management.router)
 router.include_router(people.router)
+router.include_router(test_email.router)

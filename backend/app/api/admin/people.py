@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import AdminUser, require_admin_role
 from app.db import get_db
+from app.integrations.email_service import send_caregiver_invitation
 from app.models.admin_user import AdminUser as AdminUserModel
 from app.models.enums import AccessTier, RelationshipType
 from app.models.trusted_contact import TrustedContact
@@ -270,6 +271,15 @@ async def add_caregiver_assignment(
     )
     db.add(contact)
     await db.flush()
+
+    await send_caregiver_invitation(
+        to_email=email,
+        to_name=data.get("contact_name", email),
+        user_name=user.preferred_name or user.display_name or "your charge",
+        relationship=data.get("relationship", "caregiver"),
+        invited_by="a D.D. Companion administrator",
+    )
+
     return {"created": True, "contact_id": str(contact.id)}
 
 
