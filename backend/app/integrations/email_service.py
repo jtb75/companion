@@ -129,7 +129,7 @@ async def send_caregiver_invitation(
         f"<p>Hi {to_name},</p>"
         f"<p><strong>{invited_by}</strong> has invited you as a <strong>{relationship}</strong> for <strong>{user_name}</strong> on {BRAND_MID}.</p>"
         f"<p>As a caregiver, you'll be able to view {user_name}'s status, upcoming appointments, and important alerts.</p>"
-        + _cta_button(accept_url, f"Accept Invitation")
+        + _cta_button(accept_url, "Accept Invitation")
         + f'<p style="color: #888; font-size: 13px;">Sign in with your Google account ({to_email}) to get started.</p>'
     )
 

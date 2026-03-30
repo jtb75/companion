@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
-from app.models.enums import AccessTier, InvitationStatus, RelationshipType
+from app.models.enums import AccessTier, RelationshipType
 
 
 class TrustedContact(Base):
@@ -51,7 +51,7 @@ class TrustedContact(Base):
     accepted_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
     # Relationships
-    user = relationship("User", back_populates="trusted_contacts")
+    user = relationship("User", foreign_keys=[user_id], back_populates="trusted_contacts")
     activity_logs = relationship(
         "CaregiverActivityLog",
         back_populates="trusted_contact",
