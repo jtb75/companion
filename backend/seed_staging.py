@@ -72,7 +72,7 @@ async def seed():
             TrustedContact(
                 user_id=alex.id,
                 contact_name="Joe",
-                contact_email="joe.buhr@gmail.com",
+                contact_email="dd@mydailydignity.com",
                 relationship_type=RelationshipType.CASE_WORKER,
                 access_tier=AccessTier.TIER_2,
             ),
@@ -164,7 +164,7 @@ async def seed():
         await db.commit()
         print(f"Seeded Sam ({sam.id}) and Alex ({alex.id})")
         print("Alex: 2 meds, 3 bills, 1 appt, 2 todos")
-        print("Caregivers: joe.buhr@gmail.com, jtb75.prod@gmail.com")
+        print("Caregivers: dd@mydailydignity.com, jtb75.prod@gmail.com")
 
     await engine.dispose()
 

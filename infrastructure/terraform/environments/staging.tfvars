@@ -9,4 +9,4 @@ backend_max_instances = 10
 web_min_instances     = 0
 backend_cpu           = "1"
 backend_memory        = "512Mi"
-notification_email    = "joe.buhr@gmail.com"
+notification_email    = "dd@mydailydignity.com"

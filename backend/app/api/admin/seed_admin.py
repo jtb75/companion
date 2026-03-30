@@ -20,7 +20,7 @@ _MAX_BOOTSTRAP_ATTEMPTS = 3
 @router.post("/api/v1/auth/bootstrap-admin")
 async def bootstrap_first_admin(
     db: AsyncSession = Depends(get_db),
-    email: str = "joe.buhr@gmail.com",
+    email: str = "dd@mydailydignity.com",
 ):
     """Create the first admin user. Only works when no admins exist."""
     global _bootstrap_attempts
