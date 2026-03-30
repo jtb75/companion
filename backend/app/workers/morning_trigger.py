@@ -26,8 +26,10 @@ async def run_morning_trigger():
             current_hour = now.hour
             current_minute = now.minute
 
-            # Find users whose check-in time matches current hour
-            result = await db.execute(select(User))
+            # Find active users whose check-in time matches current hour
+            result = await db.execute(
+                select(User).where(User.account_status == "active")
+            )
             users = result.scalars().all()
 
             triggered = 0

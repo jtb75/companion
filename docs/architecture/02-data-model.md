@@ -169,6 +169,7 @@ CREATE TYPE caregiver_action AS ENUM (
 -- Deletion reasons for audit trail
 CREATE TYPE deletion_reason AS ENUM (
     'user_request',
+    'admin_request',
     'ttl_expiry',
     'retention_policy'
 );
@@ -233,9 +234,12 @@ CREATE TABLE users (
     away_mode         BOOLEAN NOT NULL DEFAULT FALSE,
     away_expires_at   TIMESTAMPTZ,
 
-    -- Care model & account status
+    -- Care model & account lifecycle
     care_model        TEXT NOT NULL DEFAULT 'self_directed',
     account_status    TEXT NOT NULL DEFAULT 'active',
+                      -- Values: active, invited, deactivated, pending_deletion
+    deactivated_at    TIMESTAMPTZ,
+    deletion_scheduled_at TIMESTAMPTZ,
 
     -- V2 extension point: agency/organization ownership
     -- agency_id     UUID REFERENCES agencies(id),

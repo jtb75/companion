@@ -77,6 +77,35 @@ async def get_current_user(
     user = result.scalar_one_or_none()
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
+    if user.account_status in ("deactivated", "pending_deletion"):
+        raise HTTPException(status_code=403, detail="Account is deactivated")
+    return user
+
+
+async def get_current_user_allow_inactive(
+    authorization: str | None = Header(None, alias="Authorization"),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Like get_current_user but allows deactivated/pending_deletion accounts.
+
+    Used only for reactivation and cancel-deletion endpoints.
+    """
+    if settings.dev_auth_bypass and authorization is None:
+        result = await db.execute(select(User).limit(1))
+        user = result.scalar_one_or_none()
+        if user is None:
+            raise HTTPException(status_code=404, detail="No mock user available in dev database")
+        return user
+
+    decoded = await _extract_bearer_token(authorization)
+    email: str | None = decoded.get("email")
+    if not email:
+        raise HTTPException(status_code=401, detail="Firebase token missing email claim")
+
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
     return user
 
 

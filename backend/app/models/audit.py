@@ -48,6 +48,7 @@ class DeletionAuditLog(Base):
     entity_type: Mapped[str] = mapped_column(Text, nullable=False)
     entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     reason: Mapped[DeletionReason] = mapped_column(nullable=False)
+    details: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     deleted_at: Mapped[datetime] = mapped_column(
         nullable=False, server_default="now()"
     )

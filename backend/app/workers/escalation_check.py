@@ -19,7 +19,9 @@ async def run_escalation_check():
     """Check all users for questions past escalation thresholds."""
     async with async_session_factory() as db:
         try:
-            result = await db.execute(select(User.id))
+            result = await db.execute(
+                select(User.id).where(User.account_status == "active")
+            )
             user_ids = [row[0] for row in result.all()]
 
             total_escalated = 0

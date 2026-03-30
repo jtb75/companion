@@ -265,6 +265,112 @@ async def send_invitation_accepted_notification(
 
 
 # ---------------------------------------------------------------------------
+# Account lifecycle notifications
+# ---------------------------------------------------------------------------
+
+async def send_account_deactivated(to_email: str, to_name: str) -> bool:
+    """Confirm account deactivation to the user."""
+    subject = f"Your {BRAND_SHORT} account has been deactivated"
+    text_body = (
+        f"Hi {to_name},\n\n"
+        f"Your {BRAND_MID} account has been deactivated. "
+        f"Your data is safe and your account can be reactivated at any time.\n\n"
+        f"While deactivated, caregivers will not be able to view your dashboard "
+        f"and you will not receive check-ins or reminders.\n\n"
+        f"To reactivate, sign in at {APP_URL}.\n\n"
+        f"— The {BRAND_SHORT} Team"
+    )
+    html_body = _email_wrapper(
+        f"<p>Hi {to_name},</p>"
+        f"<p>Your {BRAND_MID} account has been <strong>deactivated</strong>.</p>"
+        f"<p>Your data is safe and your account can be reactivated at any time. While deactivated:</p>"
+        f"<ul><li>Caregivers cannot view your dashboard</li><li>You will not receive check-ins or reminders</li></ul>"
+        + _cta_button(APP_URL, "Reactivate Account")
+    )
+    return await send_email(to_email, to_name, subject, text_body, html_body)
+
+
+async def send_account_reactivated(to_email: str, to_name: str) -> bool:
+    """Confirm account reactivation to the user."""
+    subject = f"Welcome back to {BRAND_SHORT}"
+    text_body = (
+        f"Hi {to_name},\n\n"
+        f"Your {BRAND_MID} account has been reactivated. "
+        f"Everything is back to normal — check-ins, reminders, and caregiver access are restored.\n\n"
+        f"— The {BRAND_SHORT} Team"
+    )
+    html_body = _email_wrapper(
+        f"<p>Hi {to_name},</p>"
+        f"<p>Your {BRAND_MID} account has been <strong>reactivated</strong>. Welcome back!</p>"
+        f"<p>Check-ins, reminders, and caregiver access have been restored.</p>"
+        + _cta_button(APP_URL, f"Go to {BRAND_SHORT}")
+    )
+    return await send_email(to_email, to_name, subject, text_body, html_body)
+
+
+async def send_deletion_requested(to_email: str, to_name: str, scheduled_date: str) -> bool:
+    """Confirm deletion request with the scheduled date."""
+    subject = f"Your {BRAND_SHORT} account is scheduled for deletion"
+    text_body = (
+        f"Hi {to_name},\n\n"
+        f"Your {BRAND_MID} account has been scheduled for permanent deletion on {scheduled_date}.\n\n"
+        f"After that date, all your data will be permanently removed and cannot be recovered.\n\n"
+        f"If you change your mind, sign in at {APP_URL} before {scheduled_date} to cancel.\n\n"
+        f"— The {BRAND_SHORT} Team"
+    )
+    html_body = _email_wrapper(
+        f"<p>Hi {to_name},</p>"
+        f"<p>Your {BRAND_MID} account has been scheduled for <strong>permanent deletion on {scheduled_date}</strong>.</p>"
+        f"<p>After that date, all your data will be permanently removed and cannot be recovered.</p>"
+        f"<p>If you change your mind, sign in before {scheduled_date} to cancel the deletion.</p>"
+        + _cta_button(APP_URL, "Cancel Deletion")
+    )
+    return await send_email(to_email, to_name, subject, text_body, html_body)
+
+
+async def send_deletion_cancelled(to_email: str, to_name: str) -> bool:
+    """Confirm deletion cancellation."""
+    subject = f"Your {BRAND_SHORT} account deletion has been cancelled"
+    text_body = (
+        f"Hi {to_name},\n\n"
+        f"Your {BRAND_MID} account deletion has been cancelled. "
+        f"Your account is still deactivated — sign in to reactivate it.\n\n"
+        f"— The {BRAND_SHORT} Team"
+    )
+    return await send_email(to_email, to_name, subject, text_body)
+
+
+async def send_caregiver_access_revoked(
+    to_email: str, to_name: str, member_name: str, reason: str
+) -> bool:
+    """Notify a caregiver that their access has been revoked."""
+    subject = f"Your access to {member_name}'s {BRAND_SHORT} has been removed"
+    text_body = (
+        f"Hi {to_name},\n\n"
+        f"Your caregiver access to {member_name}'s {BRAND_MID} account has been removed "
+        f"because the account has been {reason}.\n\n"
+        f"If you believe this is an error, please contact your administrator.\n\n"
+        f"— The {BRAND_SHORT} Team"
+    )
+    return await send_email(to_email, to_name, subject, text_body)
+
+
+async def send_account_deleted_to_caregiver(
+    to_email: str, to_name: str, member_name: str
+) -> bool:
+    """Notify a caregiver that a member's account was permanently deleted."""
+    subject = f"{member_name}'s {BRAND_SHORT} account has been deleted"
+    text_body = (
+        f"Hi {to_name},\n\n"
+        f"{member_name}'s {BRAND_MID} account has been permanently deleted. "
+        f"All associated data has been removed.\n\n"
+        f"You will no longer receive alerts or have access to their dashboard.\n\n"
+        f"— The {BRAND_SHORT} Team"
+    )
+    return await send_email(to_email, to_name, subject, text_body)
+
+
+# ---------------------------------------------------------------------------
 # Welcome & safety alerts
 # ---------------------------------------------------------------------------
 

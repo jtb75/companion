@@ -1927,6 +1927,10 @@ Delivery will use HTTPS POST with HMAC-SHA256 signature verification.
 | DELETE | `/me/memory/:id`                       | Delete specific memory          |
 | DELETE | `/me/memory?category=all`              | Clear all memory                |
 | GET    | `/me/activity`                         | Caregiver activity log          |
+| POST   | `/me/deactivate`                       | Deactivate own account          |
+| POST   | `/me/reactivate`                       | Reactivate own account          |
+| POST   | `/me/request-deletion`                 | Request deletion (30-day grace) |
+| POST   | `/me/cancel-deletion`                  | Cancel pending deletion         |
 | POST   | `/documents/scan`                      | Submit camera scan              |
 | GET    | `/documents`                           | List documents                  |
 | GET    | `/documents/:id`                       | Document detail                 |
@@ -2026,3 +2030,7 @@ Delivery will use HTTPS POST with HMAC-SHA256 signature verification.
 | POST   | `/people/:email/invite`                | editor+  | Invite to platform (Part 1)     |
 | POST   | `/people/:email/caregiver`             | editor+  | Assign caregiver (respects care_model) |
 | PATCH  | `/people/:email`                       | editor+  | Update person (incl. care_model)|
+| POST   | `/companion-users/:id/deactivate`      | editor+  | Deactivate user account         |
+| POST   | `/companion-users/:id/reactivate`      | editor+  | Reactivate user account         |
+| POST   | `/companion-users/:id/request-deletion`| editor+  | Request deletion (30-day grace) |
+| POST   | `/companion-users/:id/cancel-deletion` | editor+  | Cancel pending deletion         |

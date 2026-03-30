@@ -124,6 +124,8 @@ class CareModel(enum.StrEnum):
 class AccountStatus(enum.StrEnum):
     ACTIVE = "active"
     INVITED = "invited"
+    DEACTIVATED = "deactivated"
+    PENDING_DELETION = "pending_deletion"
 
 
 class InvitationStatus(enum.StrEnum):
@@ -148,6 +150,7 @@ class CaregiverAction(enum.StrEnum):
 
 class DeletionReason(enum.StrEnum):
     USER_REQUEST = "user_request"
+    ADMIN_REQUEST = "admin_request"
     TTL_EXPIRY = "ttl_expiry"
     RETENTION_POLICY = "retention_policy"
 

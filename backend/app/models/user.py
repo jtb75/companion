@@ -61,6 +61,8 @@ class User(TimestampMixin, Base):
     account_status: Mapped[str] = mapped_column(
         Text, nullable=False, server_default="active"
     )
+    deactivated_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    deletion_scheduled_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
     # Relationships
     trusted_contacts = relationship(

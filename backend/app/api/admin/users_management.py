@@ -8,7 +8,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import AdminUser, require_admin_role
 from app.db import get_db
+from app.integrations.email_service import (
+    send_account_deactivated,
+    send_account_deleted_to_caregiver,
+    send_account_reactivated,
+    send_caregiver_access_revoked,
+    send_deletion_cancelled,
+    send_deletion_requested,
+)
+from app.models.enums import AccountStatus, DeletionReason
+from app.models.trusted_contact import TrustedContact
 from app.models.user import User
+from app.services.account_lifecycle_service import (
+    cancel_deletion,
+    deactivate_account,
+    execute_deletion,
+    reactivate_account,
+    request_deletion,
+)
 
 _editor = require_admin_role("editor")
 
@@ -33,6 +50,10 @@ async def list_companion_users(
                 "phone": u.phone,
                 "preferred_name": u.preferred_name,
                 "display_name": u.display_name,
+                "account_status": u.account_status,
+                "care_model": u.care_model,
+                "deactivated_at": u.deactivated_at.isoformat() if u.deactivated_at else None,
+                "deletion_scheduled_at": u.deletion_scheduled_at.isoformat() if u.deletion_scheduled_at else None,
                 "created_at": u.created_at.isoformat() if u.created_at else None,
             }
             for u in users
@@ -47,7 +68,6 @@ async def create_companion_user(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new companion user."""
-    # Check email uniqueness
     result = await db.execute(select(User).where(User.email == data.get("email")))
     if result.scalar_one_or_none():
         raise HTTPException(409, "User with this email already exists")
@@ -87,7 +107,6 @@ async def update_companion_user(
         if field in data:
             setattr(user, field, data[field])
 
-    # Update display_name if name fields changed
     if "first_name" in data or "last_name" in data:
         first = data.get("first_name", user.first_name) or ""
         last = data.get("last_name", user.last_name) or ""
@@ -97,16 +116,114 @@ async def update_companion_user(
     return {"updated": True}
 
 
+async def _get_caregiver_contacts(db: AsyncSession, user_id: uuid.UUID):
+    """Get caregiver email/name pairs for notifications."""
+    result = await db.execute(
+        select(TrustedContact.contact_email, TrustedContact.contact_name).where(
+            TrustedContact.user_id == user_id,
+            TrustedContact.contact_email.isnot(None),
+        )
+    )
+    return result.all()
+
+
+@router.post("/admin/companion-users/{user_id}/deactivate")
+async def admin_deactivate_user(
+    user_id: uuid.UUID,
+    admin: AdminUser = Depends(_editor),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin deactivates a user account."""
+    try:
+        user = await deactivate_account(db, user_id, initiated_by=f"admin:{admin.email}")
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+    name = user.preferred_name or user.display_name
+    await send_account_deactivated(user.email, name)
+    for email, cname in await _get_caregiver_contacts(db, user_id):
+        await send_caregiver_access_revoked(email, cname, name, "deactivated")
+
+    return {"deactivated": True}
+
+
+@router.post("/admin/companion-users/{user_id}/reactivate")
+async def admin_reactivate_user(
+    user_id: uuid.UUID,
+    admin: AdminUser = Depends(_editor),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin reactivates a user account."""
+    try:
+        user = await reactivate_account(db, user_id, initiated_by=f"admin:{admin.email}")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    await send_account_reactivated(user.email, user.preferred_name or user.display_name)
+    return {"reactivated": True}
+
+
+@router.post("/admin/companion-users/{user_id}/request-deletion")
+async def admin_request_deletion(
+    user_id: uuid.UUID,
+    admin: AdminUser = Depends(_editor),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin requests account deletion with 30-day grace period."""
+    try:
+        user = await request_deletion(
+            db, user_id, DeletionReason.ADMIN_REQUEST, initiated_by=f"admin:{admin.email}"
+        )
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+    name = user.preferred_name or user.display_name
+    scheduled = user.deletion_scheduled_at.strftime("%B %d, %Y") if user.deletion_scheduled_at else "30 days"
+    await send_deletion_requested(user.email, name, scheduled)
+    return {"deletion_requested": True, "scheduled_date": scheduled}
+
+
+@router.post("/admin/companion-users/{user_id}/cancel-deletion")
+async def admin_cancel_deletion(
+    user_id: uuid.UUID,
+    admin: AdminUser = Depends(_editor),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin cancels pending deletion."""
+    try:
+        user = await cancel_deletion(db, user_id, initiated_by=f"admin:{admin.email}")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    await send_deletion_cancelled(user.email, user.preferred_name or user.display_name)
+    return {"deletion_cancelled": True}
+
+
 @router.delete("/admin/companion-users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_companion_user(
     user_id: uuid.UUID,
     admin: AdminUser = Depends(_editor),
     db: AsyncSession = Depends(get_db),
 ):
-    """Delete a companion user."""
+    """Permanently delete a user. Requires pending_deletion status or forces immediate deletion."""
     user = await db.get(User, user_id)
     if not user:
         raise HTTPException(404, "User not found")
-    await db.delete(user)
-    await db.flush()
+
+    if user.account_status not in (AccountStatus.PENDING_DELETION, AccountStatus.DEACTIVATED):
+        raise HTTPException(
+            400,
+            "Use the request-deletion endpoint first, or deactivate the account. "
+            "Direct deletion is only allowed for deactivated or pending-deletion accounts.",
+        )
+
+    name = user.preferred_name or user.display_name
+    caregivers = await _get_caregiver_contacts(db, user_id)
+
+    result = await execute_deletion(db, user_id)
+
+    # Notify caregivers
+    for email, cname in caregivers:
+        await send_account_deleted_to_caregiver(email, cname, name)
+
     return None
