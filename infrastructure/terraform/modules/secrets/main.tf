@@ -11,6 +11,7 @@ locals {
     "anthropic-api-key"       = "Anthropic API key for Claude"
     "openai-api-key"          = "OpenAI API key for embeddings"
     "gmail-oauth-credentials" = "Gmail OAuth credentials for email processing"
+    "gmail-smtp-password"     = "Gmail SMTP app password for sending transactional email"
   }
 }
 

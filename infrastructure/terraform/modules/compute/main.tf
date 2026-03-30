@@ -139,6 +139,16 @@ resource "google_cloud_run_v2_service" "backend" {
         }
       }
 
+      env {
+        name = "COMPANION_GMAIL_SMTP_PASSWORD"
+        value_source {
+          secret_key_ref {
+            secret  = var.gmail_smtp_password_secret_id
+            version = "latest"
+          }
+        }
+      }
+
       ports {
         container_port = 8080
       }

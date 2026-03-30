@@ -27,3 +27,8 @@ output "gmail_oauth_credentials_secret_id" {
   description = "Secret Manager secret ID for Gmail OAuth credentials"
   value       = google_secret_manager_secret.manual["gmail-oauth-credentials"].secret_id
 }
+
+output "gmail_smtp_password_secret_id" {
+  description = "Secret Manager secret ID for Gmail SMTP app password"
+  value       = google_secret_manager_secret.manual["gmail-smtp-password"].secret_id
+}

@@ -1,12 +1,17 @@
-"""Email service using Mailjet.
+"""Email service using Gmail SMTP (Google Workspace).
 
 Sends transactional emails for:
 - Caregiver invitations
+- Platform invitations
+- Assignment notifications
 - Welcome emails after profile completion
 - Safety alerts to caregivers
 """
 
 import logging
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 from app.branding import (
     BRAND_DOMAIN,
@@ -19,21 +24,64 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+SMTP_HOST = "smtp.gmail.com"
+SMTP_PORT = 587
 
-def _get_client():
-    """Get Mailjet client. Returns None if not configured."""
-    if not settings.mailjet_api_key or not settings.mailjet_secret_key:
-        logger.warning("Mailjet not configured — emails will be logged only")
-        return None
+APP_URL = f"https://app.{BRAND_DOMAIN}"
+
+
+def _email_wrapper(content: str) -> str:
+    """Wrap email content in the standard branded template."""
+    return f"""
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 500px; margin: 0 auto; padding: 32px;">
+        <div style="text-align: center; margin-bottom: 24px;">
+            <span style="font-size: 36px;">🌟</span>
+            <h1 style="color: #2C5F8A; font-size: 22px; margin: 8px 0 0;">{BRAND_MID}</h1>
+        </div>
+        {content}
+        <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
+        <p style="color: #aaa; font-size: 12px; text-align: center;">— The {BRAND_SHORT} Team</p>
+    </div>
+    """
+
+
+def _cta_button(url: str, label: str) -> str:
+    return f"""
+    <div style="text-align: center; margin: 32px 0;">
+        <a href="{url}"
+           style="background: #2C5F8A; color: white; padding: 14px 32px; border-radius: 12px; text-decoration: none; font-weight: 600; display: inline-block;">
+            {label}
+        </a>
+    </div>
+    """
+
+
+def _send_smtp(to_email: str, to_name: str, subject: str, text_body: str, html_body: str | None) -> bool:
+    """Send a single email via Gmail SMTP."""
+    if not settings.gmail_smtp_password:
+        logger.warning("Gmail SMTP not configured — emails will be logged only")
+        logger.info(f"Email (no smtp): to={to_email} subject=\"{subject}\"")
+        return True  # Pretend success in dev
+
+    msg = MIMEMultipart("alternative")
+    msg["From"] = f"{BRAND_EMAIL_FROM_NAME} <{BRAND_EMAIL_FROM_ADDRESS}>"
+    msg["To"] = f"{to_name} <{to_email}>"
+    msg["Subject"] = subject
+
+    msg.attach(MIMEText(text_body, "plain"))
+    if html_body:
+        msg.attach(MIMEText(html_body, "html"))
+
     try:
-        from mailjet_rest import Client
-        return Client(
-            auth=(settings.mailjet_api_key, settings.mailjet_secret_key),
-            version='v3.1',
-        )
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.starttls()
+            server.login(settings.gmail_smtp_user, settings.gmail_smtp_password)
+            server.sendmail(BRAND_EMAIL_FROM_ADDRESS, to_email, msg.as_string())
+        logger.info(f"Email sent: to={to_email} subject=\"{subject}\"")
+        return True
     except Exception:
-        logger.exception("Failed to create Mailjet client")
-        return None
+        logger.exception(f"Failed to send email to {to_email}")
+        return False
 
 
 async def send_email(
@@ -43,43 +91,13 @@ async def send_email(
     text_body: str,
     html_body: str | None = None,
 ) -> bool:
-    """Send a single email via Mailjet."""
-    client = _get_client()
+    """Send a single email via Gmail SMTP."""
+    return _send_smtp(to_email, to_name, subject, text_body, html_body)
 
-    message = {
-        "From": {
-            "Email": BRAND_EMAIL_FROM_ADDRESS,
-            "Name": BRAND_EMAIL_FROM_NAME,
-        },
-        "To": [{"Email": to_email, "Name": to_name}],
-        "Subject": subject,
-        "TextPart": text_body,
-    }
-    if html_body:
-        message["HTMLPart"] = html_body
 
-    if client is None:
-        logger.info(
-            f"Email (no client): to={to_email} "
-            f"subject=\"{subject}\""
-        )
-        return True  # Pretend success in dev
-
-    try:
-        result = client.send.create(data={"Messages": [message]})
-        status = result.status_code
-        if status == 200:
-            logger.info(f"Email sent: to={to_email} subject=\"{subject}\"")
-            return True
-        else:
-            logger.error(
-                f"Mailjet error {status}: {result.json()}"
-            )
-            return False
-    except Exception:
-        logger.exception(f"Failed to send email to {to_email}")
-        return False
-
+# ---------------------------------------------------------------------------
+# Caregiver invitation (member-initiated, includes token link)
+# ---------------------------------------------------------------------------
 
 async def send_caregiver_invitation(
     to_email: str,
@@ -87,42 +105,168 @@ async def send_caregiver_invitation(
     user_name: str,
     relationship: str,
     invited_by: str,
+    invitation_token: str | None = None,
 ) -> bool:
-    """Send a caregiver invitation email."""
+    """Send a caregiver invitation email with an acceptance link."""
     subject = f"You've been invited to {BRAND_MID}"
+
+    if invitation_token:
+        accept_url = f"{APP_URL}/invite/accept?token={invitation_token}"
+        cta_text = f"To accept, click the link below and sign in with your Google account.\n\n{accept_url}"
+    else:
+        accept_url = APP_URL
+        cta_text = f"To get started, visit the {BRAND_SHORT} dashboard and sign in with your Google account ({to_email})."
 
     text_body = (
         f"Hi {to_name},\n\n"
         f"{invited_by} has invited you as a {relationship} "
         f"for {user_name} on {BRAND_MID}.\n\n"
-        f"To get started, visit the {BRAND_SHORT} dashboard "
-        f"and sign in with your Google account ({to_email}).\n\n"
+        f"{cta_text}\n\n"
         f"— The {BRAND_SHORT} Team"
     )
 
-    html_body = f"""
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 500px; margin: 0 auto; padding: 32px;">
-        <div style="text-align: center; margin-bottom: 24px;">
-            <span style="font-size: 36px;">🌟</span>
-            <h1 style="color: #2C5F8A; font-size: 22px; margin: 8px 0 0;">{BRAND_MID}</h1>
-        </div>
-        <p>Hi {to_name},</p>
-        <p><strong>{invited_by}</strong> has invited you as a <strong>{relationship}</strong> for <strong>{user_name}</strong> on {BRAND_MID}.</p>
-        <p>As a caregiver, you'll be able to view {user_name}'s status, upcoming appointments, and important alerts.</p>
-        <div style="text-align: center; margin: 32px 0;">
-            <a href="https://app.{BRAND_DOMAIN}"
-               style="background: #2C5F8A; color: white; padding: 14px 32px; border-radius: 12px; text-decoration: none; font-weight: 600; display: inline-block;">
-                Sign In to {BRAND_SHORT}
-            </a>
-        </div>
-        <p style="color: #888; font-size: 13px;">Sign in with your Google account ({to_email}) to get started.</p>
-        <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
-        <p style="color: #aaa; font-size: 12px; text-align: center;">— The {BRAND_SHORT} Team</p>
-    </div>
-    """
+    html_body = _email_wrapper(
+        f"<p>Hi {to_name},</p>"
+        f"<p><strong>{invited_by}</strong> has invited you as a <strong>{relationship}</strong> for <strong>{user_name}</strong> on {BRAND_MID}.</p>"
+        f"<p>As a caregiver, you'll be able to view {user_name}'s status, upcoming appointments, and important alerts.</p>"
+        + _cta_button(accept_url, f"Accept Invitation")
+        + f'<p style="color: #888; font-size: 13px;">Sign in with your Google account ({to_email}) to get started.</p>'
+    )
 
     return await send_email(to_email, to_name, subject, text_body, html_body)
 
+
+# ---------------------------------------------------------------------------
+# Platform invitation (admin-initiated, Part 1 only — no member assignment)
+# ---------------------------------------------------------------------------
+
+async def send_platform_invitation(
+    to_email: str,
+    to_name: str,
+    invited_by: str,
+) -> bool:
+    """Send a platform invitation email (no specific member assignment)."""
+    subject = f"You've been invited to {BRAND_MID}"
+
+    text_body = (
+        f"Hi {to_name},\n\n"
+        f"{invited_by} has invited you to join {BRAND_MID}.\n\n"
+        f"To get started, visit {APP_URL} and sign in with your Google account ({to_email}).\n\n"
+        f"— The {BRAND_SHORT} Team"
+    )
+
+    html_body = _email_wrapper(
+        f"<p>Hi {to_name},</p>"
+        f"<p><strong>{invited_by}</strong> has invited you to join {BRAND_MID}.</p>"
+        f"<p>{BRAND_SHORT} is an independence assistant that helps adults stay on top of their daily tasks, appointments, and medications.</p>"
+        + _cta_button(APP_URL, f"Sign In to {BRAND_SHORT}")
+        + f'<p style="color: #888; font-size: 13px;">Sign in with your Google account ({to_email}) to get started.</p>'
+    )
+
+    return await send_email(to_email, to_name, subject, text_body, html_body)
+
+
+# ---------------------------------------------------------------------------
+# Assignment notifications
+# ---------------------------------------------------------------------------
+
+async def send_assignment_request_notification(
+    to_email: str,
+    to_name: str,
+    caregiver_name: str,
+    relationship: str,
+) -> bool:
+    """Notify a member that someone wants to be their caregiver."""
+    subject = f"{caregiver_name} would like to be your caregiver"
+
+    text_body = (
+        f"Hi {to_name},\n\n"
+        f"{caregiver_name} would like to be added as your {relationship} on {BRAND_MID}.\n\n"
+        f"Log in to {APP_URL} to approve or decline this request.\n\n"
+        f"— The {BRAND_SHORT} Team"
+    )
+
+    html_body = _email_wrapper(
+        f"<p>Hi {to_name},</p>"
+        f"<p><strong>{caregiver_name}</strong> would like to be added as your <strong>{relationship}</strong> on {BRAND_MID}.</p>"
+        f"<p>You can approve or decline this request from your dashboard.</p>"
+        + _cta_button(APP_URL, "Review Request")
+    )
+
+    return await send_email(to_email, to_name, subject, text_body, html_body)
+
+
+async def send_assignment_approved_notification(
+    to_email: str,
+    to_name: str,
+    member_name: str,
+) -> bool:
+    """Notify a caregiver that a member approved their assignment."""
+    subject = f"{member_name} approved you as a caregiver"
+
+    text_body = (
+        f"Hi {to_name},\n\n"
+        f"{member_name} has approved you as a caregiver on {BRAND_MID}.\n\n"
+        f"You can now view their dashboard at {APP_URL}.\n\n"
+        f"— The {BRAND_SHORT} Team"
+    )
+
+    html_body = _email_wrapper(
+        f"<p>Hi {to_name},</p>"
+        f"<p><strong>{member_name}</strong> has approved you as a caregiver on {BRAND_MID}.</p>"
+        f"<p>You can now view their dashboard, alerts, and activity.</p>"
+        + _cta_button(APP_URL, "View Dashboard")
+    )
+
+    return await send_email(to_email, to_name, subject, text_body, html_body)
+
+
+async def send_assignment_rejected_notification(
+    to_email: str,
+    to_name: str,
+    member_name: str,
+) -> bool:
+    """Notify a caregiver that a member declined their assignment."""
+    subject = f"Caregiver request update — {BRAND_SHORT}"
+
+    text_body = (
+        f"Hi {to_name},\n\n"
+        f"{member_name} has declined the caregiver request on {BRAND_MID}.\n\n"
+        f"If you believe this is an error, please contact your administrator.\n\n"
+        f"— The {BRAND_SHORT} Team"
+    )
+
+    return await send_email(to_email, to_name, subject, text_body)
+
+
+async def send_invitation_accepted_notification(
+    to_email: str,
+    to_name: str,
+    caregiver_name: str,
+) -> bool:
+    """Notify a member that their caregiver accepted the invitation."""
+    subject = f"{caregiver_name} accepted your invitation"
+
+    text_body = (
+        f"Hi {to_name},\n\n"
+        f"{caregiver_name} has accepted your invitation and is now your caregiver on {BRAND_MID}.\n\n"
+        f"They can now view your dashboard and receive alerts.\n\n"
+        f"— The {BRAND_SHORT} Team"
+    )
+
+    html_body = _email_wrapper(
+        f"<p>Hi {to_name},</p>"
+        f"<p><strong>{caregiver_name}</strong> has accepted your invitation and is now your caregiver on {BRAND_MID}.</p>"
+        f"<p>They can now view your dashboard and receive important alerts on your behalf.</p>"
+        + _cta_button(APP_URL, "View Dashboard")
+    )
+
+    return await send_email(to_email, to_name, subject, text_body, html_body)
+
+
+# ---------------------------------------------------------------------------
+# Welcome & safety alerts
+# ---------------------------------------------------------------------------
 
 async def send_welcome(
     to_email: str,
@@ -160,26 +304,13 @@ async def send_safety_alert(
         f"— {BRAND_SHORT}"
     )
 
-    html_body = f"""
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 500px; margin: 0 auto; padding: 32px;">
-        <div style="text-align: center; margin-bottom: 24px;">
-            <span style="font-size: 36px;">🌟</span>
-            <h1 style="color: #2C5F8A; font-size: 22px; margin: 8px 0 0;">{BRAND_MID}</h1>
-        </div>
-        <div style="background: #FDF3E7; border: 1px solid #D4832A33; border-radius: 12px; padding: 16px; margin: 16px 0;">
-            <p style="margin: 0; font-weight: 600; color: #D4832A;">⚠️ Alert about {user_name}</p>
-            <p style="margin: 8px 0 0; color: #4A4A6A;">{alert_message}</p>
-        </div>
-        <p>You may want to check in with {user_name}.</p>
-        <div style="text-align: center; margin: 24px 0;">
-            <a href="https://app.{BRAND_DOMAIN}"
-               style="background: #2C5F8A; color: white; padding: 12px 24px; border-radius: 12px; text-decoration: none; font-weight: 600; display: inline-block;">
-                View Dashboard
-            </a>
-        </div>
-        <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
-        <p style="color: #aaa; font-size: 12px; text-align: center;">— The {BRAND_SHORT} Team</p>
-    </div>
-    """
+    html_body = _email_wrapper(
+        f'<div style="background: #FDF3E7; border: 1px solid #D4832A33; border-radius: 12px; padding: 16px; margin: 16px 0;">'
+        f'<p style="margin: 0; font-weight: 600; color: #D4832A;">⚠️ Alert about {user_name}</p>'
+        f'<p style="margin: 8px 0 0; color: #4A4A6A;">{alert_message}</p>'
+        f"</div>"
+        f"<p>You may want to check in with {user_name}.</p>"
+        + _cta_button(APP_URL, "View Dashboard")
+    )
 
     return await send_email(to_email, to_name, subject, text_body, html_body)

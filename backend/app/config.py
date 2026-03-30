@@ -31,9 +31,9 @@ class Settings(BaseSettings):
     # Must be explicitly set to true. Never enable in production.
     dev_auth_bypass: bool = False
 
-    # Mailjet
-    mailjet_api_key: str = ""
-    mailjet_secret_key: str = ""
+    # Gmail SMTP (Google Workspace)
+    gmail_smtp_user: str = "dd@mydailydignity.com"
+    gmail_smtp_password: str = ""
 
     # App
     environment: str = "development"

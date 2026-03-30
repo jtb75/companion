@@ -86,6 +86,7 @@ module "compute" {
   openai_api_key_secret_id       = module.secrets.openai_api_key_secret_id
   firebase_credentials_secret_id = module.secrets.firebase_credentials_secret_id
   redis_url_secret_id            = module.secrets.redis_url_secret_id
+  gmail_smtp_password_secret_id  = module.secrets.gmail_smtp_password_secret_id
   documents_bucket               = module.storage.documents_bucket_name
   artifact_registry_repo         = module.storage.artifact_registry_repo
   backend_image                  = var.backend_image
