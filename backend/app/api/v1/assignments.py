@@ -2,7 +2,7 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import User, require_complete_profile
@@ -11,7 +11,6 @@ from app.integrations.email_service import (
     send_assignment_approved_notification,
     send_assignment_rejected_notification,
 )
-from app.models.assignment_request import CaregiverAssignmentRequest
 from app.schemas.invitation import (
     AssignmentApproveResponse,
     AssignmentRejectResponse,
@@ -42,7 +41,7 @@ async def approve_assignment(
     try:
         contact = await assignment_service.approve_assignment(db, request_id, user.id)
     except ValueError as e:
-        raise HTTPException(400, str(e))
+        raise HTTPException(400, str(e)) from None
 
     # Notify the caregiver
     if contact.contact_email:
@@ -67,9 +66,9 @@ async def reject_assignment(
     except PermissionError:
         raise HTTPException(
             403, "Your account is managed by your organization. Contact your administrator."
-        )
+        ) from None
     except ValueError as e:
-        raise HTTPException(400, str(e))
+        raise HTTPException(400, str(e)) from None
 
     # Notify the caregiver
     await send_assignment_rejected_notification(

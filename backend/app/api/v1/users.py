@@ -77,7 +77,7 @@ async def deactivate_my_account(
     db: AsyncSession = Depends(get_db),
 ):
     """Deactivate own account."""
-    updated = await deactivate_account(db, user.id, initiated_by="user")
+    await deactivate_account(db, user.id, initiated_by="user")
 
     # Notify user
     await send_account_deactivated(user.email, user.preferred_name or user.display_name)
@@ -105,9 +105,9 @@ async def reactivate_my_account(
 ):
     """Reactivate own account from deactivated state."""
     try:
-        updated = await reactivate_account(db, user.id, initiated_by="user")
+        await reactivate_account(db, user.id, initiated_by="user")
     except ValueError as e:
-        raise HTTPException(400, str(e))
+        raise HTTPException(400, str(e)) from None
     await send_account_reactivated(user.email, user.preferred_name or user.display_name)
     return {"reactivated": True}
 
@@ -123,7 +123,10 @@ async def request_my_deletion(
             403, "Managed accounts can only be deleted by an administrator."
         )
     updated = await request_deletion(db, user.id, DeletionReason.USER_REQUEST, initiated_by="user")
-    scheduled = updated.deletion_scheduled_at.strftime("%B %d, %Y") if updated.deletion_scheduled_at else "30 days"
+    scheduled = (
+        updated.deletion_scheduled_at.strftime("%B %d, %Y")
+        if updated.deletion_scheduled_at else "30 days"
+    )
     await send_deletion_requested(user.email, user.preferred_name or user.display_name, scheduled)
     return {"deletion_requested": True, "scheduled_date": scheduled}
 
@@ -137,7 +140,7 @@ async def cancel_my_deletion(
     try:
         await cancel_deletion(db, user.id, initiated_by="user")
     except ValueError as e:
-        raise HTTPException(400, str(e))
+        raise HTTPException(400, str(e)) from None
     await send_deletion_cancelled(user.email, user.preferred_name or user.display_name)
     return {"deletion_cancelled": True}
 

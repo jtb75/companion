@@ -1,10 +1,10 @@
 """App API — Invitation routes (member-initiated caregiver invitations)."""
 
-from fastapi import APIRouter, Depends, HTTPException, Header, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import User, require_complete_profile, _extract_bearer_token
+from app.auth.dependencies import User, _extract_bearer_token, require_complete_profile
 from app.db import get_db
 from app.integrations.email_service import (
     send_caregiver_invitation,

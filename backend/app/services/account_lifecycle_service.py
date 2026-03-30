@@ -1,7 +1,7 @@
 """Service layer for account deactivation and deletion."""
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import func, select, update
@@ -82,7 +82,7 @@ async def deactivate_account(
     if user.account_status == AccountStatus.DEACTIVATED:
         return user  # Idempotent
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     user.account_status = AccountStatus.DEACTIVATED
     user.deactivated_at = now
     user.away_mode = True
@@ -145,7 +145,7 @@ async def request_deletion(
     if user.account_status != AccountStatus.DEACTIVATED:
         await deactivate_account(db, user_id, initiated_by)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     user.account_status = AccountStatus.PENDING_DELETION
     user.deletion_scheduled_at = now + timedelta(days=DELETION_GRACE_DAYS)
 

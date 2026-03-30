@@ -14,8 +14,7 @@ from app.integrations.email_service import (
     send_platform_invitation,
 )
 from app.models.admin_user import AdminUser as AdminUserModel
-from app.models.assignment_request import CaregiverAssignmentRequest
-from app.models.enums import AccessTier, CareModel, RelationshipType
+from app.models.enums import CareModel
 from app.models.trusted_contact import TrustedContact
 from app.models.user import User
 from app.schemas.invitation import AdminPlatformInvite, AdminPlatformInviteResponse
@@ -324,7 +323,7 @@ async def add_caregiver_assignment(
             admin_id=admin.id,
         )
     except ValueError as e:
-        raise HTTPException(409, str(e))
+        raise HTTPException(409, str(e)) from None
 
     member_name = member.preferred_name or member.display_name
 

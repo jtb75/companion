@@ -1,7 +1,7 @@
 """Service layer for caregiver invitations (Part 1 — getting people on the platform)."""
 
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import select
@@ -59,7 +59,7 @@ async def create_member_invitation(
     )
     existing = result.scalar_one_or_none()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     token = generate_invitation_token()
 
     if existing:
@@ -119,7 +119,7 @@ async def get_invitation_by_token(
     # Check expiry
     if contact.invited_at:
         expires = contact.invited_at + timedelta(days=INVITATION_TTL_DAYS)
-        if datetime.now(timezone.utc) > expires:
+        if datetime.now(UTC) > expires:
             contact.invitation_status = InvitationStatus.EXPIRED
             await db.flush()
             return None
@@ -141,7 +141,7 @@ async def accept_invitation(
     if contact.contact_email and contact.contact_email.lower() != accepting_email.lower():
         return None
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     contact.invitation_status = InvitationStatus.ACCEPTED
     contact.accepted_at = now
     contact.is_active = True

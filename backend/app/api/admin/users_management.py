@@ -53,7 +53,9 @@ async def list_companion_users(
                 "account_status": u.account_status,
                 "care_model": u.care_model,
                 "deactivated_at": u.deactivated_at.isoformat() if u.deactivated_at else None,
-                "deletion_scheduled_at": u.deletion_scheduled_at.isoformat() if u.deletion_scheduled_at else None,
+                "deletion_scheduled_at": (
+                    u.deletion_scheduled_at.isoformat() if u.deletion_scheduled_at else None
+                ),
                 "created_at": u.created_at.isoformat() if u.created_at else None,
             }
             for u in users
@@ -137,7 +139,7 @@ async def admin_deactivate_user(
     try:
         user = await deactivate_account(db, user_id, initiated_by=f"admin:{admin.email}")
     except ValueError as e:
-        raise HTTPException(404, str(e))
+        raise HTTPException(404, str(e)) from None
 
     name = user.preferred_name or user.display_name
     await send_account_deactivated(user.email, name)
@@ -157,7 +159,7 @@ async def admin_reactivate_user(
     try:
         user = await reactivate_account(db, user_id, initiated_by=f"admin:{admin.email}")
     except ValueError as e:
-        raise HTTPException(400, str(e))
+        raise HTTPException(400, str(e)) from None
 
     await send_account_reactivated(user.email, user.preferred_name or user.display_name)
     return {"reactivated": True}
@@ -175,10 +177,13 @@ async def admin_request_deletion(
             db, user_id, DeletionReason.ADMIN_REQUEST, initiated_by=f"admin:{admin.email}"
         )
     except ValueError as e:
-        raise HTTPException(404, str(e))
+        raise HTTPException(404, str(e)) from None
 
     name = user.preferred_name or user.display_name
-    scheduled = user.deletion_scheduled_at.strftime("%B %d, %Y") if user.deletion_scheduled_at else "30 days"
+    scheduled = (
+        user.deletion_scheduled_at.strftime("%B %d, %Y")
+        if user.deletion_scheduled_at else "30 days"
+    )
     await send_deletion_requested(user.email, name, scheduled)
     return {"deletion_requested": True, "scheduled_date": scheduled}
 
@@ -193,7 +198,7 @@ async def admin_cancel_deletion(
     try:
         user = await cancel_deletion(db, user_id, initiated_by=f"admin:{admin.email}")
     except ValueError as e:
-        raise HTTPException(400, str(e))
+        raise HTTPException(400, str(e)) from None
 
     await send_deletion_cancelled(user.email, user.preferred_name or user.display_name)
     return {"deletion_cancelled": True}
@@ -220,7 +225,7 @@ async def delete_companion_user(
     name = user.preferred_name or user.display_name
     caregivers = await _get_caregiver_contacts(db, user_id)
 
-    result = await execute_deletion(db, user_id)
+    await execute_deletion(db, user_id)
 
     # Notify caregivers
     for email, cname in caregivers:

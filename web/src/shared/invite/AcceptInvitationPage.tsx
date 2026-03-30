@@ -45,7 +45,7 @@ export default function AcceptInvitationPage() {
       body: JSON.stringify({ token }),
     })
       .then(() => navigate('/caregiver/alerts', { replace: true }))
-      .catch((err) => {
+      .catch(() => {
         setError('Failed to accept invitation. It may have expired.')
         setAccepting(false)
       })
