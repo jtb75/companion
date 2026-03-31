@@ -87,429 +87,351 @@ function statusBadge(status: string | null) {
 }
 
 // ---------------------------------------------------------------------------
-// Expanded detail panel (accordion)
+// Assignment row (reusable)
+// ---------------------------------------------------------------------------
+
+function AssignmentRow({
+  label, relationship, tier, status, isActive, contactId,
+  onApprove, onRemove, approving, removing,
+}: {
+  label: string; relationship: string; tier: string; status?: string; isActive: boolean
+  contactId: string; onApprove: (id: string) => void; onRemove: (id: string) => void
+  approving: boolean; removing: boolean
+}) {
+  return (
+    <div className="flex items-center justify-between rounded-md bg-gray-50 px-3 py-2 ring-1 ring-gray-100">
+      <div className="flex items-center gap-2 flex-wrap min-w-0">
+        <span className="text-sm font-medium text-gray-800">{label}</span>
+        <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800">{relationshipLabel(relationship)}</span>
+        <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">{tierLabel(tier)}</span>
+        {status === 'pending_approval' && <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Pending</span>}
+        {!isActive && status !== 'pending_approval' && <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Inactive</span>}
+      </div>
+      <div className="flex items-center gap-1.5 ml-2">
+        {status === 'pending_approval' && (
+          <button onClick={() => onApprove(contactId)} disabled={approving} className="rounded border border-emerald-300 p-1 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-800" title="Approve">
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+          </button>
+        )}
+        <button onClick={() => onRemove(contactId)} disabled={removing} className="rounded border border-red-200 p-1 text-gray-400 hover:bg-red-50 hover:text-red-600" title="Remove">
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Edit Profile Modal
+// ---------------------------------------------------------------------------
+
+function EditProfileModal({ person, onClose }: { person: Person; onClose: () => void }) {
+  const queryClient = useQueryClient()
+  const [editForm, setEditForm] = useState({
+    first_name: person.first_name || '', last_name: person.last_name || '',
+    preferred_name: person.preferred_name || '', phone: person.phone || '',
+    is_admin: person.is_admin, admin_role: person.admin_role || 'viewer',
+    care_model: person.care_model || 'self_directed',
+  })
+  const [deleteStep, setDeleteStep] = useState<'none' | 'confirm-deactivate' | 'confirm-delete'>('none')
+
+  const updateMutation = useMutation({
+    mutationFn: (data: Record<string, unknown>) => api(`/admin/people/${person.id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-people'] }),
+  })
+  const deactivateMutation = useMutation({
+    mutationFn: () => api(`/admin/companion-users/${person.id}/deactivate`, { method: 'POST' }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-people'] }); setDeleteStep('none') },
+  })
+  const reactivateMutation = useMutation({
+    mutationFn: () => api(`/admin/companion-users/${person.id}/reactivate`, { method: 'POST' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-people'] }),
+  })
+  const requestDeletionMutation = useMutation({
+    mutationFn: () => api(`/admin/companion-users/${person.id}/request-deletion`, { method: 'POST' }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-people'] }); setDeleteStep('none') },
+  })
+  const cancelDeletionMutation = useMutation({
+    mutationFn: () => api(`/admin/companion-users/${person.id}/cancel-deletion`, { method: 'POST' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-people'] }),
+  })
+  const deleteMutation = useMutation({
+    mutationFn: () => api(`/admin/companion-users/${person.id}`, { method: 'DELETE' }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-people'] }); onClose() },
+  })
+
+  const isDeactivated = person.account_status === 'deactivated'
+  const isPendingDeletion = person.account_status === 'pending_deletion'
+
+  const inputClass = "block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-companion-blue-light focus:outline-none focus:ring-1 focus:ring-companion-blue-light"
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/30" onClick={onClose} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-lg rounded-xl bg-white shadow-xl max-h-[90vh] overflow-y-auto">
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">{person.display_name || person.email}</h2>
+              <p className="text-sm text-gray-500">{person.email}</p>
+            </div>
+            <button onClick={onClose} className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
+
+          <div className="px-6 py-5 space-y-5">
+            {/* Profile fields */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-500">First Name</label>
+                <input type="text" value={editForm.first_name} onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })} className={inputClass} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-500">Last Name</label>
+                <input type="text" value={editForm.last_name} onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })} className={inputClass} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-500">Preferred Name</label>
+                <input type="text" value={editForm.preferred_name} onChange={(e) => setEditForm({ ...editForm, preferred_name: e.target.value })} placeholder="What D.D. calls them" className={inputClass} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-500">Phone</label>
+                <input type="tel" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} className={inputClass} />
+              </div>
+            </div>
+
+            {/* Roles */}
+            <div className="flex items-center gap-4 flex-wrap">
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input type="checkbox" checked={editForm.is_admin} onChange={(e) => setEditForm({ ...editForm, is_admin: e.target.checked })} className="rounded border-gray-300 text-companion-blue" />
+                Admin
+              </label>
+              {editForm.is_admin && (
+                <select value={editForm.admin_role} onChange={(e) => setEditForm({ ...editForm, admin_role: e.target.value })} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm">
+                  {ADMIN_ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                </select>
+              )}
+              {person.is_user && (
+                <>
+                  <span className="text-gray-300">|</span>
+                  <label className="text-xs font-medium text-gray-500">Care Model</label>
+                  <select value={editForm.care_model} onChange={(e) => setEditForm({ ...editForm, care_model: e.target.value })} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm">
+                    <option value="self_directed">Self-Directed</option>
+                    <option value="managed">Managed</option>
+                  </select>
+                </>
+              )}
+            </div>
+
+            {/* Save */}
+            <div className="flex items-center gap-3">
+              <button onClick={() => updateMutation.mutate(editForm)} disabled={updateMutation.isPending} className="rounded-md bg-companion-blue px-4 py-2 text-sm font-medium text-white hover:bg-companion-blue-mid disabled:opacity-50">
+                {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+              </button>
+              {updateMutation.isSuccess && <span className="text-xs text-emerald-600">Saved</span>}
+              {updateMutation.isError && <span className="text-xs text-companion-rose">Save failed</span>}
+            </div>
+
+            {/* Account Actions */}
+            {person.is_user && person.id && (
+              <div className="border-t border-gray-200 pt-4 space-y-3">
+                <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500">Account Actions</h3>
+
+                {(isDeactivated || isPendingDeletion) && (
+                  <div className="flex gap-2">
+                    {isPendingDeletion && <button onClick={() => cancelDeletionMutation.mutate()} disabled={cancelDeletionMutation.isPending} className="rounded-md bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50">{cancelDeletionMutation.isPending ? 'Cancelling...' : 'Cancel Deletion'}</button>}
+                    {isDeactivated && <button onClick={() => reactivateMutation.mutate()} disabled={reactivateMutation.isPending} className="rounded-md bg-emerald-500 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50">{reactivateMutation.isPending ? 'Reactivating...' : 'Reactivate'}</button>}
+                  </div>
+                )}
+
+                {deleteStep === 'none' && !isPendingDeletion && (
+                  <div className="flex gap-2">
+                    {!isDeactivated && <button onClick={() => setDeleteStep('confirm-deactivate')} className="rounded-md border border-amber-300 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50">Deactivate</button>}
+                    <button onClick={() => setDeleteStep('confirm-delete')} className="rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50">{isDeactivated ? 'Delete Account' : 'Request Deletion'}</button>
+                  </div>
+                )}
+
+                {deleteStep === 'confirm-deactivate' && (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+                    <p className="text-sm text-amber-800 mb-2">This will block access and notify caregivers. Reversible.</p>
+                    <div className="flex gap-2">
+                      <button onClick={() => deactivateMutation.mutate()} disabled={deactivateMutation.isPending} className="rounded-md bg-amber-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50">{deactivateMutation.isPending ? 'Deactivating...' : 'Confirm'}</button>
+                      <button onClick={() => setDeleteStep('none')} className="px-3 py-1.5 text-sm text-gray-500">Cancel</button>
+                    </div>
+                  </div>
+                )}
+
+                {deleteStep === 'confirm-delete' && (
+                  <div className="rounded-md border border-red-200 bg-red-50 p-3">
+                    <p className="text-sm text-red-800 mb-2">{isDeactivated ? 'Permanently delete all data. Cannot be undone.' : 'Schedule deletion in 30 days. Can be cancelled.'}</p>
+                    <div className="flex gap-2">
+                      <button onClick={() => isDeactivated ? deleteMutation.mutate() : requestDeletionMutation.mutate()} disabled={deleteMutation.isPending || requestDeletionMutation.isPending} className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50">{(deleteMutation.isPending || requestDeletionMutation.isPending) ? 'Processing...' : 'Confirm'}</button>
+                      <button onClick={() => setDeleteStep('none')} className="px-3 py-1.5 text-sm text-gray-500">Cancel</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {person.created_at && <p className="text-xs text-gray-400 pt-2">Created {new Date(person.created_at).toLocaleDateString()}</p>}
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Expanded accordion panel (lean summary + relationships)
 // ---------------------------------------------------------------------------
 
 function PersonDetail({
   person,
   userOptions,
-  onClose,
 }: {
   person: Person
   userOptions: UserOption[]
-  onClose: () => void
 }) {
   const queryClient = useQueryClient()
   const assignments = Array.isArray(person.caregiver_for) ? person.caregiver_for : []
-
-  const [editForm, setEditForm] = useState({
-    first_name: person.first_name || '',
-    last_name: person.last_name || '',
-    preferred_name: person.preferred_name || '',
-    phone: person.phone || '',
-    is_admin: person.is_admin,
-    admin_role: person.admin_role || 'viewer',
-    care_model: person.care_model || 'self_directed',
-  })
-
+  const [showModal, setShowModal] = useState(false)
+  const [showMenu, setShowMenu] = useState(false)
   const [showAssignForm, setShowAssignForm] = useState(false)
-  const [newAssignment, setNewAssignment] = useState({
-    user_id: '',
-    contact_name: person.display_name || person.first_name || person.email,
-    relationship: 'family',
-    tier: 'tier_1',
-  })
-
-  const [deleteStep, setDeleteStep] = useState<'none' | 'confirm-deactivate' | 'confirm-delete'>('none')
-
-  const updateMutation = useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
-      api(`/admin/people/${person.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(data),
-      }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-people'] }),
-  })
+  const [newAssignment, setNewAssignment] = useState({ user_id: '', contact_name: person.display_name || person.first_name || person.email, relationship: 'family', tier: 'tier_1' })
 
   const addCaregiverMutation = useMutation({
-    mutationFn: (data: Record<string, string>) =>
-      api(`/admin/people/${person.id}/caregiver`, {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-people'] })
-      setShowAssignForm(false)
-      setNewAssignment({ user_id: '', contact_name: person.display_name || '', relationship: 'family', tier: 'tier_1' })
-    },
+    mutationFn: (data: Record<string, string>) => api(`/admin/people/${person.id}/caregiver`, { method: 'POST', body: JSON.stringify(data) }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['admin-people'] }); setShowAssignForm(false); setNewAssignment({ user_id: '', contact_name: '', relationship: 'family', tier: 'tier_1' }) },
   })
-
   const removeCaregiverMutation = useMutation({
-    mutationFn: (contactId: string) =>
-      api(`/admin/people/caregiver/${contactId}`, { method: 'DELETE' }),
+    mutationFn: (id: string) => api(`/admin/people/caregiver/${id}`, { method: 'DELETE' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-people'] }),
   })
-
   const approveMutation = useMutation({
-    mutationFn: (requestId: string) =>
-      api(`/admin/people/caregiver/${requestId}/approve`, { method: 'POST' }),
+    mutationFn: (id: string) => api(`/admin/people/caregiver/${id}/approve`, { method: 'POST' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-people'] }),
   })
 
-  const deactivateMutation = useMutation({
-    mutationFn: () =>
-      api(`/admin/companion-users/${person.id}/deactivate`, { method: 'POST' }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-people'] })
-      setDeleteStep('none')
-    },
-  })
-
-  const reactivateMutation = useMutation({
-    mutationFn: () =>
-      api(`/admin/companion-users/${person.id}/reactivate`, { method: 'POST' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-people'] }),
-  })
-
-  const requestDeletionMutation = useMutation({
-    mutationFn: () =>
-      api(`/admin/companion-users/${person.id}/request-deletion`, { method: 'POST' }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-people'] })
-      setDeleteStep('none')
-    },
-  })
-
-  const cancelDeletionMutation = useMutation({
-    mutationFn: () =>
-      api(`/admin/companion-users/${person.id}/cancel-deletion`, { method: 'POST' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-people'] }),
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: () =>
-      api(`/admin/companion-users/${person.id}`, { method: 'DELETE' }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-people'] })
-      onClose()
-    },
-  })
-
-  const handleSave = () => {
-    updateMutation.mutate({
-      first_name: editForm.first_name,
-      last_name: editForm.last_name,
-      preferred_name: editForm.preferred_name,
-      phone: editForm.phone,
-      is_admin: editForm.is_admin,
-      admin_role: editForm.admin_role,
-      care_model: editForm.care_model,
-    })
-  }
-
-  const isDeactivated = person.account_status === 'deactivated'
-  const isPendingDeletion = person.account_status === 'pending_deletion'
+  const name = person.first_name || person.display_name || 'This person'
 
   return (
-    <div className="border-t border-gray-200 bg-gray-200 px-5 py-4 space-y-4">
-      {/* Profile & Roles card */}
-      <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-gray-700">Profile & Roles</h3>
-          <div className="flex items-center gap-2 flex-wrap">
-            {person.is_admin ? (
-              <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
-                Admin{person.admin_role ? ` (${person.admin_role})` : ''}
-              </span>
-            ) : assignments.length > 0 ? (
-              <span className="inline-flex items-center rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-medium text-sky-800">
-                Caregiver
-              </span>
-            ) : person.is_user ? (
-              <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800">
-                Member
-              </span>
-            ) : null}
-            {statusBadge(person.account_status)}
-            {person.care_model === 'managed' && (
-              <span className="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800">
-                Managed
-              </span>
-            )}
-          </div>
+    <div className="border-t border-gray-200 bg-gray-200 px-5 py-4 space-y-3">
+      {/* Summary bar */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 flex-wrap">
+          {person.is_admin ? (
+            <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">Admin{person.admin_role ? ` (${person.admin_role})` : ''}</span>
+          ) : assignments.length > 0 ? (
+            <span className="inline-flex items-center rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-medium text-sky-800">Caregiver</span>
+          ) : person.is_user ? (
+            <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800">Member</span>
+          ) : null}
+          {statusBadge(person.account_status)}
+          {person.care_model === 'managed' && <span className="inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800">Managed</span>}
+          {person.created_at && <span className="text-xs text-gray-400">Since {new Date(person.created_at).toLocaleDateString()}</span>}
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">First Name</label>
-            <input type="text" value={editForm.first_name} onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })} className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-companion-blue-light focus:outline-none focus:ring-1 focus:ring-companion-blue-light" />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">Last Name</label>
-            <input type="text" value={editForm.last_name} onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })} className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-companion-blue-light focus:outline-none focus:ring-1 focus:ring-companion-blue-light" />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">Preferred Name</label>
-            <input type="text" value={editForm.preferred_name} onChange={(e) => setEditForm({ ...editForm, preferred_name: e.target.value })} placeholder="What D.D. calls them" className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-companion-blue-light focus:outline-none focus:ring-1 focus:ring-companion-blue-light" />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">Phone</label>
-            <input type="tel" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-companion-blue-light focus:outline-none focus:ring-1 focus:ring-companion-blue-light" />
-          </div>
-        </div>
-        <div className="mt-4 flex items-center gap-4 flex-wrap">
-          <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input type="checkbox" checked={editForm.is_admin} onChange={(e) => setEditForm({ ...editForm, is_admin: e.target.checked })} className="rounded border-gray-300 text-companion-blue focus:ring-companion-blue-light" />
-            Admin
-          </label>
-          {editForm.is_admin && (
-            <select value={editForm.admin_role} onChange={(e) => setEditForm({ ...editForm, admin_role: e.target.value })} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm">
-              {ADMIN_ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-            </select>
-          )}
-          {person.is_user && (
+        <div className="relative">
+          <button onClick={() => setShowMenu(!showMenu)} className="rounded-md p-1.5 text-gray-500 hover:bg-white hover:text-gray-700">
+            <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" /></svg>
+          </button>
+          {showMenu && (
             <>
-              <span className="text-gray-300">|</span>
-              <label className="text-xs font-medium text-gray-500">Care Model</label>
-              <select value={editForm.care_model} onChange={(e) => setEditForm({ ...editForm, care_model: e.target.value })} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm">
-                <option value="self_directed">Self-Directed</option>
-                <option value="managed">Managed</option>
-              </select>
+              <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
+              <div className="absolute right-0 z-20 mt-1 w-48 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                <button onClick={() => { setShowModal(true); setShowMenu(false) }} className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                  <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" /></svg>
+                  Edit Profile
+                </button>
+                {person.is_user && person.id && !person.is_admin && (
+                  <button onClick={() => { setShowModal(true); setShowMenu(false) }} className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                    <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" /></svg>
+                    Set as Admin
+                  </button>
+                )}
+                {person.is_user && person.id && person.account_status !== 'deactivated' && person.account_status !== 'pending_deletion' && (
+                  <button onClick={() => { setShowModal(true); setShowMenu(false) }} className="flex w-full items-center gap-2 px-4 py-2 text-sm text-amber-700 hover:bg-amber-50">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" /></svg>
+                    Deactivate Account
+                  </button>
+                )}
+                {person.is_user && person.id && (
+                  <button onClick={() => { setShowModal(true); setShowMenu(false) }} className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
+                    Delete Account
+                  </button>
+                )}
+              </div>
             </>
           )}
         </div>
-        <div className="mt-4 flex items-center gap-3">
-          <button onClick={handleSave} disabled={updateMutation.isPending} className="rounded-md bg-companion-blue px-4 py-2 text-sm font-medium text-white hover:bg-companion-blue-mid disabled:opacity-50">
-            {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
-          </button>
-          {updateMutation.isSuccess && <span className="text-xs text-emerald-600">Saved</span>}
-          {updateMutation.isError && <span className="text-xs text-companion-rose">Save failed</span>}
-        </div>
       </div>
 
-      {/* This member's caregivers */}
-      {person.is_user && (
-        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Caregivers for {person.first_name || person.display_name || 'this member'}</h3>
-          {(person.caregivers?.length ?? 0) > 0 ? (
-            <div className="space-y-2">
-              {person.caregivers.map((c) => (
-                <div key={c.contact_id} className="flex items-center justify-between rounded-md bg-gray-50 px-3 py-2 ring-1 ring-gray-100">
-                  <div className="flex items-center gap-2 flex-wrap min-w-0">
-                    <span className="text-sm font-medium text-gray-800">{c.caregiver_name}</span>
-                    <span className="text-xs text-gray-500">{c.caregiver_email}</span>
-                    <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800">{relationshipLabel(c.relationship)}</span>
-                    <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">{tierLabel(c.tier)}</span>
-                    {c.status === 'pending_approval' && <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Pending Approval</span>}
-                    {!c.is_active && c.status !== 'pending_approval' && <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Inactive</span>}
-                  </div>
-                  <div className="flex items-center gap-1 ml-2">
-                    {c.status === 'pending_approval' && (
-                      <button onClick={() => approveMutation.mutate(c.contact_id)} disabled={approveMutation.isPending} className="text-xs text-emerald-600 hover:text-emerald-800 font-medium" title="Approve">Approve</button>
-                    )}
-                    <button onClick={() => removeCaregiverMutation.mutate(c.contact_id)} disabled={removeCaregiverMutation.isPending} className="text-gray-400 hover:text-companion-rose" title="Remove">&#10005;</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-400">No caregivers assigned.</p>
-          )}
-        </div>
-      )}
-
-      {/* This person is a caregiver for... */}
-      <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">{person.first_name || person.display_name || 'This person'} is a caregiver for</h3>
-        {assignments.length > 0 ? (
-          <div className="space-y-2">
-            {assignments.map((a) => (
-              <div key={a.contact_id} className="flex items-center justify-between rounded-md bg-gray-50 px-3 py-2 ring-1 ring-gray-100">
-                <div className="flex items-center gap-2 flex-wrap min-w-0">
-                  <span className="text-sm font-medium text-gray-800">{a.user_name}</span>
-                  <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800">{relationshipLabel(a.relationship)}</span>
-                  <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">{tierLabel(a.tier)}</span>
-                  {a.status === 'pending_approval' && <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Pending Approval</span>}
-                  {!a.is_active && a.status !== 'pending_approval' && <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Inactive</span>}
-                </div>
-                <div className="flex items-center gap-1 ml-2">
-                  {a.status === 'pending_approval' && (
-                    <button onClick={() => approveMutation.mutate(a.contact_id)} disabled={approveMutation.isPending} className="text-xs text-emerald-600 hover:text-emerald-800 font-medium" title="Approve">Approve</button>
-                  )}
-                  <button onClick={() => removeCaregiverMutation.mutate(a.contact_id)} disabled={removeCaregiverMutation.isPending} className="text-gray-400 hover:text-companion-rose" title="Remove">&#10005;</button>
-                </div>
-              </div>
+      {/* Caregivers for this member */}
+      {person.is_user && (person.caregivers?.length ?? 0) > 0 && (
+        <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+          <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">Caregivers for {name}</h3>
+          <div className="space-y-1.5">
+            {person.caregivers.map((c) => (
+              <AssignmentRow key={c.contact_id} label={`${c.caregiver_name}`} relationship={c.relationship} tier={c.tier} status={c.status} isActive={c.is_active} contactId={c.contact_id} onApprove={(id) => approveMutation.mutate(id)} onRemove={(id) => removeCaregiverMutation.mutate(id)} approving={approveMutation.isPending} removing={removeCaregiverMutation.isPending} />
             ))}
           </div>
-        ) : (
-          <p className="text-sm text-gray-400">Not a caregiver for anyone.</p>
-        )}
-
-        {!showAssignForm ? (
-          <button onClick={() => setShowAssignForm(true)} className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-companion-blue px-3 py-1.5 text-xs font-medium text-white hover:bg-companion-blue-mid">
-            + Assign as Caregiver
-          </button>
-        ) : (
-          <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 p-4 space-y-3">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">Caregiver for which member?</label>
-              <select value={newAssignment.user_id} onChange={(e) => setNewAssignment({ ...newAssignment, user_id: e.target.value })} className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm">
-                <option value="">Select a member...</option>
-                {userOptions.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.email})</option>)}
-              </select>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-600">Relationship</label>
-                <select value={newAssignment.relationship} onChange={(e) => setNewAssignment({ ...newAssignment, relationship: e.target.value })} className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm">
-                  {RELATIONSHIPS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-600">Access Tier</label>
-                <select value={newAssignment.tier} onChange={(e) => setNewAssignment({ ...newAssignment, tier: e.target.value })} className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm">
-                  {TIERS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => addCaregiverMutation.mutate({ member_id: newAssignment.user_id, contact_name: newAssignment.contact_name || person.email, relationship: newAssignment.relationship, tier: newAssignment.tier })} disabled={addCaregiverMutation.isPending || !newAssignment.user_id} className="rounded-md bg-companion-blue px-4 py-1.5 text-sm font-medium text-white hover:bg-companion-blue-mid disabled:opacity-50">
-                {addCaregiverMutation.isPending ? 'Saving...' : 'Save'}
-              </button>
-              <button onClick={() => setShowAssignForm(false)} className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700">Cancel</button>
-            </div>
-            {addCaregiverMutation.isError && <p className="text-xs text-companion-rose">Failed to assign caregiver.</p>}
-          </div>
-        )}
-      </div>
-
-      {/* Account Actions card */}
-      {person.is_user && person.id && (
-        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Account Actions</h3>
-
-              {/* Reactivate */}
-              {(isDeactivated || isPendingDeletion) && (
-                <div className="mb-3">
-                  {isPendingDeletion && (
-                    <button
-                      onClick={() => cancelDeletionMutation.mutate()}
-                      disabled={cancelDeletionMutation.isPending}
-                      className="mr-2 rounded-md bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50"
-                    >
-                      {cancelDeletionMutation.isPending ? 'Cancelling...' : 'Cancel Deletion'}
-                    </button>
-                  )}
-                  {isDeactivated && (
-                    <button
-                      onClick={() => reactivateMutation.mutate()}
-                      disabled={reactivateMutation.isPending}
-                      className="rounded-md bg-emerald-500 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-600 disabled:opacity-50"
-                    >
-                      {reactivateMutation.isPending ? 'Reactivating...' : 'Reactivate Account'}
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {/* Deactivate / Delete */}
-              {deleteStep === 'none' && !isPendingDeletion && (
-                <div className="flex gap-2">
-                  {!isDeactivated && (
-                    <button
-                      onClick={() => setDeleteStep('confirm-deactivate')}
-                      className="rounded-md border border-amber-300 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50"
-                    >
-                      Deactivate
-                    </button>
-                  )}
-                  <button
-                    onClick={() => setDeleteStep('confirm-delete')}
-                    className="rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
-                  >
-                    {isDeactivated ? 'Delete Account' : 'Request Deletion'}
-                  </button>
-                </div>
-              )}
-
-              {/* Deactivate confirmation */}
-              {deleteStep === 'confirm-deactivate' && (
-                <div className="rounded-md border border-amber-200 bg-amber-50 p-4">
-                  <p className="text-sm text-amber-800 mb-3">
-                    Deactivating will block all access and notify caregivers. The account can be reactivated later.
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => deactivateMutation.mutate()}
-                      disabled={deactivateMutation.isPending}
-                      className="rounded-md bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50"
-                    >
-                      {deactivateMutation.isPending ? 'Deactivating...' : 'Confirm Deactivate'}
-                    </button>
-                    <button onClick={() => setDeleteStep('none')} className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700">
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Delete confirmation */}
-              {deleteStep === 'confirm-delete' && (
-                <div className="rounded-md border border-red-200 bg-red-50 p-4">
-                  {isDeactivated ? (
-                    <>
-                      <p className="text-sm text-red-800 mb-3">
-                        This will permanently delete the account and all associated data. This action cannot be undone.
-                      </p>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => deleteMutation.mutate()}
-                          disabled={deleteMutation.isPending}
-                          className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-                        >
-                          {deleteMutation.isPending ? 'Deleting...' : 'Permanently Delete'}
-                        </button>
-                        <button onClick={() => setDeleteStep('none')} className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700">
-                          Cancel
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-sm text-red-800 mb-3">
-                        This will schedule the account for deletion in 30 days. The account will be deactivated immediately. During the grace period, the deletion can be cancelled.
-                      </p>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => requestDeletionMutation.mutate()}
-                          disabled={requestDeletionMutation.isPending}
-                          className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-                        >
-                          {requestDeletionMutation.isPending ? 'Requesting...' : 'Request Deletion'}
-                        </button>
-                        <button onClick={() => setDeleteStep('none')} className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700">
-                          Cancel
-                        </button>
-                      </div>
-                    </>
-                  )}
-                  {(deleteMutation.isError || requestDeletionMutation.isError) && (
-                    <p className="mt-2 text-xs text-red-600">Operation failed. Please try again.</p>
-                  )}
-                </div>
-              )}
-
-          {(deactivateMutation.isError || reactivateMutation.isError || cancelDeletionMutation.isError) && (
-            <p className="mt-2 text-xs text-companion-rose">Action failed. Please try again.</p>
-          )}
         </div>
       )}
 
-      {/* Metadata */}
-      {person.created_at && (
-        <p className="text-xs text-gray-400 px-1">
-          Created {new Date(person.created_at).toLocaleDateString()}
-        </p>
+      {/* This person is a caregiver for */}
+      {assignments.length > 0 && (
+        <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+          <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-2">{name} is a caregiver for</h3>
+          <div className="space-y-1.5">
+            {assignments.map((a) => (
+              <AssignmentRow key={a.contact_id} label={a.user_name} relationship={a.relationship} tier={a.tier} status={a.status} isActive={a.is_active} contactId={a.contact_id} onApprove={(id) => approveMutation.mutate(id)} onRemove={(id) => removeCaregiverMutation.mutate(id)} approving={approveMutation.isPending} removing={removeCaregiverMutation.isPending} />
+            ))}
+          </div>
+        </div>
       )}
+
+      {/* Assign as caregiver */}
+      {!showAssignForm ? (
+        <button onClick={() => setShowAssignForm(true)} className="inline-flex items-center gap-1.5 rounded-md bg-companion-blue px-3 py-1.5 text-xs font-medium text-white hover:bg-companion-blue-mid">
+          + Assign as Caregiver
+        </button>
+      ) : (
+        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm space-y-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-600">Caregiver for which member?</label>
+            <select value={newAssignment.user_id} onChange={(e) => setNewAssignment({ ...newAssignment, user_id: e.target.value })} className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm">
+              <option value="">Select a member...</option>
+              {userOptions.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.email})</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">Relationship</label>
+              <select value={newAssignment.relationship} onChange={(e) => setNewAssignment({ ...newAssignment, relationship: e.target.value })} className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm">
+                {RELATIONSHIPS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">Access Tier</label>
+              <select value={newAssignment.tier} onChange={(e) => setNewAssignment({ ...newAssignment, tier: e.target.value })} className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm">
+                {TIERS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => addCaregiverMutation.mutate({ member_id: newAssignment.user_id, contact_name: newAssignment.contact_name || person.email, relationship: newAssignment.relationship, tier: newAssignment.tier })} disabled={addCaregiverMutation.isPending || !newAssignment.user_id} className="rounded-md bg-companion-blue px-4 py-1.5 text-sm font-medium text-white hover:bg-companion-blue-mid disabled:opacity-50">
+              {addCaregiverMutation.isPending ? 'Saving...' : 'Save'}
+            </button>
+            <button onClick={() => setShowAssignForm(false)} className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700">Cancel</button>
+          </div>
+          {addCaregiverMutation.isError && <p className="text-xs text-companion-rose">Failed to assign caregiver.</p>}
+        </div>
+      )}
+
+      {/* Modal */}
+      {showModal && <EditProfileModal person={person} onClose={() => setShowModal(false)} />}
     </div>
   )
 }
@@ -739,7 +661,6 @@ export function PeoplePage() {
                   <PersonDetail
                     person={people.find((p) => p.email === person.email) || person}
                     userOptions={userOptions}
-                    onClose={() => setExpandedEmail(null)}
                   />
                 )}
               </div>
