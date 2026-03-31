@@ -7,6 +7,7 @@ import { ChatScreen } from '../screens/ChatScreen'
 import { MyStuffScreen } from '../screens/MyStuffScreen'
 import { ProfileScreen } from '../screens/ProfileScreen'
 import { LoginScreen } from '../auth/LoginScreen'
+import { VerifyEmailScreen } from '../auth/VerifyEmailScreen'
 import { useAuth } from '../auth/AuthProvider'
 import { colors } from '../theme/colors'
 
@@ -27,12 +28,16 @@ function TabIcon({ label, focused }: { label: string; focused: boolean }) {
 }
 
 export function AppNavigator() {
-  const { user, loading } = useAuth()
+  const { user, loading, needsVerification } = useAuth()
 
   if (loading) return null
 
   if (!user) {
     return <LoginScreen />
+  }
+
+  if (needsVerification) {
+    return <VerifyEmailScreen />
   }
 
   return (
