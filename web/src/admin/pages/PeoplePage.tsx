@@ -85,10 +85,10 @@ function statusBadge(status: string | null) {
 }
 
 // ---------------------------------------------------------------------------
-// Drawer component
+// Expanded detail panel (accordion)
 // ---------------------------------------------------------------------------
 
-function PersonDrawer({
+function PersonDetail({
   person,
   userOptions,
   onClose,
@@ -203,33 +203,11 @@ function PersonDrawer({
   const isPendingDeletion = person.account_status === 'pending_deletion'
 
   return (
-    <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 z-40 bg-black/30" onClick={onClose} />
-
-      {/* Drawer */}
-      <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-lg flex-col bg-white shadow-xl">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">
-              {person.display_name || person.first_name || person.email}
-            </h2>
-            <p className="text-sm text-gray-500">{person.email}</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-          >
-            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Scrollable content */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
-          {/* Role badge */}
+    <div className="border-t border-gray-200 bg-gray-200 px-5 py-4 space-y-4">
+      {/* Profile & Roles card */}
+      <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-gray-700">Profile & Roles</h3>
           <div className="flex items-center gap-2 flex-wrap">
             {person.is_admin ? (
               <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
@@ -251,208 +229,118 @@ function PersonDrawer({
               </span>
             )}
           </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">First Name</label>
+            <input type="text" value={editForm.first_name} onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })} className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-companion-blue-light focus:outline-none focus:ring-1 focus:ring-companion-blue-light" />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">Last Name</label>
+            <input type="text" value={editForm.last_name} onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })} className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-companion-blue-light focus:outline-none focus:ring-1 focus:ring-companion-blue-light" />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">Preferred Name</label>
+            <input type="text" value={editForm.preferred_name} onChange={(e) => setEditForm({ ...editForm, preferred_name: e.target.value })} placeholder="What D.D. calls them" className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-companion-blue-light focus:outline-none focus:ring-1 focus:ring-companion-blue-light" />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">Phone</label>
+            <input type="tel" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-companion-blue-light focus:outline-none focus:ring-1 focus:ring-companion-blue-light" />
+          </div>
+        </div>
+        <div className="mt-4 flex items-center gap-4 flex-wrap">
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" checked={editForm.is_admin} onChange={(e) => setEditForm({ ...editForm, is_admin: e.target.checked })} className="rounded border-gray-300 text-companion-blue focus:ring-companion-blue-light" />
+            Admin
+          </label>
+          {editForm.is_admin && (
+            <select value={editForm.admin_role} onChange={(e) => setEditForm({ ...editForm, admin_role: e.target.value })} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm">
+              {ADMIN_ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+            </select>
+          )}
+          {person.is_user && (
+            <>
+              <span className="text-gray-300">|</span>
+              <label className="text-xs font-medium text-gray-500">Care Model</label>
+              <select value={editForm.care_model} onChange={(e) => setEditForm({ ...editForm, care_model: e.target.value })} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm">
+                <option value="self_directed">Self-Directed</option>
+                <option value="managed">Managed</option>
+              </select>
+            </>
+          )}
+        </div>
+        <div className="mt-4 flex items-center gap-3">
+          <button onClick={handleSave} disabled={updateMutation.isPending} className="rounded-md bg-companion-blue px-4 py-2 text-sm font-medium text-white hover:bg-companion-blue-mid disabled:opacity-50">
+            {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+          </button>
+          {updateMutation.isSuccess && <span className="text-xs text-emerald-600">Saved</span>}
+          {updateMutation.isError && <span className="text-xs text-companion-rose">Save failed</span>}
+        </div>
+      </div>
 
-          {/* Profile */}
-          <section>
-            <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">Profile</h3>
+      {/* Caregiver Assignments card */}
+      <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">Caregiver Assignments</h3>
+        {assignments.length > 0 ? (
+          <div className="space-y-2">
+            {assignments.map((a) => (
+              <div key={a.contact_id} className="flex items-center justify-between rounded-md bg-gray-50 px-3 py-2 ring-1 ring-gray-100">
+                <div className="flex items-center gap-2 flex-wrap min-w-0">
+                  <span className="text-sm font-medium text-gray-800">for {a.user_name}</span>
+                  <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800">{relationshipLabel(a.relationship)}</span>
+                  <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">{tierLabel(a.tier)}</span>
+                  {!a.is_active && <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Inactive</span>}
+                </div>
+                <button onClick={() => removeCaregiverMutation.mutate(a.contact_id)} disabled={removeCaregiverMutation.isPending} className="ml-2 text-gray-400 hover:text-companion-rose" title="Remove">&#10005;</button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-400">No caregiver assignments.</p>
+        )}
+
+        {!showAssignForm ? (
+          <button onClick={() => setShowAssignForm(true)} className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-companion-blue px-3 py-1.5 text-xs font-medium text-white hover:bg-companion-blue-mid">
+            + Assign as Caregiver
+          </button>
+        ) : (
+          <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 p-4 space-y-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">Member</label>
+              <select value={newAssignment.user_id} onChange={(e) => setNewAssignment({ ...newAssignment, user_id: e.target.value })} className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm">
+                <option value="">Select a member...</option>
+                {userOptions.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.email})</option>)}
+              </select>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-500">First Name</label>
-                <input
-                  type="text"
-                  value={editForm.first_name}
-                  onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })}
-                  className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-companion-blue-light focus:outline-none focus:ring-1 focus:ring-companion-blue-light"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-500">Last Name</label>
-                <input
-                  type="text"
-                  value={editForm.last_name}
-                  onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })}
-                  className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-companion-blue-light focus:outline-none focus:ring-1 focus:ring-companion-blue-light"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-500">Preferred Name</label>
-                <input
-                  type="text"
-                  value={editForm.preferred_name}
-                  onChange={(e) => setEditForm({ ...editForm, preferred_name: e.target.value })}
-                  placeholder="What D.D. calls them"
-                  className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-companion-blue-light focus:outline-none focus:ring-1 focus:ring-companion-blue-light"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-gray-500">Phone</label>
-                <input
-                  type="tel"
-                  value={editForm.phone}
-                  onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-                  className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-companion-blue-light focus:outline-none focus:ring-1 focus:ring-companion-blue-light"
-                />
-              </div>
-            </div>
-          </section>
-
-          {/* Roles */}
-          <section>
-            <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">Roles</h3>
-            <div className="flex items-center gap-4 flex-wrap">
-              <label className="flex items-center gap-2 text-sm text-gray-700">
-                <input
-                  type="checkbox"
-                  checked={editForm.is_admin}
-                  onChange={(e) => setEditForm({ ...editForm, is_admin: e.target.checked })}
-                  className="rounded border-gray-300 text-companion-blue focus:ring-companion-blue-light"
-                />
-                Admin
-              </label>
-              {editForm.is_admin && (
-                <select
-                  value={editForm.admin_role}
-                  onChange={(e) => setEditForm({ ...editForm, admin_role: e.target.value })}
-                  className="rounded-md border border-gray-300 px-3 py-1.5 text-sm"
-                >
-                  {ADMIN_ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-                </select>
-              )}
-            </div>
-            {person.is_user && (
-              <div className="mt-3 flex items-center gap-4">
-                <label className="text-xs font-medium text-gray-500">Care Model</label>
-                <select
-                  value={editForm.care_model}
-                  onChange={(e) => setEditForm({ ...editForm, care_model: e.target.value })}
-                  className="rounded-md border border-gray-300 px-3 py-1.5 text-sm"
-                >
-                  <option value="self_directed">Self-Directed</option>
-                  <option value="managed">Managed</option>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Relationship</label>
+                <select value={newAssignment.relationship} onChange={(e) => setNewAssignment({ ...newAssignment, relationship: e.target.value })} className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm">
+                  {RELATIONSHIPS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                 </select>
               </div>
-            )}
-          </section>
-
-          {/* Save */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleSave}
-              disabled={updateMutation.isPending}
-              className="rounded-md bg-companion-blue px-4 py-2 text-sm font-medium text-white hover:bg-companion-blue-mid disabled:opacity-50"
-            >
-              {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
-            </button>
-            {updateMutation.isSuccess && <span className="text-xs text-emerald-600">Saved</span>}
-            {updateMutation.isError && <span className="text-xs text-companion-rose">Save failed</span>}
-          </div>
-
-          {/* Caregiver Assignments */}
-          <section>
-            <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">Caregiver Assignments</h3>
-            {assignments.length > 0 ? (
-              <div className="space-y-2">
-                {assignments.map((a) => (
-                  <div key={a.contact_id} className="flex items-center justify-between rounded-md bg-gray-50 px-3 py-2 ring-1 ring-gray-100">
-                    <div className="flex items-center gap-2 flex-wrap min-w-0">
-                      <span className="text-sm font-medium text-gray-800">for {a.user_name}</span>
-                      <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800">
-                        {relationshipLabel(a.relationship)}
-                      </span>
-                      <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">
-                        {tierLabel(a.tier)}
-                      </span>
-                      {!a.is_active && (
-                        <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">
-                          Inactive
-                        </span>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => removeCaregiverMutation.mutate(a.contact_id)}
-                      disabled={removeCaregiverMutation.isPending}
-                      className="ml-2 text-gray-400 hover:text-companion-rose"
-                      title="Remove"
-                    >
-                      &#10005;
-                    </button>
-                  </div>
-                ))}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-600">Access Tier</label>
+                <select value={newAssignment.tier} onChange={(e) => setNewAssignment({ ...newAssignment, tier: e.target.value })} className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm">
+                  {TIERS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
               </div>
-            ) : (
-              <p className="text-sm text-gray-400">No caregiver assignments.</p>
-            )}
-
-            {!showAssignForm ? (
-              <button
-                onClick={() => setShowAssignForm(true)}
-                className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-companion-blue px-3 py-1.5 text-xs font-medium text-white hover:bg-companion-blue-mid"
-              >
-                + Assign as Caregiver
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => addCaregiverMutation.mutate({ user_id: newAssignment.user_id, contact_name: newAssignment.contact_name || person.email, relationship: newAssignment.relationship, tier: newAssignment.tier })} disabled={addCaregiverMutation.isPending || !newAssignment.user_id} className="rounded-md bg-companion-blue px-4 py-1.5 text-sm font-medium text-white hover:bg-companion-blue-mid disabled:opacity-50">
+                {addCaregiverMutation.isPending ? 'Saving...' : 'Save'}
               </button>
-            ) : (
-              <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 p-4 space-y-3">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-600">Member</label>
-                  <select
-                    value={newAssignment.user_id}
-                    onChange={(e) => setNewAssignment({ ...newAssignment, user_id: e.target.value })}
-                    className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm"
-                  >
-                    <option value="">Select a member...</option>
-                    {userOptions.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.email})</option>)}
-                  </select>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-600">Relationship</label>
-                    <select
-                      value={newAssignment.relationship}
-                      onChange={(e) => setNewAssignment({ ...newAssignment, relationship: e.target.value })}
-                      className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm"
-                    >
-                      {RELATIONSHIPS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-gray-600">Access Tier</label>
-                    <select
-                      value={newAssignment.tier}
-                      onChange={(e) => setNewAssignment({ ...newAssignment, tier: e.target.value })}
-                      className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm"
-                    >
-                      {TIERS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => addCaregiverMutation.mutate({
-                      user_id: newAssignment.user_id,
-                      contact_name: newAssignment.contact_name || person.email,
-                      relationship: newAssignment.relationship,
-                      tier: newAssignment.tier,
-                    })}
-                    disabled={addCaregiverMutation.isPending || !newAssignment.user_id}
-                    className="rounded-md bg-companion-blue px-4 py-1.5 text-sm font-medium text-white hover:bg-companion-blue-mid disabled:opacity-50"
-                  >
-                    {addCaregiverMutation.isPending ? 'Saving...' : 'Save'}
-                  </button>
-                  <button onClick={() => setShowAssignForm(false)} className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700">
-                    Cancel
-                  </button>
-                </div>
-                {addCaregiverMutation.isError && (
-                  <p className="text-xs text-companion-rose">Failed to assign caregiver.</p>
-                )}
-              </div>
-            )}
-          </section>
+              <button onClick={() => setShowAssignForm(false)} className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700">Cancel</button>
+            </div>
+            {addCaregiverMutation.isError && <p className="text-xs text-companion-rose">Failed to assign caregiver.</p>}
+          </div>
+        )}
+      </div>
 
-          {/* Account Actions */}
-          {person.is_user && person.id && (
-            <section className="border-t border-gray-200 pt-5">
-              <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-gray-500">Account Actions</h3>
+      {/* Account Actions card */}
+      {person.is_user && person.id && (
+        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">Account Actions</h3>
 
               {/* Reactivate */}
               {(isDeactivated || isPendingDeletion) && (
@@ -565,23 +453,19 @@ function PersonDrawer({
                 </div>
               )}
 
-              {(deactivateMutation.isError || reactivateMutation.isError || cancelDeletionMutation.isError) && (
-                <p className="mt-2 text-xs text-companion-rose">Action failed. Please try again.</p>
-              )}
-            </section>
-          )}
-
-          {/* Metadata */}
-          {person.created_at && (
-            <section className="border-t border-gray-200 pt-4">
-              <p className="text-xs text-gray-400">
-                Created {new Date(person.created_at).toLocaleDateString()}
-              </p>
-            </section>
+          {(deactivateMutation.isError || reactivateMutation.isError || cancelDeletionMutation.isError) && (
+            <p className="mt-2 text-xs text-companion-rose">Action failed. Please try again.</p>
           )}
         </div>
-      </div>
-    </>
+      )}
+
+      {/* Metadata */}
+      {person.created_at && (
+        <p className="text-xs text-gray-400 px-1">
+          Created {new Date(person.created_at).toLocaleDateString()}
+        </p>
+      )}
+    </div>
   )
 }
 
@@ -592,7 +476,7 @@ function PersonDrawer({
 export function PeoplePage() {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
-  const [selectedPerson, setSelectedPerson] = useState<Person | null>(null)
+  const [expandedEmail, setExpandedEmail] = useState<string | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
   const [roleFilters, setRoleFilters] = useState<Set<string>>(new Set())
 
@@ -656,11 +540,6 @@ export function PeoplePage() {
       setNewPerson({ email: '', first_name: '', last_name: '', phone: '', is_user: true, is_admin: false, admin_role: 'viewer' })
     },
   })
-
-  // Keep drawer in sync with refreshed data
-  const drawerPerson = selectedPerson
-    ? people.find((p) => p.email === selectedPerson.email) || selectedPerson
-    : null
 
   if (isLoading) {
     return <p className="text-gray-500 p-6">Loading people...</p>
@@ -791,38 +670,38 @@ export function PeoplePage() {
           <div className="px-6 py-12 text-center text-sm text-gray-400">No people found</div>
         ) : (
           filteredPeople.map((person) => {
+            const isExpanded = expandedEmail === person.email
             return (
-              <button
-                key={person.email}
-                type="button"
-                onClick={() => setSelectedPerson(person)}
-                className="flex w-full items-center justify-between border-b border-gray-100 px-5 py-3.5 text-left transition-colors hover:bg-gray-50 last:border-b-0"
-              >
-                <div className="min-w-0 flex-1">
-                  <span className="text-sm font-medium text-gray-900">
-                    {person.display_name || person.first_name || person.email}
-                  </span>
-                  <span className="ml-3 text-sm text-gray-500">{person.email}</span>
-                </div>
-                <div className="ml-4">
-                  <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                  </svg>
-                </div>
-              </button>
+              <div key={person.email} className="border-b border-gray-100 last:border-b-0">
+                <button
+                  type="button"
+                  onClick={() => setExpandedEmail(isExpanded ? null : person.email)}
+                  className="flex w-full items-center justify-between px-5 py-3.5 text-left transition-colors hover:bg-gray-50"
+                >
+                  <div className="min-w-0 flex-1">
+                    <span className="text-sm font-medium text-gray-900">
+                      {person.display_name || person.first_name || person.email}
+                    </span>
+                    <span className="ml-3 text-sm text-gray-500">{person.email}</span>
+                  </div>
+                  <div className="ml-4">
+                    <svg className={`h-4 w-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                    </svg>
+                  </div>
+                </button>
+                {isExpanded && (
+                  <PersonDetail
+                    person={people.find((p) => p.email === person.email) || person}
+                    userOptions={userOptions}
+                    onClose={() => setExpandedEmail(null)}
+                  />
+                )}
+              </div>
             )
           })
         )}
       </div>
-
-      {/* Drawer */}
-      {drawerPerson && (
-        <PersonDrawer
-          person={drawerPerson}
-          userOptions={userOptions}
-          onClose={() => setSelectedPerson(null)}
-        />
-      )}
     </div>
   )
 }

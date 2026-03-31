@@ -15,7 +15,7 @@ class User(TimestampMixin, Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     email: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
-    phone: Mapped[str | None] = mapped_column(Text, unique=True, nullable=True)
+    phone: Mapped[str | None] = mapped_column(Text, nullable=True)
     preferred_name: Mapped[str] = mapped_column(Text, nullable=False)
     display_name: Mapped[str] = mapped_column(Text, nullable=False)
     first_name: Mapped[str | None] = mapped_column(Text, nullable=True)
