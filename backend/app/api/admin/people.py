@@ -420,10 +420,18 @@ async def remove_caregiver_assignment(
     admin: AdminUser = Depends(_editor),
     db: AsyncSession = Depends(get_db),
 ):
-    """Remove a caregiver assignment."""
+    """Remove a caregiver assignment or pending assignment request."""
     contact = await db.get(TrustedContact, contact_id)
-    if not contact:
-        raise HTTPException(404, "Contact not found")
-    await db.delete(contact)
+    if contact:
+        await db.delete(contact)
+        await db.flush()
+        return {"deleted": True}
+
+    # Check pending assignment requests
+    from app.models.assignment_request import CaregiverAssignmentRequest
+    request = await db.get(CaregiverAssignmentRequest, contact_id)
+    if not request:
+        raise HTTPException(404, "Assignment not found")
+    await db.delete(request)
     await db.flush()
     return {"deleted": True}
