@@ -39,5 +39,9 @@ export async function api<T>(
     throw new Error(`API error: ${res.status}`)
   }
 
+  if (res.status === 204) {
+    return {} as T
+  }
+
   return res.json()
 }
