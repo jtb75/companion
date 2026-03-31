@@ -16,7 +16,29 @@ from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
-DELETION_GRACE_DAYS = 30
+
+async def _get_grace_days() -> int:
+    """Get deletion grace period from config, default 30 days."""
+    try:
+        from sqlalchemy import select
+
+        from app.db.session import async_session_factory
+        from app.models.system_config import SystemConfig
+
+        async with async_session_factory() as db:
+            result = await db.execute(
+                select(SystemConfig).where(
+                    SystemConfig.category == "deletion_settings",
+                    SystemConfig.key == "grace_period_days",
+                    SystemConfig.is_active.is_(True),
+                )
+            )
+            config = result.scalar_one_or_none()
+            if config and config.value:
+                return int(config.value.get("days", 30))
+    except Exception:
+        pass
+    return 30
 
 
 # ---------------------------------------------------------------------------
@@ -145,9 +167,10 @@ async def request_deletion(
     if user.account_status != AccountStatus.DEACTIVATED:
         await deactivate_account(db, user_id, initiated_by)
 
+    grace_days = await _get_grace_days()
     now = datetime.utcnow()
     user.account_status = AccountStatus.PENDING_DELETION
-    user.deletion_scheduled_at = now + timedelta(days=DELETION_GRACE_DAYS)
+    user.deletion_scheduled_at = now + timedelta(days=grace_days)
 
     await db.flush()
     logger.info(

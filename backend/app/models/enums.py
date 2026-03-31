@@ -164,3 +164,4 @@ class ConfigCategory(enum.StrEnum):
     EMAIL_PREFILTER = "email_prefilter"
     SUMMARIZATION_PROMPT = "summarization_prompt"
     FEATURE_FLAG = "feature_flag"
+    DELETION_SETTINGS = "deletion_settings"

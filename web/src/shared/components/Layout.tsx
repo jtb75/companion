@@ -29,6 +29,7 @@ const navSections = [
       { to: '/admin/notifications', label: 'Notifications' },
       { to: '/admin/audit', label: 'Audit' },
       { to: '/admin/people', label: 'People' },
+      { to: '/admin/settings', label: 'Settings' },
     ],
   },
 ]
