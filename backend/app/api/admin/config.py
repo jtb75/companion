@@ -60,7 +60,7 @@ async def create_config(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new configuration entry."""
-    entry = await config_service.create_config(db, admin.email, data.model_dump())
+    entry = await config_service.create_config(db, {**data.model_dump(), "updated_by": admin.email})
     return entry
 
 
