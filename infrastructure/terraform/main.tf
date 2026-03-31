@@ -61,6 +61,12 @@ module "pubsub" {
   environment = var.environment
 }
 
+# Import manually-created secrets into Terraform state
+import {
+  to = module.secrets.google_secret_manager_secret.manual["gmail-smtp-password"]
+  id = "projects/${var.project_id}/secrets/companion-${var.environment}-gmail-smtp-password"
+}
+
 module "secrets" {
   source                   = "./modules/secrets"
   project_id               = var.project_id
