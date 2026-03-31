@@ -156,8 +156,8 @@ class DeletionReason(enum.StrEnum):
 
 
 class ConfigCategory(enum.StrEnum):
-    ARLO_PERSONA = "arlo_persona"
-    ARLO_VOICE = "arlo_voice"
+    DD_PERSONA = "dd_persona"
+    DD_VOICE = "dd_voice"
     PIPELINE_THRESHOLD = "pipeline_threshold"
     ESCALATION_THRESHOLD = "escalation_threshold"
     NOTIFICATION_DEFAULT = "notification_default"
