@@ -48,6 +48,15 @@ async def list_all_people(
     )
     contact_rows = contacts_result.all()
 
+    # Get pending assignment requests
+    from app.models.assignment_request import CaregiverAssignmentRequest
+    pending_result = await db.execute(
+        select(CaregiverAssignmentRequest, User)
+        .join(User, CaregiverAssignmentRequest.member_id == User.id)
+        .where(CaregiverAssignmentRequest.status == "pending_approval")
+    )
+    pending_rows = pending_result.all()
+
     # Build a map of caregiver assignments by contact_email
     # Each email may be a caregiver for multiple users
     caregiver_map: dict[str, list[dict]] = {}
@@ -71,7 +80,25 @@ async def list_all_people(
                 ),
                 "is_active": contact.is_active,
                 "invitation_status": contact.invitation_status,
+                "status": "assigned",
             })
+
+    # Add pending assignment requests to the caregiver map
+    for req, member in pending_rows:
+        email = req.caregiver_email
+        if email not in caregiver_map:
+            caregiver_map[email] = []
+        caregiver_map[email].append({
+            "contact_id": str(req.id),
+            "user_id": str(req.member_id),
+            "user_name": member.display_name or member.preferred_name,
+            "contact_name": req.caregiver_name,
+            "relationship": req.relationship_type,
+            "tier": req.access_tier,
+            "is_active": False,
+            "invitation_status": "pending_approval",
+            "status": "pending_approval",
+        })
 
     # Build consolidated people list
     # Start with all users, then add admin-only people not in users table

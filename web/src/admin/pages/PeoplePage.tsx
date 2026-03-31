@@ -11,6 +11,7 @@ interface CaregiverAssignment {
   tier: string
   is_active: boolean
   invitation_status?: string
+  status?: string
 }
 
 interface Person {
@@ -289,7 +290,8 @@ function PersonDetail({
                   <span className="text-sm font-medium text-gray-800">for {a.user_name}</span>
                   <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800">{relationshipLabel(a.relationship)}</span>
                   <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">{tierLabel(a.tier)}</span>
-                  {!a.is_active && <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Inactive</span>}
+                  {a.status === 'pending_approval' && <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Pending Approval</span>}
+                  {!a.is_active && a.status !== 'pending_approval' && <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Inactive</span>}
                 </div>
                 <button onClick={() => removeCaregiverMutation.mutate(a.contact_id)} disabled={removeCaregiverMutation.isPending} className="ml-2 text-gray-400 hover:text-companion-rose" title="Remove">&#10005;</button>
               </div>
