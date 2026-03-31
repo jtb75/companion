@@ -279,7 +279,29 @@ async def execute_deletion(db: AsyncSession, user_id: UUID) -> dict:
     )
     db.add(audit)
 
-    # 8. Delete user row (CASCADE handles all related data)
+    # 8. Remove caregiver relationships where this user is the caregiver (by email)
+    from app.models.assignment_request import CaregiverAssignmentRequest
+
+    caregiver_contacts = await db.execute(
+        select(TrustedContact).where(TrustedContact.contact_email == user.email)
+    )
+    removed_caregiver_count = 0
+    for tc in caregiver_contacts.scalars().all():
+        await db.delete(tc)
+        removed_caregiver_count += 1
+
+    # Remove pending assignment requests for this caregiver
+    pending_requests = await db.execute(
+        select(CaregiverAssignmentRequest).where(
+            CaregiverAssignmentRequest.caregiver_email == user.email
+        )
+    )
+    for req in pending_requests.scalars().all():
+        await db.delete(req)
+
+    audit_details["caregiver_roles_removed"] = removed_caregiver_count
+
+    # 9. Delete user row (CASCADE handles member's own data)
     await db.delete(user)
     await db.flush()
 
