@@ -8,7 +8,7 @@ interface ConfigEntry {
   id: string
   category: string
   key: string
-  value: string
+  value: string | { prompt: string }
   version: number
   updated_by: string
   updated_at: string
@@ -34,10 +34,11 @@ export function PromptsPage() {
     queryKey: ['config-dd-persona'],
     queryFn: async () => {
       try {
-        const entries = await api<ConfigEntry[]>('/admin/config?category=dd_persona')
-        if (entries.length > 0) {
-          setConfigId(entries[0].id)
-          return entries[0]
+        const data = await api<{ entries: ConfigEntry[]; total: number }>('/admin/config')
+        const match = data.entries.find((e) => e.category.toLowerCase() === 'dd_persona' && e.key === 'system_prompt')
+        if (match) {
+          setConfigId(match.id)
+          return match
         }
         return placeholderPrompt
       } catch {
@@ -86,7 +87,8 @@ export function PromptsPage() {
     return <p className="text-gray-500">Loading prompt config...</p>
   }
 
-  const currentValue = editValue ?? prompt.value
+  const promptText = typeof prompt.value === 'object' ? prompt.value.prompt : prompt.value
+  const currentValue = editValue ?? promptText
 
   return (
     <div className="space-y-6">
