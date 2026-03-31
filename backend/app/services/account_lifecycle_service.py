@@ -155,8 +155,8 @@ async def reactivate_account(
 
 async def request_deletion(
     db: AsyncSession, user_id: UUID, reason: DeletionReason, initiated_by: str
-) -> User:
-    """Request account deletion with a 30-day grace period."""
+) -> User | dict:
+    """Request account deletion. If grace period is 0, deletes immediately."""
     user = await db.get(User, user_id)
     if user is None:
         raise ValueError("User not found")
@@ -168,6 +168,12 @@ async def request_deletion(
         await deactivate_account(db, user_id, initiated_by)
 
     grace_days = await _get_grace_days()
+
+    if grace_days == 0:
+        # Immediate deletion — no grace period
+        logger.info(f"Immediate deletion (grace=0): user={user_id} by={initiated_by}")
+        return await execute_deletion(db, user_id)
+
     now = datetime.utcnow()
     user.account_status = AccountStatus.PENDING_DELETION
     user.deletion_scheduled_at = now + timedelta(days=grace_days)

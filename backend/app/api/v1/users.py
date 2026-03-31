@@ -122,10 +122,13 @@ async def request_my_deletion(
         raise HTTPException(
             403, "Managed accounts can only be deleted by an administrator."
         )
-    updated = await request_deletion(db, user.id, DeletionReason.USER_REQUEST, initiated_by="user")
+    result = await request_deletion(db, user.id, DeletionReason.USER_REQUEST, initiated_by="user")
+    if isinstance(result, dict):
+        # Immediate deletion (grace=0)
+        return {"deleted": True, "immediate": True}
     scheduled = (
-        updated.deletion_scheduled_at.strftime("%B %d, %Y")
-        if updated.deletion_scheduled_at else "30 days"
+        result.deletion_scheduled_at.strftime("%B %d, %Y")
+        if result.deletion_scheduled_at else "30 days"
     )
     await send_deletion_requested(user.email, user.preferred_name or user.display_name, scheduled)
     return {"deletion_requested": True, "scheduled_date": scheduled}

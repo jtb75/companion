@@ -12,6 +12,7 @@ from app.api.admin import (
     pipeline_health,
     test_email,
     users_management,
+    workers,
 )
 
 router = APIRouter()
@@ -25,3 +26,4 @@ router.include_router(contacts.router)
 router.include_router(users_management.router)
 router.include_router(people.router)
 router.include_router(test_email.router)
+router.include_router(workers.router)

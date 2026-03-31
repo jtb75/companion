@@ -173,18 +173,21 @@ async def admin_request_deletion(
 ):
     """Admin requests account deletion with 30-day grace period."""
     try:
-        user = await request_deletion(
+        result = await request_deletion(
             db, user_id, DeletionReason.ADMIN_REQUEST, initiated_by=f"admin:{admin.email}"
         )
     except ValueError as e:
         raise HTTPException(404, str(e)) from None
 
-    name = user.preferred_name or user.display_name
+    if isinstance(result, dict):
+        return {"deleted": True, "immediate": True}
+
+    name = result.preferred_name or result.display_name
     scheduled = (
-        user.deletion_scheduled_at.strftime("%B %d, %Y")
-        if user.deletion_scheduled_at else "30 days"
+        result.deletion_scheduled_at.strftime("%B %d, %Y")
+        if result.deletion_scheduled_at else "30 days"
     )
-    await send_deletion_requested(user.email, name, scheduled)
+    await send_deletion_requested(result.email, name, scheduled)
     return {"deletion_requested": True, "scheduled_date": scheduled}
 
 
