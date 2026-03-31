@@ -73,7 +73,7 @@ async def update_config(
 ):
     """Update a configuration entry."""
     entry = await config_service.update_config(
-        db, config_id, admin.email, data.model_dump(exclude_unset=True)
+        db, config_id, data.model_dump(exclude_unset=True), admin.email
     )
     if entry is None:
         raise HTTPException(status_code=404, detail="Config entry not found")
