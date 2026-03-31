@@ -112,30 +112,32 @@ async def list_pending_assignments(
 
 
 async def approve_assignment(
-    db: AsyncSession, request_id: UUID, member_id: UUID
+    db: AsyncSession, request_id: UUID, member_id: UUID | None = None
 ) -> TrustedContact:
-    """Member approves an assignment request. Creates TrustedContact."""
-    result = await db.execute(
-        select(CaregiverAssignmentRequest).where(
-            CaregiverAssignmentRequest.id == request_id,
-            CaregiverAssignmentRequest.member_id == member_id,
-            CaregiverAssignmentRequest.status == AssignmentRequestStatus.PENDING_APPROVAL,
-        )
+    """Approve an assignment request. Creates TrustedContact.
+
+    If member_id is None (admin override), skips the member ownership check.
+    """
+    stmt = select(CaregiverAssignmentRequest).where(
+        CaregiverAssignmentRequest.id == request_id,
+        CaregiverAssignmentRequest.status == AssignmentRequestStatus.PENDING_APPROVAL,
     )
+    if member_id is not None:
+        stmt = stmt.where(CaregiverAssignmentRequest.member_id == member_id)
+
+    result = await db.execute(stmt)
     request = result.scalar_one_or_none()
     if request is None:
         raise ValueError("Assignment request not found or already resolved")
 
     now = datetime.utcnow()
 
-    # Resolve the request
     request.status = AssignmentRequestStatus.APPROVED
     request.resolved_at = now
-    request.resolved_by = "member"
+    request.resolved_by = "admin" if member_id is None else "member"
 
-    # Create the TrustedContact
     contact = TrustedContact(
-        user_id=member_id,
+        user_id=request.member_id,
         contact_name=request.caregiver_name,
         contact_email=request.caregiver_email,
         relationship_type=request.relationship_type,

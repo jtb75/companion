@@ -414,6 +414,20 @@ async def add_caregiver_assignment(
         return {"created": True, "request_id": str(result.id), "status": "pending_approval"}
 
 
+@router.post("/admin/people/caregiver/{request_id}/approve")
+async def admin_approve_assignment(
+    request_id: uuid.UUID,
+    admin: AdminUser = Depends(_editor),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin approves a pending caregiver assignment request."""
+    try:
+        contact = await assignment_service.approve_assignment(db, request_id, member_id=None)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from None
+    return {"approved": True, "contact_id": str(contact.id)}
+
+
 @router.delete("/admin/people/caregiver/{contact_id}")
 async def remove_caregiver_assignment(
     contact_id: uuid.UUID,

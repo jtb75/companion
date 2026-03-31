@@ -150,6 +150,12 @@ function PersonDetail({
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-people'] }),
   })
 
+  const approveMutation = useMutation({
+    mutationFn: (requestId: string) =>
+      api(`/admin/people/caregiver/${requestId}/approve`, { method: 'POST' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-people'] }),
+  })
+
   const deactivateMutation = useMutation({
     mutationFn: () =>
       api(`/admin/companion-users/${person.id}/deactivate`, { method: 'POST' }),
@@ -296,7 +302,12 @@ function PersonDetail({
                     {c.status === 'pending_approval' && <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Pending Approval</span>}
                     {!c.is_active && c.status !== 'pending_approval' && <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Inactive</span>}
                   </div>
-                  <button onClick={() => removeCaregiverMutation.mutate(c.contact_id)} disabled={removeCaregiverMutation.isPending} className="ml-2 text-gray-400 hover:text-companion-rose" title="Remove">&#10005;</button>
+                  <div className="flex items-center gap-1 ml-2">
+                    {c.status === 'pending_approval' && (
+                      <button onClick={() => approveMutation.mutate(c.contact_id)} disabled={approveMutation.isPending} className="text-xs text-emerald-600 hover:text-emerald-800 font-medium" title="Approve">Approve</button>
+                    )}
+                    <button onClick={() => removeCaregiverMutation.mutate(c.contact_id)} disabled={removeCaregiverMutation.isPending} className="text-gray-400 hover:text-companion-rose" title="Remove">&#10005;</button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -320,7 +331,12 @@ function PersonDetail({
                   {a.status === 'pending_approval' && <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Pending Approval</span>}
                   {!a.is_active && a.status !== 'pending_approval' && <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Inactive</span>}
                 </div>
-                <button onClick={() => removeCaregiverMutation.mutate(a.contact_id)} disabled={removeCaregiverMutation.isPending} className="ml-2 text-gray-400 hover:text-companion-rose" title="Remove">&#10005;</button>
+                <div className="flex items-center gap-1 ml-2">
+                  {a.status === 'pending_approval' && (
+                    <button onClick={() => approveMutation.mutate(a.contact_id)} disabled={approveMutation.isPending} className="text-xs text-emerald-600 hover:text-emerald-800 font-medium" title="Approve">Approve</button>
+                  )}
+                  <button onClick={() => removeCaregiverMutation.mutate(a.contact_id)} disabled={removeCaregiverMutation.isPending} className="text-gray-400 hover:text-companion-rose" title="Remove">&#10005;</button>
+                </div>
               </div>
             ))}
           </div>
