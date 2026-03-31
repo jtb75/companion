@@ -301,7 +301,18 @@ async def execute_deletion(db: AsyncSession, user_id: UUID) -> dict:
 
     audit_details["caregiver_roles_removed"] = removed_caregiver_count
 
-    # 9. Delete Firebase Auth user
+    # 9. Delete admin record if exists
+    from app.models.admin_user import AdminUser as AdminUserModel
+
+    admin_result = await db.execute(
+        select(AdminUserModel).where(AdminUserModel.email == user.email)
+    )
+    admin_record = admin_result.scalar_one_or_none()
+    if admin_record:
+        await db.delete(admin_record)
+        audit_details["admin_record_deleted"] = True
+
+    # 10. Delete Firebase Auth user
     from app.auth.firebase import delete_firebase_user
     firebase_deleted = delete_firebase_user(user.email)
     audit_details["firebase_auth_deleted"] = firebase_deleted
