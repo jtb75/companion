@@ -57,46 +57,75 @@ async def list_all_people(
     )
     pending_rows = pending_result.all()
 
-    # Build a map of caregiver assignments by contact_email
-    # Each email may be a caregiver for multiple users
-    caregiver_map: dict[str, list[dict]] = {}
-    for contact, user in contact_rows:
-        email = contact.contact_email
-        if email:
-            if email not in caregiver_map:
-                caregiver_map[email] = []
-            caregiver_map[email].append({
-                "contact_id": str(contact.id),
-                "user_id": str(contact.user_id),
-                "user_name": user.display_name or user.preferred_name,
-                "contact_name": contact.contact_name,
-                "relationship": getattr(
-                    contact.relationship_type, "value",
-                    str(contact.relationship_type),
-                ),
-                "tier": getattr(
-                    contact.access_tier, "value",
-                    str(contact.access_tier),
-                ),
-                "is_active": contact.is_active,
-                "invitation_status": contact.invitation_status,
-                "status": "assigned",
-            })
+    def _contact_dict(contact, member_name: str, status: str = "assigned"):
+        return {
+            "contact_id": str(contact.id),
+            "user_id": str(contact.user_id),
+            "user_name": member_name,
+            "contact_name": contact.contact_name,
+            "contact_email": contact.contact_email,
+            "relationship": getattr(
+                contact.relationship_type, "value",
+                str(contact.relationship_type),
+            ),
+            "tier": getattr(
+                contact.access_tier, "value",
+                str(contact.access_tier),
+            ),
+            "is_active": contact.is_active,
+            "invitation_status": contact.invitation_status,
+            "status": status,
+        }
 
-    # Add pending assignment requests to the caregiver map
+    # caregiver_for: keyed by contact_email — "this person is a caregiver for..."
+    caregiver_for_map: dict[str, list[dict]] = {}
+    # caregivers: keyed by user_id — "this member's caregivers are..."
+    caregivers_map: dict[str, list[dict]] = {}
+
+    for contact, member in contact_rows:
+        # This person (contact_email) is a caregiver for member
+        c_email = contact.contact_email
+        if c_email:
+            caregiver_for_map.setdefault(c_email, []).append(
+                _contact_dict(contact, member.display_name or member.preferred_name)
+            )
+        # This member (user_id) has this caregiver
+        uid = str(contact.user_id)
+        caregivers_map.setdefault(uid, []).append({
+            "contact_id": str(contact.id),
+            "caregiver_name": contact.contact_name,
+            "caregiver_email": contact.contact_email,
+            "relationship": getattr(
+                contact.relationship_type, "value", str(contact.relationship_type)
+            ),
+            "tier": getattr(
+                contact.access_tier, "value", str(contact.access_tier)
+            ),
+            "is_active": contact.is_active,
+            "status": "assigned",
+        })
+
+    # Add pending assignment requests to both maps
     for req, member in pending_rows:
-        email = req.caregiver_email
-        if email not in caregiver_map:
-            caregiver_map[email] = []
-        caregiver_map[email].append({
+        caregiver_for_map.setdefault(req.caregiver_email, []).append({
             "contact_id": str(req.id),
             "user_id": str(req.member_id),
             "user_name": member.display_name or member.preferred_name,
             "contact_name": req.caregiver_name,
+            "contact_email": req.caregiver_email,
             "relationship": req.relationship_type,
             "tier": req.access_tier,
             "is_active": False,
             "invitation_status": "pending_approval",
+            "status": "pending_approval",
+        })
+        caregivers_map.setdefault(str(req.member_id), []).append({
+            "contact_id": str(req.id),
+            "caregiver_name": req.caregiver_name,
+            "caregiver_email": req.caregiver_email,
+            "relationship": req.relationship_type,
+            "tier": req.access_tier,
+            "is_active": False,
             "status": "pending_approval",
         })
 
@@ -124,7 +153,8 @@ async def list_all_people(
             "admin_role": admin_record.role if admin_record else None,
             "care_model": u.care_model,
             "account_status": u.account_status,
-            "caregiver_for": caregiver_map.get(email, []),
+            "caregiver_for": caregiver_for_map.get(email, []),
+            "caregivers": caregivers_map.get(str(u.id), []),
             "created_at": u.created_at.isoformat() if u.created_at else None,
         })
 
@@ -146,12 +176,13 @@ async def list_all_people(
                 "admin_role": a.role,
                 "care_model": None,
                 "account_status": None,
-                "caregiver_for": caregiver_map.get(a.email, []),
+                "caregiver_for": caregiver_for_map.get(a.email, []),
+            "caregivers": [],
                 "created_at": a.created_at.isoformat() if a.created_at else None,
             })
 
     # Add caregiver-only people (in trusted_contacts but not in users or admins)
-    for email, assignments in caregiver_map.items():
+    for email, assignments in caregiver_for_map.items():
         if email and email not in seen_emails:
             seen_emails.add(email)
             people.append({
@@ -169,6 +200,7 @@ async def list_all_people(
                 "care_model": None,
                 "account_status": None,
                 "caregiver_for": assignments,
+                "caregivers": [],
                 "created_at": None,
             })
 
@@ -238,67 +270,65 @@ async def create_person(
     }
 
 
-@router.patch("/admin/people/{email}")
+@router.patch("/admin/people/{user_id}")
 async def update_person(
-    email: str,
+    user_id: uuid.UUID,
     data: dict,
     admin: AdminUser = Depends(_editor),
     db: AsyncSession = Depends(get_db),
 ):
     """Update a person's details and roles."""
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(404, "User not found")
 
-    # Update user record if exists
-    result = await db.execute(select(User).where(User.email == email))
-    user = result.scalar_one_or_none()
-    if user:
-        for field in ["first_name", "last_name", "phone", "preferred_name", "care_model"]:
-            if field in data:
-                setattr(user, field, data[field])
-        if "first_name" in data or "last_name" in data:
-            first = data.get("first_name", user.first_name) or ""
-            last = data.get("last_name", user.last_name) or ""
-            user.display_name = f"{first} {last}".strip() or email
+    for field in ["first_name", "last_name", "phone", "preferred_name", "care_model"]:
+        if field in data:
+            setattr(user, field, data[field])
+    if "first_name" in data or "last_name" in data:
+        first = data.get("first_name", user.first_name) or ""
+        last = data.get("last_name", user.last_name) or ""
+        user.display_name = f"{first} {last}".strip() or user.email
 
     # Handle admin role changes
     result = await db.execute(
-        select(AdminUserModel).where(AdminUserModel.email == email)
+        select(AdminUserModel).where(AdminUserModel.email == user.email)
     )
     admin_record = result.scalar_one_or_none()
 
     if data.get("is_admin") and not admin_record:
-        # Add as admin
         admin_record = AdminUserModel(
-            email=email,
-            name=user.display_name if user else email,
+            email=user.email,
+            name=user.display_name or user.email,
             role=data.get("admin_role", "viewer"),
             is_active=True,
         )
         db.add(admin_record)
     elif not data.get("is_admin") and admin_record and "is_admin" in data:
-        # Remove admin
         await db.delete(admin_record)
     elif admin_record and "admin_role" in data:
-        # Update admin role
         admin_record.role = data["admin_role"]
 
     await db.flush()
     return {"updated": True}
 
 
-@router.post("/admin/people/{email}/invite", status_code=status.HTTP_201_CREATED)
+@router.post("/admin/people/invite", status_code=status.HTTP_201_CREATED)
 async def invite_to_platform(
-    email: str,
     data: AdminPlatformInvite,
     admin: AdminUser = Depends(_editor),
     db: AsyncSession = Depends(get_db),
 ):
     """Invite someone to the platform (Part 1 — no member assignment)."""
+    if not data.email:
+        raise HTTPException(400, "Email required")
+
     user, created = await invitation_service.create_admin_platform_invitation(
-        db=db, admin_id=admin.id, email=email, name=data.name,
+        db=db, admin_id=admin.id, email=data.email, name=data.name,
     )
 
     email_sent = await send_platform_invitation(
-        to_email=email,
+        to_email=data.email,
         to_name=data.name,
         invited_by=admin.name,
     )
@@ -311,9 +341,9 @@ async def invite_to_platform(
     )
 
 
-@router.post("/admin/people/{email}/caregiver")
+@router.post("/admin/people/{caregiver_id}/caregiver")
 async def add_caregiver_assignment(
-    email: str,
+    caregiver_id: uuid.UUID,
     data: dict,
     admin: AdminUser = Depends(_editor),
     db: AsyncSession = Depends(get_db),
@@ -323,20 +353,22 @@ async def add_caregiver_assignment(
     For managed members: creates TrustedContact immediately.
     For self-directed members: creates an assignment request pending member approval.
     """
-    user_id = data.get("user_id")
-    if not user_id:
-        raise HTTPException(400, "user_id required")
+    caregiver = await db.get(User, caregiver_id)
+    if not caregiver:
+        raise HTTPException(404, "Caregiver not found")
 
-    member = await db.get(User, uuid.UUID(user_id))
+    member_id = data.get("member_id") or data.get("user_id")
+    if not member_id:
+        raise HTTPException(400, "member_id required")
+
+    member = await db.get(User, uuid.UUID(member_id))
     if not member:
         raise HTTPException(404, "Member not found")
 
-    contact_name = data.get("contact_name", email)
+    email = caregiver.email
+    contact_name = data.get("contact_name", caregiver.display_name or email)
     relationship = data.get("relationship", "family")
     tier = data.get("tier", "tier_1")
-
-    # Ensure caregiver has a stub account
-    await invitation_service.get_or_create_stub_user(db, email, contact_name)
 
     try:
         result = await assignment_service.create_assignment_request(

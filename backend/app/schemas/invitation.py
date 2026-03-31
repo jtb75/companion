@@ -26,6 +26,7 @@ class InvitationResponse(BaseModel):
 
 
 class AdminPlatformInvite(BaseModel):
+    email: str = Field(description="Invitee's email address")
     name: str = Field(description="Invitee's full name")
     phone: str | None = Field(default=None, description="Phone number")
 

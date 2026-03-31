@@ -29,6 +29,7 @@ interface Person {
   care_model: string | null
   account_status: string | null
   caregiver_for: CaregiverAssignment[]
+  caregivers: { contact_id: string; caregiver_name: string; caregiver_email: string; relationship: string; tier: string; is_active: boolean; status?: string }[]
   created_at: string | null
 }
 
@@ -123,7 +124,7 @@ function PersonDetail({
 
   const updateMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) =>
-      api(`/admin/people/${encodeURIComponent(person.email)}`, {
+      api(`/admin/people/${person.id}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
       }),
@@ -132,7 +133,7 @@ function PersonDetail({
 
   const addCaregiverMutation = useMutation({
     mutationFn: (data: Record<string, string>) =>
-      api(`/admin/people/${encodeURIComponent(person.email)}/caregiver`, {
+      api(`/admin/people/${person.id}/caregiver`, {
         method: 'POST',
         body: JSON.stringify(data),
       }),
@@ -279,15 +280,41 @@ function PersonDetail({
         </div>
       </div>
 
-      {/* Caregiver Assignments card */}
+      {/* This member's caregivers */}
+      {person.is_user && (
+        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">Caregivers for {person.first_name || person.display_name || 'this member'}</h3>
+          {(person.caregivers?.length ?? 0) > 0 ? (
+            <div className="space-y-2">
+              {person.caregivers.map((c) => (
+                <div key={c.contact_id} className="flex items-center justify-between rounded-md bg-gray-50 px-3 py-2 ring-1 ring-gray-100">
+                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                    <span className="text-sm font-medium text-gray-800">{c.caregiver_name}</span>
+                    <span className="text-xs text-gray-500">{c.caregiver_email}</span>
+                    <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800">{relationshipLabel(c.relationship)}</span>
+                    <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">{tierLabel(c.tier)}</span>
+                    {c.status === 'pending_approval' && <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Pending Approval</span>}
+                    {!c.is_active && c.status !== 'pending_approval' && <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Inactive</span>}
+                  </div>
+                  <button onClick={() => removeCaregiverMutation.mutate(c.contact_id)} disabled={removeCaregiverMutation.isPending} className="ml-2 text-gray-400 hover:text-companion-rose" title="Remove">&#10005;</button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400">No caregivers assigned.</p>
+          )}
+        </div>
+      )}
+
+      {/* This person is a caregiver for... */}
       <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">Caregiver Assignments</h3>
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">{person.first_name || person.display_name || 'This person'} is a caregiver for</h3>
         {assignments.length > 0 ? (
           <div className="space-y-2">
             {assignments.map((a) => (
               <div key={a.contact_id} className="flex items-center justify-between rounded-md bg-gray-50 px-3 py-2 ring-1 ring-gray-100">
                 <div className="flex items-center gap-2 flex-wrap min-w-0">
-                  <span className="text-sm font-medium text-gray-800">for {a.user_name}</span>
+                  <span className="text-sm font-medium text-gray-800">{a.user_name}</span>
                   <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800">{relationshipLabel(a.relationship)}</span>
                   <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700">{tierLabel(a.tier)}</span>
                   {a.status === 'pending_approval' && <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Pending Approval</span>}
@@ -298,7 +325,7 @@ function PersonDetail({
             ))}
           </div>
         ) : (
-          <p className="text-sm text-gray-400">No caregiver assignments.</p>
+          <p className="text-sm text-gray-400">Not a caregiver for anyone.</p>
         )}
 
         {!showAssignForm ? (
@@ -308,7 +335,7 @@ function PersonDetail({
         ) : (
           <div className="mt-3 rounded-md border border-gray-200 bg-gray-50 p-4 space-y-3">
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-600">Member</label>
+              <label className="mb-1 block text-xs font-medium text-gray-600">Caregiver for which member?</label>
               <select value={newAssignment.user_id} onChange={(e) => setNewAssignment({ ...newAssignment, user_id: e.target.value })} className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm">
                 <option value="">Select a member...</option>
                 {userOptions.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.email})</option>)}
@@ -329,7 +356,7 @@ function PersonDetail({
               </div>
             </div>
             <div className="flex gap-2">
-              <button onClick={() => addCaregiverMutation.mutate({ user_id: newAssignment.user_id, contact_name: newAssignment.contact_name || person.email, relationship: newAssignment.relationship, tier: newAssignment.tier })} disabled={addCaregiverMutation.isPending || !newAssignment.user_id} className="rounded-md bg-companion-blue px-4 py-1.5 text-sm font-medium text-white hover:bg-companion-blue-mid disabled:opacity-50">
+              <button onClick={() => addCaregiverMutation.mutate({ member_id: newAssignment.user_id, contact_name: newAssignment.contact_name || person.email, relationship: newAssignment.relationship, tier: newAssignment.tier })} disabled={addCaregiverMutation.isPending || !newAssignment.user_id} className="rounded-md bg-companion-blue px-4 py-1.5 text-sm font-medium text-white hover:bg-companion-blue-mid disabled:opacity-50">
                 {addCaregiverMutation.isPending ? 'Saving...' : 'Save'}
               </button>
               <button onClick={() => setShowAssignForm(false)} className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700">Cancel</button>
