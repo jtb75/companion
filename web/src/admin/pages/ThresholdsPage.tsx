@@ -23,13 +23,15 @@ export function ThresholdsPage() {
     queryKey: ['config-pipeline-threshold'],
     queryFn: async () => {
       try {
-        const entries = await api<{ id: string; key: string; value: string }[]>(
-          '/admin/config?category=pipeline_threshold'
+        const data = await api<{ entries: { id: string; key: string; value: Record<string, string>; category: string }[] }>(
+          '/admin/config'
         )
+        const filtered = data.entries.filter((e) => e.category.toLowerCase() === 'pipeline_threshold')
         const obj: Record<string, number> = {}
         const ids: Record<string, string> = {}
-        for (const e of entries) {
-          obj[e.key] = parseFloat(e.value)
+        for (const e of filtered) {
+          const val = typeof e.value === 'object' ? (e.value as Record<string, string>).threshold : String(e.value)
+          obj[e.key] = parseFloat(val)
           ids[e.key] = e.id
         }
         setConfigIds(ids)

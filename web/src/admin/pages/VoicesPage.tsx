@@ -28,19 +28,20 @@ export function VoicesPage() {
     queryKey: ['config-voice-profiles'],
     queryFn: async () => {
       try {
-        const entries = await api<{ id: string; key: string; value: string }[]>(
-          '/admin/config?category=voice_profile'
+        const data = await api<{ entries: { id: string; key: string; value: unknown; category: string }[] }>(
+          '/admin/config'
         )
-        if (entries.length > 0) {
+        const filtered = data.entries.filter((e) => e.category.toLowerCase() === 'voice_profile')
+        if (filtered.length > 0) {
           const ids: Record<string, string> = {}
-          const loaded: VoiceProfile[] = entries.map((e) => {
+          const loaded: VoiceProfile[] = filtered.map((e) => {
             ids[e.key] = e.id
-            const parsed = typeof e.value === 'string' ? JSON.parse(e.value) : e.value
+            const parsed = typeof e.value === 'string' ? JSON.parse(e.value) : e.value as Record<string, unknown>
             return {
               id: e.key,
-              name: parsed.name ?? e.key,
-              pitch: parsed.pitch ?? 0,
-              speaking_rate: parsed.speaking_rate ?? 1.0,
+              name: (parsed as Record<string, unknown>).name as string ?? e.key,
+              pitch: Number((parsed as Record<string, unknown>).pitch ?? 0),
+              speaking_rate: Number((parsed as Record<string, unknown>).speaking_rate ?? 1.0),
             }
           })
           setConfigIds(ids)

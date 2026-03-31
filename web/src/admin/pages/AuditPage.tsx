@@ -21,7 +21,7 @@ const placeholderAudit: AuditEntry[] = [
   },
   {
     timestamp: '2026-03-25T10:00:00Z',
-    category: 'arlo_persona',
+    category: 'dd_persona',
     key: 'system_prompt',
     changed_by: 'admin@companion.dev',
     old_value: '(previous prompt text)',
