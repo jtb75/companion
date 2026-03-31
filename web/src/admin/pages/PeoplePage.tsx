@@ -134,6 +134,17 @@ function EditProfileModal({ person, onClose }: { person: Person; onClose: () => 
     care_model: person.care_model || 'self_directed',
   })
   const [deleteStep, setDeleteStep] = useState<'none' | 'confirm-deactivate' | 'confirm-delete'>('none')
+  const [graceDays, setGraceDays] = useState(30)
+
+  const { } = useQuery({
+    queryKey: ['config-deletion-settings'],
+    queryFn: async () => {
+      const data = await api<{ entries: { category: string; key: string; value: { days: number } }[] }>('/admin/config')
+      const match = data.entries.find((e) => e.category.toLowerCase() === 'deletion_settings' && e.key === 'grace_period_days')
+      if (match) setGraceDays(match.value.days ?? 30)
+      return match
+    },
+  })
 
   const updateMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => api(`/admin/people/${person.id}`, { method: 'PATCH', body: JSON.stringify(data) }),
@@ -265,7 +276,7 @@ function EditProfileModal({ person, onClose }: { person: Person; onClose: () => 
 
                 {deleteStep === 'confirm-delete' && (
                   <div className="rounded-md border border-red-200 bg-red-50 p-3">
-                    <p className="text-sm text-red-800 mb-2">{isDeactivated ? 'Permanently delete all data. Cannot be undone.' : 'Schedule deletion in 30 days. Can be cancelled.'}</p>
+                    <p className="text-sm text-red-800 mb-2">{isDeactivated ? 'Permanently delete all data. Cannot be undone.' : graceDays === 0 ? 'This will permanently delete all data immediately. Cannot be undone.' : `Schedule deletion in ${graceDays} days. Can be cancelled.`}</p>
                     <div className="flex gap-2">
                       <button onClick={() => isDeactivated ? deleteMutation.mutate() : requestDeletionMutation.mutate()} disabled={deleteMutation.isPending || requestDeletionMutation.isPending} className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50">{(deleteMutation.isPending || requestDeletionMutation.isPending) ? 'Processing...' : 'Confirm'}</button>
                       <button onClick={() => setDeleteStep('none')} className="px-3 py-1.5 text-sm text-gray-500">Cancel</button>

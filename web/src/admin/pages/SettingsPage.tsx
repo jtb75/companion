@@ -99,7 +99,7 @@ export function SettingsPage() {
           </p>
           {settings.grace_period_days === 0 && (
             <p className="text-xs text-amber-600 font-medium">
-              Warning: With 0 days, account deletion requests will be executed immediately by the nightly worker.
+              Warning: With 0 days, account deletion requests will be executed immediately. All data will be permanently removed with no recovery window.
             </p>
           )}
         </div>
