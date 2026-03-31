@@ -30,6 +30,24 @@ def _ensure_initialized():
         return False
 
 
+def delete_firebase_user(email: str) -> bool:
+    """Delete a Firebase Auth user by email. Returns True if deleted, False if not found."""
+    if not _ensure_initialized():
+        logger.warning("Firebase not configured — skipping auth user deletion")
+        return False
+    try:
+        user = firebase_auth.get_user_by_email(email)
+        firebase_auth.delete_user(user.uid)
+        logger.info(f"Firebase Auth user deleted: {email} (uid={user.uid})")
+        return True
+    except firebase_auth.UserNotFoundError:
+        logger.info(f"Firebase Auth user not found: {email}")
+        return False
+    except Exception:
+        logger.exception(f"Failed to delete Firebase Auth user: {email}")
+        return False
+
+
 async def verify_firebase_token(token: str) -> dict:
     """Verify a Firebase ID token and return decoded claims."""
     if not _ensure_initialized():

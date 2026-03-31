@@ -301,7 +301,12 @@ async def execute_deletion(db: AsyncSession, user_id: UUID) -> dict:
 
     audit_details["caregiver_roles_removed"] = removed_caregiver_count
 
-    # 9. Delete user row (CASCADE handles member's own data)
+    # 9. Delete Firebase Auth user
+    from app.auth.firebase import delete_firebase_user
+    firebase_deleted = delete_firebase_user(user.email)
+    audit_details["firebase_auth_deleted"] = firebase_deleted
+
+    # 10. Delete user row (CASCADE handles member's own data)
     await db.delete(user)
     await db.flush()
 
