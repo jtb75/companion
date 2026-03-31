@@ -13,6 +13,7 @@ locals {
     "roles/pubsub.subscriber",
     "roles/secretmanager.secretAccessor",
     "roles/documentai.apiUser",
+    "roles/aiplatform.user",
   ]
 }
 

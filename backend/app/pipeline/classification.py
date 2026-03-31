@@ -1,8 +1,12 @@
-"""Stage 2 — Two-tier classification. Tier 1 is rule-based, Tier 2 uses LLM (stubbed)."""
+"""Stage 2 — Two-tier classification. Tier 1 is rule-based, Tier 2 uses LLM."""
 
+import json
+import logging
 import re
 
 from app.pipeline.schemas import ClassificationResult, NormalizedDocument
+
+logger = logging.getLogger(__name__)
 
 # Tier 1: Rule-based patterns for obvious classifications
 BILL_PATTERNS = [
@@ -111,16 +115,60 @@ def _infer_urgency(classification: str, text: str) -> str:
     return "routine"
 
 
+_CLASSIFY_PROMPT = """Classify this document into exactly one category.
+
+Categories: bill, legal, government, medical, insurance, form, junk, personal, unknown
+Urgency: routine, needs_attention, act_today, urgent
+
+Respond with JSON only, no other text:
+{"classification": "...", "urgency": "...", "confidence": 0.0-1.0}
+
+Document text:
+"""
+
+
 async def _tier2_classify(doc: NormalizedDocument) -> ClassificationResult:
-    """LLM-based classification. Currently stubbed with heuristic fallback.
+    """LLM-based classification for documents that Tier 1 couldn't classify."""
+    from app.conversation.llm import get_llm_client
 
-    In production, this sends the document text to Claude with a
-    classification prompt and parses the structured response.
-    """
-    # TODO: Replace with real LLM call
-    # For now, use a simple heuristic based on any tier 1 partial matches
+    # Try LLM classification
+    try:
+        llm = get_llm_client()
+        text_snippet = doc.raw_text[:3000]
+        response = await llm.generate(
+            system_prompt="You are a document classifier. Respond with valid JSON only.",
+            messages=[{"role": "user", "content": _CLASSIFY_PROMPT + text_snippet}],
+            max_tokens=100,
+        )
+
+        parsed = json.loads(response.strip())
+        classification = parsed.get("classification", "unknown")
+        urgency = parsed.get("urgency", "needs_attention")
+        confidence = min(max(float(parsed.get("confidence", 0.7)), 0.0), 1.0)
+
+        valid_classes = {
+            "bill", "legal", "government", "medical",
+            "insurance", "form", "junk", "personal", "unknown",
+        }
+        valid_urgencies = {"routine", "needs_attention", "act_today", "urgent"}
+
+        if classification not in valid_classes:
+            classification = "unknown"
+        if urgency not in valid_urgencies:
+            urgency = "needs_attention"
+
+        return ClassificationResult(
+            document_id=doc.document_id,
+            classification=classification,
+            urgency_level=urgency,
+            confidence_score=confidence,
+            classifier_tier=2,
+        )
+    except Exception:
+        logger.warning("Tier 2 LLM classification failed, falling back to heuristics")
+
+    # Fallback: heuristic retry
     text_lower = doc.raw_text.lower()
-
     tier1 = _tier1_classify(text_lower)
     if tier1:
         classification, confidence = tier1
@@ -132,7 +180,6 @@ async def _tier2_classify(doc: NormalizedDocument) -> ClassificationResult:
             classifier_tier=2,
         )
 
-    # Default: unknown with needs_attention (never silently archive)
     return ClassificationResult(
         document_id=doc.document_id,
         classification="unknown",
