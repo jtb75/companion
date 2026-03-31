@@ -2,54 +2,31 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '../../shared/api/client'
 
 interface AuditEntry {
-  timestamp: string
+  id: string
+  config_id: string
   category: string
   key: string
   changed_by: string
-  old_value: string
-  new_value: string
+  reason: string | null
+  old_value: Record<string, unknown> | null
+  new_value: Record<string, unknown>
+  changed_at: string
 }
 
-const placeholderAudit: AuditEntry[] = [
-  {
-    timestamp: '2026-03-27T09:12:00Z',
-    category: 'pipeline_threshold',
-    key: 'classification_confidence',
-    changed_by: 'admin@companion.dev',
-    old_value: '0.80',
-    new_value: '0.85',
-  },
-  {
-    timestamp: '2026-03-25T10:00:00Z',
-    category: 'dd_persona',
-    key: 'system_prompt',
-    changed_by: 'admin@companion.dev',
-    old_value: '(previous prompt text)',
-    new_value: '(updated prompt text)',
-  },
-  {
-    timestamp: '2026-03-22T15:30:00Z',
-    category: 'pipeline_threshold',
-    key: 'junk_cutoff',
-    changed_by: 'ops@companion.dev',
-    old_value: '0.25',
-    new_value: '0.30',
-  },
-]
+function formatValue(val: Record<string, unknown> | null | string): string {
+  if (val === null) return '-'
+  if (typeof val === 'string') return val
+  const str = JSON.stringify(val)
+  return str.length > 80 ? str.slice(0, 77) + '...' : str
+}
 
 export function AuditPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['config-audit'],
-    queryFn: async () => {
-      try {
-        return await api<AuditEntry[]>('/admin/config/audit')
-      } catch {
-        return placeholderAudit
-      }
-    },
+    queryFn: () => api<{ entries: AuditEntry[]; total: number }>('/admin/config/audit'),
   })
 
-  const entries = Array.isArray(data) ? data : placeholderAudit
+  const entries = data?.entries ?? []
 
   if (isLoading) {
     return <p className="text-gray-500">Loading audit log...</p>
@@ -84,10 +61,17 @@ export function AuditPage() {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {entries.map((entry, i) => (
-              <tr key={i} className="hover:bg-gray-50">
+            {entries.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-4 py-12 text-center text-sm text-gray-400">
+                  No audit entries yet. Changes to config settings will appear here.
+                </td>
+              </tr>
+            )}
+            {entries.map((entry) => (
+              <tr key={entry.id} className="hover:bg-gray-50">
                 <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
-                  {new Date(entry.timestamp).toLocaleString()}
+                  {new Date(entry.changed_at).toLocaleString()}
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-800">
                   <span className="px-2 py-0.5 bg-gray-100 rounded text-xs font-mono">
@@ -96,11 +80,11 @@ export function AuditPage() {
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-800 font-mono">{entry.key}</td>
                 <td className="px-4 py-3 text-sm text-gray-600">{entry.changed_by}</td>
-                <td className="px-4 py-3 text-sm text-gray-500 max-w-[200px] truncate">
-                  {entry.old_value}
+                <td className="px-4 py-3 text-sm text-gray-500 max-w-[200px] truncate" title={formatValue(entry.old_value)}>
+                  {formatValue(entry.old_value)}
                 </td>
-                <td className="px-4 py-3 text-sm text-gray-800 max-w-[200px] truncate">
-                  {entry.new_value}
+                <td className="px-4 py-3 text-sm text-gray-800 max-w-[200px] truncate" title={formatValue(entry.new_value)}>
+                  {formatValue(entry.new_value)}
                 </td>
               </tr>
             ))}
