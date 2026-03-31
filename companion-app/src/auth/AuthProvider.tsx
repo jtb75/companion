@@ -25,6 +25,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    GoogleSignin.configure({
+      scopes: ['email', 'profile'],
+    })
     const unsubscribe = auth().onAuthStateChanged((u) => {
       setUser(u)
       setLoading(false)

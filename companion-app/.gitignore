@@ -1,3 +1,7 @@
+# Firebase config (injected via CI, not committed)
+ios/CompanionApp/GoogleService-Info.plist
+android/app/google-services.json
+
 # OSX
 #
 .DS_Store
