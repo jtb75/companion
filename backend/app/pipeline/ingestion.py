@@ -99,13 +99,13 @@ async def process_camera_scan(
                 "OCR extracted %d characters", len(raw_text)
             )
 
-            # Store extracted text back on the document
-            doc.raw_text_ref = "ocr_complete"
+            # Store extracted text (keep original GCS path)
             if not doc.source_metadata:
                 doc.source_metadata = {}
             doc.source_metadata["ocr_text"] = raw_text[
                 :5000
             ]
+            doc.source_metadata["ocr_complete"] = True
             await db.flush()
         except Exception:
             logger.exception(
