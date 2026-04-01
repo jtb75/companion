@@ -323,7 +323,7 @@ function TranscriptDetail({ sessionId }: { sessionId: string }) {
             </div>
           </div>
         ))}
-        {messages.length === 0 && (
+        {data.messages.length === 0 && (
           <p className="text-center text-sm text-gray-400 py-4">No messages in this session.</p>
         )}
       </div>
