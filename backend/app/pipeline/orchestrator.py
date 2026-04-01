@@ -2,7 +2,7 @@
 
 import logging
 import time
-from datetime import UTC, datetime
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -202,7 +202,7 @@ async def process_document(
 
         # Calculate total processing time
         total_ms = int((time.monotonic() - pipeline_start) * 1000)
-        doc.processed_at = datetime.now(UTC)
+        doc.processed_at = datetime.utcnow()
         await db.flush()
 
         # Emit events
