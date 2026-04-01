@@ -1,7 +1,11 @@
 """App API — Conversation (D.D.) routes."""
 
+import json
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.responses import StreamingResponse
 
 from app.auth.dependencies import User, require_complete_profile
 from app.conversation.llm import get_llm_client
@@ -12,6 +16,8 @@ from app.schemas.conversation import (
     ConversationMessageRequest,
     ConversationStartRequest,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/conversation", tags=["Conversation"])
 
@@ -94,6 +100,73 @@ async def send_message(
         "response": response_text,
         "message_count": len(session.messages),
     }
+
+
+@router.post("/message/stream")
+async def send_message_stream(
+    data: ConversationMessageRequest,
+    user: User = Depends(require_complete_profile),
+    db: AsyncSession = Depends(get_db),
+):
+    """Stream a D.D. response via SSE."""
+    session = await state_manager.get_active_session(
+        str(user.id)
+    )
+    if session is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No active conversation. Start one first.",
+        )
+
+    # Add user message before streaming
+    session.add_message("user", data.text)
+    await state_manager.update_session(session)
+
+    system_prompt = await build_system_prompt(db, user)
+    llm_messages = [
+        {"role": m.role, "content": m.content}
+        for m in session.messages
+    ]
+    llm = get_llm_client()
+
+    async def event_generator():
+        full_response = ""
+        try:
+            async for token in llm.generate_stream(
+                system_prompt, llm_messages, max_tokens=300
+            ):
+                full_response += token
+                event = json.dumps({"token": token})
+                yield f"data: {event}\n\n"
+
+            # Save full assistant response after stream ends
+            session.add_message("assistant", full_response)
+            await state_manager.update_session(session)
+
+            done_event = json.dumps(
+                {"done": True, "full_response": full_response}
+            )
+            yield f"data: {done_event}\n\n"
+        except Exception:
+            logger.exception("SSE stream error")
+            if not full_response:
+                full_response = (
+                    "Sorry, something went wrong. "
+                    "Please try again."
+                )
+                session.add_message(
+                    "assistant", full_response
+                )
+                await state_manager.update_session(session)
+            err = json.dumps(
+                {"error": True, "full_response": full_response}
+            )
+            yield f"data: {err}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+    )
 
 
 @router.get("/state")

@@ -1,5 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 
 from app.config import settings
 
@@ -12,6 +13,18 @@ class LLMClient(ABC):
         self, system_prompt: str, messages: list[dict], max_tokens: int = 500
     ) -> str:
         ...
+
+    async def generate_stream(
+        self,
+        system_prompt: str,
+        messages: list[dict],
+        max_tokens: int = 500,
+    ) -> AsyncIterator[str]:
+        """Yield text chunks. Default: single chunk fallback."""
+        text = await self.generate(
+            system_prompt, messages, max_tokens
+        )
+        yield text
 
 
 class GeminiClient(LLMClient):
@@ -67,6 +80,52 @@ class GeminiClient(LLMClient):
         except Exception:
             logger.exception("Gemini API call failed")
             return self._fallback_response(messages)
+
+    async def generate_stream(
+        self,
+        system_prompt: str,
+        messages: list[dict],
+        max_tokens: int = 500,
+    ) -> AsyncIterator[str]:
+        model = self._get_model()
+        if model is None:
+            yield self._fallback_response(messages)
+            return
+
+        try:
+            from vertexai.generative_models import (
+                Content,
+                GenerationConfig,
+                Part,
+            )
+
+            contents = []
+            for msg in messages:
+                role = (
+                    "user" if msg["role"] == "user" else "model"
+                )
+                contents.append(
+                    Content(
+                        role=role,
+                        parts=[Part.from_text(msg["content"])],
+                    )
+                )
+
+            response = await model.generate_content_async(
+                contents,
+                stream=True,
+                generation_config=GenerationConfig(
+                    max_output_tokens=max_tokens,
+                    temperature=0.7,
+                ),
+                system_instruction=system_prompt,
+            )
+            async for chunk in response:
+                if chunk.text:
+                    yield chunk.text
+        except Exception:
+            logger.exception("Gemini streaming failed")
+            yield self._fallback_response(messages)
 
     def _fallback_response(self, messages: list[dict]) -> str:
         last = messages[-1]["content"] if messages else ""

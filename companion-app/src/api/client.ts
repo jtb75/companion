@@ -1,6 +1,6 @@
 import auth from '@react-native-firebase/auth'
 
-const API_BASE = __DEV__
+export const API_BASE = __DEV__
   ? 'https://companion-staging-backend-381910341082.us-central1.run.app'
   : 'https://companion-staging-backend-381910341082.us-central1.run.app'
 

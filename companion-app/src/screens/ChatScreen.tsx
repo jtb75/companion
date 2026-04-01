@@ -1,15 +1,17 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
   StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native'
-import { api } from '../api/client'
+import auth from '@react-native-firebase/auth'
+import { api, API_BASE } from '../api/client'
 import { colors, brand } from '../theme/colors'
 
 interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
+  streaming?: boolean
 }
 
 export function ChatScreen() {
@@ -43,35 +45,142 @@ export function ChatScreen() {
     }
   }
 
-  const sendMessage = async () => {
+  const sendMessage = useCallback(async () => {
     if (!input.trim() || !sessionId || sending) return
     const text = input.trim()
     setInput('')
 
     const userMsg: Message = { id: Date.now().toString(), role: 'user', content: text }
+    const assistantMsgId = (Date.now() + 1).toString()
     setMessages((prev) => [...prev, userMsg])
     setSending(true)
 
+    // Add an empty assistant bubble immediately (streaming placeholder)
+    setMessages((prev) => [
+      ...prev,
+      { id: assistantMsgId, role: 'assistant', content: '', streaming: true },
+    ])
+
     try {
-      const res = await api<{ response: string }>('/api/v1/conversation/message', {
-        method: 'POST',
-        body: JSON.stringify({ session_id: sessionId, message: text }),
-      })
-      const assistantMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: res.response,
+      const user = auth().currentUser
+      const token = user ? await user.getIdToken() : null
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Accept': 'text/event-stream',
       }
-      setMessages((prev) => [...prev, assistantMsg])
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+
+      // Use XMLHttpRequest for incremental SSE reading in React Native
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.open('POST', `${API_BASE}/api/v1/conversation/message/stream`)
+        Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v))
+
+        let lastProcessedIndex = 0
+
+        xhr.onprogress = () => {
+          const text = xhr.responseText
+          const newText = text.slice(lastProcessedIndex)
+          lastProcessedIndex = text.length
+
+          // Parse SSE lines from the new chunk
+          const lines = newText.split('\n')
+          for (const line of lines) {
+            const trimmed = line.trim()
+            if (!trimmed.startsWith('data:')) continue
+            const jsonStr = trimmed.slice(5).trim()
+            if (!jsonStr) continue
+
+            try {
+              const data = JSON.parse(jsonStr)
+              if (data.done) {
+                // Stream complete — finalize the message
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantMsgId ? { ...m, streaming: false } : m,
+                  ),
+                )
+                setSending(false)
+              } else if (data.token != null) {
+                // First token hides the "thinking" indicator
+                setSending(false)
+                // Append the token to the assistant message
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantMsgId
+                      ? { ...m, content: m.content + data.token }
+                      : m,
+                  ),
+                )
+              }
+            } catch {
+              // Skip malformed JSON lines
+            }
+          }
+        }
+
+        xhr.onload = () => {
+          // Process any remaining data not caught by onprogress
+          if (xhr.responseText) {
+            const remaining = xhr.responseText.slice(lastProcessedIndex)
+            const lines = remaining.split('\n')
+            for (const line of lines) {
+              const trimmed = line.trim()
+              if (!trimmed.startsWith('data:')) continue
+              const jsonStr = trimmed.slice(5).trim()
+              if (!jsonStr) continue
+              try {
+                const data = JSON.parse(jsonStr)
+                if (data.token != null) {
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === assistantMsgId
+                        ? { ...m, content: m.content + data.token }
+                        : m,
+                    ),
+                  )
+                }
+              } catch {
+                // skip
+              }
+            }
+          }
+          // Finalize
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId ? { ...m, streaming: false } : m,
+            ),
+          )
+          setSending(false)
+          resolve()
+        }
+
+        xhr.onerror = () => {
+          reject(new Error('Stream request failed'))
+        }
+
+        xhr.ontimeout = () => {
+          reject(new Error('Stream request timed out'))
+        }
+
+        xhr.timeout = 60000
+        xhr.send(JSON.stringify({ session_id: sessionId, message: text }))
+      })
     } catch {
-      setMessages((prev) => [
-        ...prev,
-        { id: (Date.now() + 1).toString(), role: 'assistant', content: "Sorry, I couldn't process that. Try again?" },
-      ])
-    } finally {
+      // On error, replace the empty streaming bubble with an error message
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMsgId
+            ? { ...m, content: "Sorry, I couldn't process that. Try again?", streaming: false }
+            : m,
+        ),
+      )
       setSending(false)
     }
-  }
+  }, [input, sessionId, sending])
 
   if (starting) {
     return (
@@ -98,7 +207,11 @@ export function ChatScreen() {
         renderItem={({ item }) => (
           <View style={[styles.bubble, item.role === 'user' ? styles.userBubble : styles.assistantBubble]}>
             {item.role === 'assistant' && <Text style={styles.botName}>{brand.short}</Text>}
-            <Text style={[styles.bubbleText, item.role === 'user' && styles.userText]}>{item.content}</Text>
+            {item.streaming && !item.content ? (
+              <ActivityIndicator size="small" color={colors.gray400} />
+            ) : (
+              <Text style={[styles.bubbleText, item.role === 'user' && styles.userText]}>{item.content}</Text>
+            )}
           </View>
         )}
       />
