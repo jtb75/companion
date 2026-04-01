@@ -2,13 +2,16 @@
 
 import logging
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.events.publisher import event_publisher
-from app.events.schemas import DocumentProcessedPayload, DocumentRoutedPayload
+from app.events.schemas import (
+    DocumentProcessedPayload,
+    DocumentRoutedPayload,
+)
 from app.models.document import Document
 from app.models.enums import (
     DocumentClassification,
@@ -18,8 +21,12 @@ from app.models.enums import (
 )
 from app.models.pipeline_metrics import PipelineMetric
 from app.pipeline.classification import classify
+from app.pipeline.events import publish_pipeline_event
 from app.pipeline.extraction import extract
-from app.pipeline.ingestion import process_camera_scan, process_email
+from app.pipeline.ingestion import (
+    process_camera_scan,
+    process_email,
+)
 from app.pipeline.routing import route
 from app.pipeline.schemas import PipelineResult
 from app.pipeline.summarization import summarize
@@ -45,6 +52,9 @@ async def process_document(
     try:
         # Stage 1: Ingestion
         stage_start = time.monotonic()
+        await publish_pipeline_event(
+            document_id, "ingestion", "started",
+        )
         source = getattr(
             doc.source_channel, "value", str(doc.source_channel)
         )
@@ -53,9 +63,15 @@ async def process_document(
         else:
             normalized = await process_email(db, document_id)
         await _record_metric(db, document_id, "ingestion", "completed", stage_start)
+        await publish_pipeline_event(
+            document_id, "ingestion", "completed",
+        )
 
         # Stage 2: Classification
         stage_start = time.monotonic()
+        await publish_pipeline_event(
+            document_id, "classification", "started",
+        )
         classification_result = await classify(normalized)
 
         # Map string values to enums for the Document model
@@ -69,9 +85,23 @@ async def process_document(
             "confidence": classification_result.confidence_score,
             "tier": classification_result.classifier_tier,
         })
+        await publish_pipeline_event(
+            document_id, "classification", "completed",
+            {
+                "classification": (
+                    classification_result.classification
+                ),
+                "confidence": (
+                    classification_result.confidence_score
+                ),
+            },
+        )
 
         # Stage 3: Extraction
         stage_start = time.monotonic()
+        await publish_pipeline_event(
+            document_id, "extraction", "started",
+        )
         extraction_result = await extract(normalized, classification_result)
         # Convert Decimals to floats for JSONB storage
         import json
@@ -82,19 +112,31 @@ async def process_document(
         await _record_metric(db, document_id, "extraction", "completed", stage_start, {
             "missing_fields": extraction_result.missing_fields,
         })
+        await publish_pipeline_event(
+            document_id, "extraction", "completed",
+        )
 
         # Stage 4: Summarization
         stage_start = time.monotonic()
+        await publish_pipeline_event(
+            document_id, "summarization", "started",
+        )
         summarization_result = await summarize(classification_result, extraction_result)
         doc.spoken_summary = summarization_result.spoken_summary
         doc.card_summary = summarization_result.card_summary
         doc.status = DocumentStatus.SUMMARIZED
         await db.flush()
         await _record_metric(db, document_id, "summarization", "completed", stage_start)
+        await publish_pipeline_event(
+            document_id, "summarization", "completed",
+        )
 
         # Stage 4.5: Embedding (non-blocking)
         try:
             stage_start = time.monotonic()
+            await publish_pipeline_event(
+                document_id, "embedding", "started",
+            )
             from app.pipeline.embeddings import embed_document
             chunk_count = await embed_document(
                 db, document_id, user_id,
@@ -106,6 +148,10 @@ async def process_document(
                 db, document_id, "embedding", "completed",
                 stage_start, {"chunks": chunk_count},
             )
+            await publish_pipeline_event(
+                document_id, "embedding", "completed",
+                {"chunks": chunk_count},
+            )
         except Exception as emb_err:
             logger.warning(
                 "Embedding failed for doc %s: %s",
@@ -115,9 +161,16 @@ async def process_document(
                 db, document_id, "embedding", "failed",
                 stage_start, {"error": str(emb_err)},
             )
+            await publish_pipeline_event(
+                document_id, "embedding", "failed",
+                {"error": str(emb_err)},
+            )
 
         # Stage 5: Routing
         stage_start = time.monotonic()
+        await publish_pipeline_event(
+            document_id, "routing", "started",
+        )
         routing_result = await route(
             db, user_id, classification_result,
             extraction_result, summarization_result,
@@ -129,6 +182,14 @@ async def process_document(
             "destination": routing_result.routing_destination,
             "records_created": len(routing_result.records_created),
         })
+        await publish_pipeline_event(
+            document_id, "routing", "completed",
+            {
+                "destination": (
+                    routing_result.routing_destination
+                ),
+            },
+        )
 
         # Stage 6: Question Tracker
         stage_start = time.monotonic()
@@ -141,7 +202,7 @@ async def process_document(
 
         # Calculate total processing time
         total_ms = int((time.monotonic() - pipeline_start) * 1000)
-        doc.processed_at = datetime.utcnow()
+        doc.processed_at = datetime.now(UTC)
         await db.flush()
 
         # Emit events
@@ -187,10 +248,17 @@ async def process_document(
         )
 
     except Exception as e:
-        logger.exception("Pipeline failed for document %s", document_id)
-        await _record_metric(db, document_id, "pipeline", "failed", pipeline_start, {
-            "error": str(e),
-        })
+        logger.exception(
+            "Pipeline failed for document %s", document_id
+        )
+        await _record_metric(
+            db, document_id, "pipeline", "failed",
+            pipeline_start, {"error": str(e)},
+        )
+        await publish_pipeline_event(
+            document_id, "pipeline", "failed",
+            {"error": str(e)},
+        )
         raise
 
 
