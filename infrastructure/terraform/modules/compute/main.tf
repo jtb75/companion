@@ -14,6 +14,7 @@ locals {
     "roles/secretmanager.secretAccessor",
     "roles/documentai.apiUser",
     "roles/aiplatform.user",
+    "roles/firebaseauth.admin",
   ]
 }
 

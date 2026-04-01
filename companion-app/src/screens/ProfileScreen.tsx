@@ -183,7 +183,7 @@ export function ProfileScreen() {
                 style: 'destructive',
                 onPress: async () => {
                   try {
-                    const result = await api<{ deleted?: boolean; deletion_requested?: boolean; scheduled_date?: string }>('/me/request-deletion', { method: 'POST' })
+                    const result = await api<{ deleted?: boolean; deletion_requested?: boolean; scheduled_date?: string }>('/api/v1/me/request-deletion', { method: 'POST' })
                     if (result.deleted) {
                       Alert.alert('Account Deleted', 'Your account has been permanently deleted.', [
                         { text: 'OK', onPress: () => signOut() },
