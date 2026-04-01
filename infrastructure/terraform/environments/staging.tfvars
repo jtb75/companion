@@ -8,6 +8,6 @@ backend_min_instances = 0
 backend_max_instances = 10
 web_min_instances     = 0
 backend_cpu           = "1"
-backend_memory        = "512Mi"
+backend_memory        = "1Gi"
 notification_email    = "dd@mydailydignity.com"
 app_url               = "https://companion-staging-web-44gbcsdrnq-uc.a.run.app"

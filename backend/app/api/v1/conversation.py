@@ -133,19 +133,20 @@ async def send_message(
                 ChatSession.session_id == session.session_id
             )
         )
-        db_session = result.scalar_one()
-        db.add(ChatMessage(
-            chat_session_id=db_session.id,
-            role="user",
-            content=data.text,
-        ))
-        db.add(ChatMessage(
-            chat_session_id=db_session.id,
-            role="assistant",
-            content=response_text,
-        ))
-        db_session.message_count += 2
-        await db.commit()
+        db_session = result.scalar_one_or_none()
+        if db_session:
+            db.add(ChatMessage(
+                chat_session_id=db_session.id,
+                role="user",
+                content=data.text,
+            ))
+            db.add(ChatMessage(
+                chat_session_id=db_session.id,
+                role="assistant",
+                content=response_text,
+            ))
+            db_session.message_count += 2
+            await db.commit()
     except Exception:
         logger.exception("Failed to persist chat")
         await db.rollback()
