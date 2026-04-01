@@ -142,6 +142,34 @@ export function ProfileScreen() {
                    cg.invitation_status === 'pending' ? 'Pending' : cg.invitation_status}
                 </Text>
               </View>
+              <TouchableOpacity
+                style={styles.removeButton}
+                onPress={() => {
+                  Alert.alert(
+                    'Remove Caregiver',
+                    `Remove ${cg.contact_name} as your caregiver?`,
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Remove',
+                        style: 'destructive',
+                        onPress: async () => {
+                          try {
+                            await api(`/api/v1/contacts/${cg.id}`, {
+                              method: 'DELETE',
+                            })
+                            loadCaregivers()
+                          } catch (e: any) {
+                            Alert.alert('Error', e.message)
+                          }
+                        },
+                      },
+                    ]
+                  )
+                }}
+              >
+                <Text style={styles.removeText}>✕</Text>
+              </TouchableOpacity>
             </View>
           ))
         )}
@@ -301,6 +329,10 @@ const styles = StyleSheet.create({
   caregiverEmail: { fontSize: 12, color: colors.gray400, marginTop: 1 },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
   statusText: { fontSize: 11, fontWeight: '600' },
+  removeButton: {
+    marginLeft: 8, padding: 6,
+  },
+  removeText: { fontSize: 14, color: colors.gray400 },
   settingRow: {
     flexDirection: 'row', justifyContent: 'space-between',
     width: '100%', paddingVertical: 10,

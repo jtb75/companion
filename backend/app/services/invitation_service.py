@@ -159,6 +159,19 @@ async def accept_invitation(
         user.account_status = AccountStatus.ACTIVE
 
     await db.flush()
+
+    # Notify the member who sent the invitation
+    from app.services.push_notification_service import (
+        notify_caregiver_status_change,
+    )
+
+    await notify_caregiver_status_change(
+        db,
+        inviter_user_id=contact.user_id,
+        caregiver_name=contact.contact_name,
+        new_status="accepted",
+    )
+
     return contact
 
 
@@ -180,4 +193,17 @@ async def decline_invitation(
     contact.is_active = False
     contact.invitation_token = None
     await db.flush()
+
+    # Notify the member who sent the invitation
+    from app.services.push_notification_service import (
+        notify_caregiver_status_change,
+    )
+
+    await notify_caregiver_status_change(
+        db,
+        inviter_user_id=contact.user_id,
+        caregiver_name=contact.contact_name,
+        new_status="declined",
+    )
+
     return contact

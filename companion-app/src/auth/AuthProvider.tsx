@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth'
+import messaging from '@react-native-firebase/messaging'
 import { GoogleSignin } from '@react-native-google-signin/google-signin'
+import { api } from '../api/client'
 
 interface AuthContextType {
   user: FirebaseAuthTypes.User | null
@@ -57,6 +59,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const signOut = async () => {
+    try {
+      const token = await messaging().getToken()
+      await api('/api/v1/me/devices', {
+        method: 'DELETE',
+        body: JSON.stringify({ fcm_token: token }),
+      })
+    } catch (err) {
+      console.log('[AuthProvider] failed to deactivate FCM token:', err)
+    }
     await auth().signOut()
   }
 

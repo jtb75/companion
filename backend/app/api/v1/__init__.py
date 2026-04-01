@@ -8,6 +8,7 @@ from app.api.v1 import (
     bills,
     contacts,
     conversation,
+    device_tokens,
     documents,
     integrations,
     invitations,
@@ -33,3 +34,4 @@ router.include_router(assignments.router)
 router.include_router(conversation.router)
 router.include_router(notifications.router)
 router.include_router(integrations.router)
+router.include_router(device_tokens.router)

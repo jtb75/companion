@@ -10,6 +10,7 @@ import { LoginScreen } from '../auth/LoginScreen'
 import { OnboardingScreen } from '../auth/OnboardingScreen'
 import { useAuth } from '../auth/AuthProvider'
 import { api } from '../api/client'
+import { usePushNotifications } from '../hooks/usePushNotifications'
 import { colors } from '../theme/colors'
 
 const Tab = createBottomTabNavigator()
@@ -31,6 +32,7 @@ function TabIcon({ label, focused }: { label: string; focused: boolean }) {
 export function AppNavigator() {
   const { user, loading } = useAuth()
   const [profileComplete, setProfileComplete] = useState<boolean | null>(null)
+  usePushNotifications(profileComplete === true)
 
   useEffect(() => {
     if (!user) {

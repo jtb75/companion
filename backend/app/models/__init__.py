@@ -35,6 +35,7 @@ from app.models.pipeline_metrics import PipelineMetric
 from app.models.question_tracker import QuestionTracker
 from app.models.system_config import ConfigAuditLog, SystemConfig
 from app.models.todo import Todo
+from app.models.device_token import DeviceToken
 from app.models.trusted_contact import TrustedContact
 from app.models.user import User
 
@@ -81,4 +82,5 @@ __all__ = [
     "AdminUser",
     "CaregiverActivityLog",
     "DeletionAuditLog",
+    "DeviceToken",
 ]
