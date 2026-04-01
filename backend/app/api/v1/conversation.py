@@ -82,22 +82,30 @@ async def start_conversation(
         ChatSession,
     )
 
-    db_session = ChatSession(
-        user_id=user.id,
-        session_id=session.session_id,
-        started_at=dt.utcnow(),
-        message_count=1,
-    )
-    db.add(db_session)
-    await db.flush()
-    db.add(
-        ChatMessage(
-            chat_session_id=db_session.id,
-            role="assistant",
-            content=greeting,
+    try:
+        db_session = ChatSession(
+            user_id=user.id,
+            session_id=session.session_id,
+            started_at=dt.utcnow(),
+            message_count=1,
         )
-    )
-    await db.commit()
+        db.add(db_session)
+        await db.flush()
+        db.add(
+            ChatMessage(
+                chat_session_id=db_session.id,
+                role="assistant",
+                content=greeting,
+            )
+        )
+        await db.commit()
+        logger.info(
+            "Chat session persisted: %s",
+            session.session_id,
+        )
+    except Exception:
+        logger.exception("Failed to persist chat session")
+        await db.rollback()
 
     return {
         "session_id": session.session_id,
