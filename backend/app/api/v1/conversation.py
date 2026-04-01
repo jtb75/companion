@@ -99,12 +99,11 @@ async def start_conversation(
             )
         )
         await db.commit()
-        logger.info(
-            "Chat session persisted: %s",
-            session.session_id,
+        print(
+            f"CHAT_PERSIST: session {session.session_id} saved"
         )
-    except Exception:
-        logger.exception("Failed to persist chat session")
+    except Exception as e:
+        print(f"CHAT_PERSIST_FAIL: {e}")
         await db.rollback()
 
     return {
