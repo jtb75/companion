@@ -89,6 +89,11 @@ resource "google_cloud_run_v2_service" "backend" {
         value = var.documents_bucket
       }
 
+      env {
+        name  = "COMPANION_APP_URL"
+        value = var.app_url
+      }
+
       # Secret environment variables
       env {
         name = "COMPANION_REDIS_URL"

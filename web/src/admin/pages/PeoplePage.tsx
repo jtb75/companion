@@ -653,7 +653,7 @@ export function PeoplePage() {
       <p className="text-xs text-gray-400">{filteredPeople.length} of {people.length} people</p>
 
       {/* People list */}
-      <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+      <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
         {filteredPeople.length === 0 ? (
           <div className="px-6 py-12 text-center text-sm text-gray-400">No people found</div>
         ) : (

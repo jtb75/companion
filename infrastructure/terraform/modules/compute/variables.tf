@@ -58,6 +58,11 @@ variable "documents_bucket" {
   type        = string
 }
 
+variable "app_url" {
+  description = "Frontend URL for email links"
+  type        = string
+}
+
 variable "artifact_registry_repo" {
   description = "Artifact Registry repository path"
   type        = string

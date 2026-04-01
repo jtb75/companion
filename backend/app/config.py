@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     gmail_smtp_password: str = ""
 
     # App
+    app_url: str = "http://localhost:5173"  # Frontend URL for email links
     environment: str = "development"
     debug: bool = False
     api_v1_prefix: str = "/api/v1"

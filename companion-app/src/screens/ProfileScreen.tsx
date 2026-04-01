@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import {
   View, Text, TouchableOpacity, ScrollView, StyleSheet,
-  Modal, ActivityIndicator,
+  Modal, ActivityIndicator, Alert,
 } from 'react-native'
 import { useAuth } from '../auth/AuthProvider'
 import { api } from '../api/client'
@@ -169,6 +169,44 @@ export function ProfileScreen() {
         <Text style={styles.signOutText}>Sign Out</Text>
       </TouchableOpacity>
 
+      {/* Delete account */}
+      <TouchableOpacity
+        style={styles.deleteButton}
+        onPress={() => {
+          Alert.alert(
+            'Delete Account',
+            'Are you sure you want to delete your account? This will schedule your account for deletion. You can cancel within the grace period.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Delete My Account',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    const result = await api<{ deleted?: boolean; deletion_requested?: boolean; scheduled_date?: string }>('/me/request-deletion', { method: 'POST' })
+                    if (result.deleted) {
+                      Alert.alert('Account Deleted', 'Your account has been permanently deleted.', [
+                        { text: 'OK', onPress: () => signOut() },
+                      ])
+                    } else {
+                      Alert.alert(
+                        'Deletion Scheduled',
+                        `Your account is scheduled for deletion on ${result.scheduled_date}. You can cancel this from your profile before then.`,
+                        [{ text: 'OK', onPress: () => signOut() }]
+                      )
+                    }
+                  } catch (e: any) {
+                    Alert.alert('Error', e.message || 'Failed to delete account')
+                  }
+                },
+              },
+            ]
+          )
+        }}
+      >
+        <Text style={styles.deleteText}>Delete Account</Text>
+      </TouchableOpacity>
+
       <Text style={styles.version}>{brand.name} v1.0.0</Text>
 
       {/* Invite Modal */}
@@ -275,6 +313,11 @@ const styles = StyleSheet.create({
     alignItems: 'center', marginTop: 8, borderWidth: 1, borderColor: colors.gray200,
   },
   signOutText: { fontSize: 15, fontWeight: '600', color: colors.rose },
+  deleteButton: {
+    borderRadius: 12, padding: 14,
+    alignItems: 'center', marginTop: 8,
+  },
+  deleteText: { fontSize: 13, color: colors.gray400 },
   version: { fontSize: 12, color: colors.gray400, textAlign: 'center', marginTop: 20 },
   modalContainer: { flex: 1, backgroundColor: colors.cream },
   modalHeader: {

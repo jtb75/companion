@@ -40,10 +40,15 @@ export function AppNavigator() {
     // Check if user has a profile in our backend
     const checkProfile = async () => {
       try {
-        const data = await api<{ exists: boolean; profile_complete: boolean }>('/api/v1/me')
-        setProfileComplete(data.exists && data.profile_complete)
-      } catch {
-        // 401/403 means no account yet — needs onboarding
+        const data = await api<{ exists?: boolean; profile_complete?: boolean; first_name?: string; last_name?: string }>('/api/v1/me')
+        // Handle both structured response ({exists, profile_complete}) and raw user model ({first_name, last_name})
+        if ('profile_complete' in data) {
+          setProfileComplete(data.exists !== false && data.profile_complete === true)
+        } else {
+          setProfileComplete(Boolean(data.first_name && data.last_name))
+        }
+      } catch (err) {
+        console.log('[AppNavigator] /api/v1/me error:', err)
         setProfileComplete(false)
       }
     }

@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
 
-APP_URL = f"https://app.{BRAND_DOMAIN}"
+APP_URL = settings.app_url or f"https://app.{BRAND_DOMAIN}"
 
 
 def _email_wrapper(content: str) -> str:

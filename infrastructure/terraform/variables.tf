@@ -87,6 +87,11 @@ variable "notification_email" {
   type        = string
 }
 
+variable "app_url" {
+  description = "Frontend URL for email links (invitation, account actions)"
+  type        = string
+}
+
 variable "github_repo" {
   description = "GitHub repository in owner/repo format"
   type        = string

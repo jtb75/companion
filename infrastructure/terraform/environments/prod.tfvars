@@ -10,3 +10,4 @@ web_min_instances     = 0
 backend_cpu           = "1"
 backend_memory        = "512Mi"
 notification_email    = "dd@mydailydignity.com"
+app_url               = "https://app.mydailydignity.com"
