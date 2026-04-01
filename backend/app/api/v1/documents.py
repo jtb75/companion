@@ -135,6 +135,9 @@ async def scan_document(
         },
     )
 
+    # Commit so background task can find the document
+    await db.commit()
+
     # Trigger pipeline in the background
     background_tasks.add_task(
         _run_pipeline_background, doc.id, user.id
