@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     openai_api_key: str = ""
     llm_provider: str = "gemini"  # "gemini", "anthropic", or "openai"
-    gemini_model: str = "gemini-2.0-flash"
+    gemini_model: str = "gemini-2.5-flash"
     gemini_location: str = "us-central1"
 
     # Pipeline service-to-service auth
