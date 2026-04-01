@@ -404,14 +404,49 @@ export function PipelinePage() {
   // --- WebSocket for real-time updates ---
   const wsConnected = usePipelineWebSocket((updatedDoc) => {
     setDocuments((prev) => {
-      const idx = prev.findIndex((d) => d.id === updatedDoc.id)
-      if (idx >= 0) {
-        const next = [...prev]
-        next[idx] = updatedDoc
-        return next
+      // WebSocket sends stage events, not full documents
+      // Match by document_id and update pipeline_stages
+      const docId = updatedDoc.id
+        || (updatedDoc as any).document_id
+      if (!docId) return prev
+      const idx = prev.findIndex((d) => d.id === docId)
+      if (idx < 0) {
+        // Unknown doc — refetch instead of adding broken entry
+        queryClient.invalidateQueries({
+          queryKey: ['pipeline-documents'],
+        })
+        return prev
       }
-      // New document — add to the top
-      return [updatedDoc, ...prev]
+      const next = [...prev]
+      const existing = { ...next[idx] }
+      // If the event has stage info, update the stages
+      const stage = (updatedDoc as any).stage
+      const stageStatus = (updatedDoc as any).status
+      if (stage && stageStatus) {
+        const stages = [...(existing.pipeline_stages || [])]
+        const si = stages.findIndex(
+          (s) => s.stage === stage
+        )
+        if (si >= 0) {
+          stages[si] = { ...stages[si], status: stageStatus }
+        } else {
+          stages.push({
+            stage,
+            status: stageStatus,
+          })
+        }
+        existing.pipeline_stages = stages
+      }
+      // Merge any other fields from a full document update
+      if (updatedDoc.status) existing.status = updatedDoc.status
+      if (updatedDoc.classification) {
+        existing.classification = updatedDoc.classification
+      }
+      if (updatedDoc.card_summary) {
+        existing.card_summary = updatedDoc.card_summary
+      }
+      next[idx] = existing
+      return next
     })
   })
 
