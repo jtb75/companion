@@ -71,8 +71,8 @@ app.include_router(caregiver_router)
 app.include_router(pipeline_router)
 app.include_router(admin_router)
 app.include_router(auth_router)
+app.include_router(seed_admin_router)
 if settings.dev_auth_bypass:
-    app.include_router(seed_admin_router)
     logger.warning(
         "DEV AUTH BYPASS IS ENABLED -- all endpoints accept "
         "unauthenticated requests. This must NEVER be enabled in production."
