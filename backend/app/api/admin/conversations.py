@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.auth.dependencies import AdminUser, require_admin_role
 from app.db import get_db
-from app.models.chat_session import ChatMessage, ChatSession
+from app.models.chat_session import ChatSession
 from app.models.user import User
 
 router = APIRouter(
