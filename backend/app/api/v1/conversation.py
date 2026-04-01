@@ -4,6 +4,7 @@ import json
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
 
@@ -12,6 +13,7 @@ from app.conversation.llm import get_llm_client
 from app.conversation.prompt_builder import build_system_prompt
 from app.conversation.state_manager import state_manager
 from app.db import get_db
+from app.models.system_config import SystemConfig
 from app.schemas.conversation import (
     ConversationMessageRequest,
     ConversationStartRequest,
@@ -20,6 +22,28 @@ from app.schemas.conversation import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/conversation", tags=["Conversation"])
+
+DEFAULT_CONTEXT_WINDOW = 20
+
+
+async def _get_context_window(db: AsyncSession) -> int:
+    """Get context window size from system_config."""
+    try:
+        result = await db.execute(
+            select(SystemConfig).where(
+                SystemConfig.category == "dd_persona",
+                SystemConfig.key == "context_window",
+                SystemConfig.is_active.is_(True),
+            )
+        )
+        config = result.scalar_one_or_none()
+        if config and config.value:
+            return int(config.value.get(
+                "max_messages", DEFAULT_CONTEXT_WINDOW
+            ))
+    except Exception:
+        pass
+    return DEFAULT_CONTEXT_WINDOW
 
 
 @router.post("/start", status_code=status.HTTP_201_CREATED)
@@ -104,10 +128,13 @@ async def send_message(
     # Build prompt with full context
     system_prompt = await build_system_prompt(db, user)
 
-    # Convert session messages to LLM format
+    # Apply sliding window to limit context
+    window = await _get_context_window(db)
+    recent = session.messages[-window:]
+
     llm_messages = [
         {"role": m.role, "content": m.content}
-        for m in session.messages
+        for m in recent
     ]
 
     # Generate response
@@ -179,9 +206,11 @@ async def send_message_stream(
     await state_manager.update_session(session)
 
     system_prompt = await build_system_prompt(db, user)
+    window = await _get_context_window(db)
+    recent = session.messages[-window:]
     llm_messages = [
         {"role": m.role, "content": m.content}
-        for m in session.messages
+        for m in recent
     ]
     llm = get_llm_client()
 
