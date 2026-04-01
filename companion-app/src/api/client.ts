@@ -1,8 +1,8 @@
 import auth from '@react-native-firebase/auth'
 
 const API_BASE = __DEV__
-  ? 'http://localhost:8000'
-  : 'https://companion-staging-backend-44gbcsdrnq-uc.a.run.app'
+  ? 'https://companion-staging-backend-381910341082.us-central1.run.app'
+  : 'https://companion-staging-backend-381910341082.us-central1.run.app'
 
 export async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {

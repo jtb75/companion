@@ -1,14 +1,15 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { NavigationContainer } from '@react-navigation/native'
-import { Text } from 'react-native'
+import { Text, ActivityIndicator, View } from 'react-native'
 import { TodayScreen } from '../screens/TodayScreen'
 import { ChatScreen } from '../screens/ChatScreen'
 import { MyStuffScreen } from '../screens/MyStuffScreen'
 import { ProfileScreen } from '../screens/ProfileScreen'
 import { LoginScreen } from '../auth/LoginScreen'
-import { VerifyEmailScreen } from '../auth/VerifyEmailScreen'
+import { OnboardingScreen } from '../auth/OnboardingScreen'
 import { useAuth } from '../auth/AuthProvider'
+import { api } from '../api/client'
 import { colors } from '../theme/colors'
 
 const Tab = createBottomTabNavigator()
@@ -28,7 +29,26 @@ function TabIcon({ label, focused }: { label: string; focused: boolean }) {
 }
 
 export function AppNavigator() {
-  const { user, loading, needsVerification } = useAuth()
+  const { user, loading } = useAuth()
+  const [profileComplete, setProfileComplete] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    if (!user) {
+      setProfileComplete(null)
+      return
+    }
+    // Check if user has a profile in our backend
+    const checkProfile = async () => {
+      try {
+        const data = await api<{ exists: boolean; profile_complete: boolean }>('/api/v1/me')
+        setProfileComplete(data.exists && data.profile_complete)
+      } catch {
+        // 401/403 means no account yet — needs onboarding
+        setProfileComplete(false)
+      }
+    }
+    checkProfile()
+  }, [user])
 
   if (loading) return null
 
@@ -36,8 +56,16 @@ export function AppNavigator() {
     return <LoginScreen />
   }
 
-  if (needsVerification) {
-    return <VerifyEmailScreen />
+  if (profileComplete === null) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.cream }}>
+        <ActivityIndicator size="large" color={colors.blue} />
+      </View>
+    )
+  }
+
+  if (!profileComplete) {
+    return <OnboardingScreen onComplete={() => setProfileComplete(true)} />
   }
 
   return (

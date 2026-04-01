@@ -12,6 +12,44 @@ from app.models.user import User
 router = APIRouter(tags=["Profile"])
 
 
+@router.get("/api/v1/me")
+async def get_my_profile(
+    db: AsyncSession = Depends(get_db),
+    authorization: str | None = Header(None, alias="Authorization"),
+):
+    """Get current user's profile. Any authenticated Firebase user can call this."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(401, "No token")
+
+    token = authorization.removeprefix("Bearer ").strip()
+    try:
+        decoded = await verify_firebase_token(token)
+    except ValueError as e:
+        raise HTTPException(401, str(e)) from None
+
+    email = decoded.get("email")
+    if not email:
+        raise HTTPException(401, "No email")
+
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        return {"exists": False, "profile_complete": False}
+
+    return {
+        "exists": True,
+        "profile_complete": bool(user.first_name and user.last_name),
+        "user_id": str(user.id),
+        "email": user.email,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "preferred_name": user.preferred_name,
+        "display_name": user.display_name,
+        "phone": user.phone,
+    }
+
+
 @router.post("/api/v1/auth/complete-profile")
 async def complete_profile(
     data: dict,
