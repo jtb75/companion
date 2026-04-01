@@ -1,37 +1,119 @@
-"""Stage 1 — Normalizes camera scan uploads and email content into NormalizedDocument."""
+"""Stage 1 — Ingestion: OCR via Document AI, normalize into text."""
 
+import asyncio
+import logging
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models.document import Document
 from app.pipeline.schemas import NormalizedDocument
 
+logger = logging.getLogger(__name__)
+
+
+def _download_from_gcs(gcs_uri: str) -> bytes:
+    """Download a blob from GCS. Synchronous."""
+    from google.cloud import storage
+
+    # Parse gs://bucket/path or just path
+    if gcs_uri.startswith("gs://"):
+        parts = gcs_uri.replace("gs://", "").split("/", 1)
+        bucket_name, blob_path = parts[0], parts[1]
+    else:
+        bucket_name = settings.gcs_bucket_documents
+        blob_path = gcs_uri
+
+    client = storage.Client()
+    bucket = client.bucket(bucket_name)
+    blob = bucket.blob(blob_path)
+    return blob.download_as_bytes()
+
+
+def _ocr_with_document_ai(
+    image_data: bytes, mime_type: str
+) -> str:
+    """Run OCR using Google Document AI. Synchronous."""
+    from google.cloud import documentai_v1 as documentai
+
+    client = documentai.DocumentProcessorServiceClient()
+    resource_name = client.processor_path(
+        settings.gcp_project_id,
+        settings.documentai_location,
+        settings.documentai_processor_id,
+    )
+
+    raw_document = documentai.RawDocument(
+        content=image_data, mime_type=mime_type
+    )
+    request = documentai.ProcessRequest(
+        name=resource_name, raw_document=raw_document
+    )
+
+    result = client.process_document(request=request)
+    return result.document.text
+
 
 async def process_camera_scan(
-    db: AsyncSession, document_id: UUID, image_data: bytes | None = None
+    db: AsyncSession,
+    document_id: UUID,
+    image_data: bytes | None = None,
 ) -> NormalizedDocument:
-    """Process a camera scan image into normalized text.
-
-    In production: sends image to Google Document AI for OCR.
-    In development: uses the raw_text already stored in the document record.
-    """
+    """Process a camera scan: download from GCS, OCR, normalize."""
     doc = await db.get(Document, document_id)
     if not doc:
         raise ValueError(f"Document {document_id} not found")
 
-    # In production, this would:
-    # 1. Download image from GCS using raw_text_ref
-    # 2. Send to Google Document AI
-    # 3. Get OCR text back
-    # For now, use any text already in the document or the raw_text_ref path
     raw_text = ""
-    if doc.source_metadata and isinstance(doc.source_metadata, dict):
-        raw_text = doc.source_metadata.get("raw_text", "")
-    if not raw_text and doc.raw_text_ref:
-        raw_text = doc.raw_text_ref  # may be a GCS path; placeholder for dev
+    mime_type = "image/jpeg"
 
-    quality_score = 0.85  # placeholder
+    # Get mime type from metadata
+    if doc.source_metadata and isinstance(
+        doc.source_metadata, dict
+    ):
+        mime_type = doc.source_metadata.get(
+            "content_type", mime_type
+        )
+        # Check for pre-provided raw text (tests)
+        raw_text = doc.source_metadata.get("raw_text", "")
+
+    if not raw_text and doc.raw_text_ref:
+        # Download image from GCS and run OCR
+        try:
+            logger.info(
+                "Downloading from GCS: %s", doc.raw_text_ref
+            )
+            data = await asyncio.to_thread(
+                _download_from_gcs, doc.raw_text_ref
+            )
+            logger.info(
+                "Running OCR on %d bytes (%s)",
+                len(data),
+                mime_type,
+            )
+            raw_text = await asyncio.to_thread(
+                _ocr_with_document_ai, data, mime_type
+            )
+            logger.info(
+                "OCR extracted %d characters", len(raw_text)
+            )
+
+            # Store extracted text back on the document
+            doc.raw_text_ref = "ocr_complete"
+            if not doc.source_metadata:
+                doc.source_metadata = {}
+            doc.source_metadata["ocr_text"] = raw_text[
+                :5000
+            ]
+            await db.flush()
+        except Exception:
+            logger.exception(
+                "OCR failed for document %s", document_id
+            )
+            raw_text = "[OCR failed - image could not be read]"
+
+    quality_score = 0.85 if raw_text else 0.0
 
     return NormalizedDocument(
         document_id=document_id,
@@ -46,7 +128,9 @@ async def process_camera_scan(
 
 
 async def process_email(
-    db: AsyncSession, document_id: UUID, email_content: dict | None = None
+    db: AsyncSession,
+    document_id: UUID,
+    email_content: dict | None = None,
 ) -> NormalizedDocument:
     """Process an email into normalized text."""
     doc = await db.get(Document, document_id)
@@ -56,8 +140,13 @@ async def process_email(
     raw_text = ""
     if email_content:
         raw_text = email_content.get("body_text", "")
-    elif doc.source_metadata and isinstance(doc.source_metadata, dict):
-        raw_text = doc.source_metadata.get("body_text", doc.source_metadata.get("raw_text", ""))
+    elif doc.source_metadata and isinstance(
+        doc.source_metadata, dict
+    ):
+        raw_text = doc.source_metadata.get(
+            "body_text",
+            doc.source_metadata.get("raw_text", ""),
+        )
 
     return NormalizedDocument(
         document_id=document_id,
@@ -65,5 +154,5 @@ async def process_email(
         source_channel="email",
         raw_text=raw_text,
         metadata=doc.source_metadata or {},
-        quality_score=1.0,  # email text is always clean
+        quality_score=1.0,
     )

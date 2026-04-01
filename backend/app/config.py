@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     gmail_smtp_user: str = "dd@mydailydignity.com"
     gmail_smtp_password: str = ""
 
+    # Document AI OCR
+    documentai_processor_id: str = "6785df08989fd9a6"
+    documentai_location: str = "us"
+
     # App
     app_url: str = "http://localhost:5173"  # Frontend URL for email links
     environment: str = "development"
