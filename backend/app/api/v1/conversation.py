@@ -121,26 +121,25 @@ async def send_message(
     await state_manager.update_session(session)
 
     # Persist messages to DB
-    from sqlalchemy import select
-
-    from app.models.chat_session import (
-        ChatMessage as CM,
-        ChatSession as CS,
-    )
-
     try:
+        from sqlalchemy import select as sa_select
+
+        from app.models.chat_session import (
+            ChatMessage,
+            ChatSession,
+        )
         result = await db.execute(
-            select(CS).where(
-                CS.session_id == session.session_id
+            sa_select(ChatSession).where(
+                ChatSession.session_id == session.session_id
             )
         )
         db_session = result.scalar_one()
-        db.add(CM(
+        db.add(ChatMessage(
             chat_session_id=db_session.id,
             role="user",
             content=data.text,
         ))
-        db.add(CM(
+        db.add(ChatMessage(
             chat_session_id=db_session.id,
             role="assistant",
             content=response_text,
@@ -200,27 +199,26 @@ async def send_message_stream(
             await state_manager.update_session(session)
 
             # Persist to DB
-            from sqlalchemy import select as sel
-
-            from app.models.chat_session import (
-                ChatMessage as CMsg,
-                ChatSession as CSess,
-            )
-
             try:
+                from sqlalchemy import select as sa_sel
+
+                from app.models.chat_session import (
+                    ChatMessage,
+                    ChatSession,
+                )
                 res = await db.execute(
-                    sel(CSess).where(
-                        CSess.session_id
+                    sa_sel(ChatSession).where(
+                        ChatSession.session_id
                         == session.session_id
                     )
                 )
                 db_sess = res.scalar_one()
-                db.add(CMsg(
+                db.add(ChatMessage(
                     chat_session_id=db_sess.id,
                     role="user",
                     content=data.text,
                 ))
-                db.add(CMsg(
+                db.add(ChatMessage(
                     chat_session_id=db_sess.id,
                     role="assistant",
                     content=full_response,
