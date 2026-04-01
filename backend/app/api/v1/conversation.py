@@ -44,7 +44,7 @@ async def start_conversation(
         {"role": "user", "content": f"[Session started by {name}]"}
     ]
     greeting = await llm.generate(
-        system_prompt, greeting_messages, max_tokens=300
+        system_prompt, greeting_messages, max_tokens=1024
     )
 
     session.add_message("assistant", greeting)
@@ -113,7 +113,7 @@ async def send_message(
     # Generate response
     llm = get_llm_client()
     response_text = await llm.generate(
-        system_prompt, llm_messages, max_tokens=300
+        system_prompt, llm_messages, max_tokens=1024
     )
 
     # Add assistant response to session
@@ -188,7 +188,7 @@ async def send_message_stream(
         full_response = ""
         try:
             async for token in llm.generate_stream(
-                system_prompt, llm_messages, max_tokens=300
+                system_prompt, llm_messages, max_tokens=1024
             ):
                 full_response += token
                 event = json.dumps({"token": token})
