@@ -4,6 +4,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.appointment import Appointment
@@ -87,6 +88,13 @@ async def _create_bill_record(
     if not sender or not amount:
         return None
 
+    # Delete existing bill from same document (idempotent)
+    await db.execute(
+        delete(Bill).where(
+            Bill.source_document_id == document_id
+        )
+    )
+
     # Parse due date if available
     due: date | None = None
     if due_date_str:
@@ -123,6 +131,13 @@ async def _create_appointment_record(
 
     if not provider:
         return None
+
+    # Delete existing appointment from same document (idempotent)
+    await db.execute(
+        delete(Appointment).where(
+            Appointment.source_document_id == document_id
+        )
+    )
 
     # Parse appointment datetime
     appt_dt: datetime | None = None
