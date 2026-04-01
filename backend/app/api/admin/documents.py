@@ -61,7 +61,10 @@ async def list_documents(
         base = base.where(Document.status == status)
         count_q = count_q.where(Document.status == status)
 
-    rows = await db.execute(base.limit(limit).offset(offset))
+    result = await db.execute(
+        base.limit(limit).offset(offset)
+    )
+    rows = result.all()
     total = await db.scalar(count_q)
 
     # Collect document IDs for pipeline metrics query
