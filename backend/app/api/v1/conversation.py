@@ -44,7 +44,7 @@ async def start_conversation(
         {"role": "user", "content": f"[Session started by {name}]"}
     ]
     greeting = await llm.generate(
-        system_prompt, greeting_messages, max_tokens=150
+        system_prompt, greeting_messages, max_tokens=300
     )
 
     session.add_message("assistant", greeting)
