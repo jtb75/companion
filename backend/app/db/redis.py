@@ -4,11 +4,20 @@ import redis.asyncio as redis
 
 from app.config import settings
 
-pool = redis.ConnectionPool.from_url(settings.redis_url, decode_responses=True)
+_pool = None
+
+
+def _get_pool():
+    global _pool
+    if _pool is None:
+        _pool = redis.ConnectionPool.from_url(
+            settings.redis_url, decode_responses=True
+        )
+    return _pool
 
 
 def get_redis() -> redis.Redis:
-    return redis.Redis(connection_pool=pool)
+    return redis.Redis(connection_pool=_get_pool())
 
 
 # ── Namespace helpers ────────────────────────────────────────────────────────
