@@ -2,7 +2,6 @@
 
 import json
 import logging
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -85,7 +84,6 @@ async def start_conversation(
         db_session = ChatSession(
             user_id=user.id,
             session_id=session.session_id,
-            started_at=datetime.now(datetime.UTC),
             message_count=1,
         )
         db.add(db_session)
