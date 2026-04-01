@@ -4,7 +4,7 @@ import { Navigate } from 'react-router-dom'
 import { BRAND_MID } from '../branding'
 
 export default function LoginPage() {
-  const { user, loading, role, authorized, loginWithGoogle, loginWithEmail, registerWithEmail, logout } = useAuth()
+  const { user, loading, role, authorized, loginWithGoogle, loginWithEmail, registerWithEmail } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
