@@ -22,14 +22,10 @@ interface ConversationMessage {
 }
 
 interface ConversationDetail {
-  session: {
-    session_id: string
-    user_name: string
-    user_email: string
-    started_at: string
-    ended_at: string | null
-    message_count: number
-  }
+  session_id: string
+  started_at: string
+  ended_at: string | null
+  message_count: number
   messages: ConversationMessage[]
 }
 
@@ -283,30 +279,28 @@ function TranscriptDetail({ sessionId }: { sessionId: string }) {
 
   if (!data) return null
 
-  const { session, messages } = data
-
   return (
     <div className="bg-gray-50 border-t border-gray-200">
       {/* Session metadata */}
       <div className="px-6 py-3 flex flex-wrap gap-6 text-xs text-gray-500 border-b border-gray-200">
         <span>
           <span className="font-medium text-gray-700">Started:</span>{' '}
-          {formatDate(session.started_at)}
+          {formatDate(data.started_at)}
         </span>
-        {session.ended_at && (
+        {data.ended_at && (
           <span>
             <span className="font-medium text-gray-700">Ended:</span>{' '}
-            {formatDate(session.ended_at)}
+            {formatDate(data.ended_at)}
           </span>
         )}
         <span>
-          <span className="font-medium text-gray-700">Messages:</span> {session.message_count}
+          <span className="font-medium text-gray-700">Messages:</span> {data.message_count}
         </span>
       </div>
 
       {/* Chat bubbles */}
       <div className="px-6 py-4 space-y-3 max-h-[500px] overflow-y-auto">
-        {messages.map((msg) => (
+        {data.messages.map((msg) => (
           <div
             key={msg.id}
             className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
