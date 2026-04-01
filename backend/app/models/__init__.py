@@ -4,6 +4,7 @@ from app.models.assignment_request import CaregiverAssignmentRequest
 from app.models.audit import CaregiverActivityLog, DeletionAuditLog
 from app.models.base import Base
 from app.models.bill import Bill
+from app.models.chat_session import ChatMessage, ChatSession
 from app.models.device_token import DeviceToken
 from app.models.document import Document
 from app.models.enums import (
@@ -80,6 +81,8 @@ __all__ = [
     "ConfigAuditLog",
     "PipelineMetric",
     "AdminUser",
+    "ChatSession",
+    "ChatMessage",
     "CaregiverActivityLog",
     "DeletionAuditLog",
     "DeviceToken",

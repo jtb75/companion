@@ -50,6 +50,31 @@ async def start_conversation(
     session.add_message("assistant", greeting)
     await state_manager.update_session(session)
 
+    # Persist chat session to DB for audit
+    from datetime import datetime as dt
+
+    from app.models.chat_session import (
+        ChatMessage,
+        ChatSession,
+    )
+
+    db_session = ChatSession(
+        user_id=user.id,
+        session_id=session.session_id,
+        started_at=dt.utcnow(),
+        message_count=1,
+    )
+    db.add(db_session)
+    await db.flush()
+    db.add(
+        ChatMessage(
+            chat_session_id=db_session.id,
+            role="assistant",
+            content=greeting,
+        )
+    )
+    await db.commit()
+
     return {
         "session_id": session.session_id,
         "greeting": greeting,
@@ -94,6 +119,37 @@ async def send_message(
     # Add assistant response to session
     session.add_message("assistant", response_text)
     await state_manager.update_session(session)
+
+    # Persist messages to DB
+    from sqlalchemy import select
+
+    from app.models.chat_session import (
+        ChatMessage as CM,
+        ChatSession as CS,
+    )
+
+    try:
+        result = await db.execute(
+            select(CS).where(
+                CS.session_id == session.session_id
+            )
+        )
+        db_session = result.scalar_one()
+        db.add(CM(
+            chat_session_id=db_session.id,
+            role="user",
+            content=data.text,
+        ))
+        db.add(CM(
+            chat_session_id=db_session.id,
+            role="assistant",
+            content=response_text,
+        ))
+        db_session.message_count += 2
+        await db.commit()
+    except Exception:
+        logger.exception("Failed to persist chat")
+        await db.rollback()
 
     return {
         "session_id": session.session_id,
@@ -142,6 +198,40 @@ async def send_message_stream(
             # Save full assistant response after stream ends
             session.add_message("assistant", full_response)
             await state_manager.update_session(session)
+
+            # Persist to DB
+            from sqlalchemy import select as sel
+
+            from app.models.chat_session import (
+                ChatMessage as CMsg,
+                ChatSession as CSess,
+            )
+
+            try:
+                res = await db.execute(
+                    sel(CSess).where(
+                        CSess.session_id
+                        == session.session_id
+                    )
+                )
+                db_sess = res.scalar_one()
+                db.add(CMsg(
+                    chat_session_id=db_sess.id,
+                    role="user",
+                    content=data.text,
+                ))
+                db.add(CMsg(
+                    chat_session_id=db_sess.id,
+                    role="assistant",
+                    content=full_response,
+                ))
+                db_sess.message_count += 2
+                await db.commit()
+            except Exception:
+                logger.exception(
+                    "Failed to persist streamed chat"
+                )
+                await db.rollback()
 
             done_event = json.dumps(
                 {"done": True, "full_response": full_response}
@@ -194,6 +284,7 @@ async def conversation_state(
 @router.post("/end")
 async def end_conversation(
     user: User = Depends(require_complete_profile),
+    db: AsyncSession = Depends(get_db),
 ):
     """End the current D.D. session."""
     session = await state_manager.get_active_session(str(user.id))
@@ -201,6 +292,29 @@ async def end_conversation(
         return {"status": "no_active_session"}
 
     await state_manager.end_session(str(user.id), session.session_id)
+
+    # Mark ended in DB
+    from datetime import datetime as dt
+
+    from sqlalchemy import select as s
+
+    from app.models.chat_session import (
+        ChatSession as CSe,
+    )
+
+    try:
+        result = await db.execute(
+            s(CSe).where(
+                CSe.session_id == session.session_id
+            )
+        )
+        db_session = result.scalar_one()
+        db_session.ended_at = dt.utcnow()
+        await db.commit()
+    except Exception:
+        logger.exception("Failed to mark session ended")
+        await db.rollback()
+
     return {
         "status": "ended",
         "session_id": session.session_id,

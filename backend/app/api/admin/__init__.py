@@ -6,6 +6,7 @@ from app.api.admin import (
     admin_users,
     config,
     contacts,
+    conversations,
     escalations,
     metrics,
     people,
@@ -18,6 +19,7 @@ from app.api.admin import (
 router = APIRouter()
 
 router.include_router(config.router)
+router.include_router(conversations.router)
 router.include_router(pipeline_health.router)
 router.include_router(escalations.router)
 router.include_router(metrics.router)

@@ -52,7 +52,12 @@ export function ChatScreen() {
   }
 
   const sendMessage = useCallback(async () => {
-    if (!input.trim() || !sessionId || sending) return
+    if (!input.trim() || sending) return
+    if (!sessionId) {
+      console.log('[ChatScreen] No session yet, starting one...')
+      await startSession()
+      return
+    }
     const text = input.trim()
     setInput('')
 
@@ -88,9 +93,9 @@ export function ChatScreen() {
         let lastProcessedIndex = 0
 
         xhr.onprogress = () => {
-          const text = xhr.responseText
-          const newText = text.slice(lastProcessedIndex)
-          lastProcessedIndex = text.length
+          const responseText = xhr.responseText
+          const newText = responseText.slice(lastProcessedIndex)
+          lastProcessedIndex = responseText.length
 
           // Parse SSE lines from the new chunk
           const lines = newText.split('\n')
@@ -129,6 +134,7 @@ export function ChatScreen() {
         }
 
         xhr.onload = () => {
+          console.log('[ChatScreen] XHR loaded, status:', xhr.status, 'len:', xhr.responseText?.length)
           // Process any remaining data not caught by onprogress
           if (xhr.responseText) {
             const remaining = xhr.responseText.slice(lastProcessedIndex)
@@ -165,6 +171,7 @@ export function ChatScreen() {
         }
 
         xhr.onerror = () => {
+          console.log('[ChatScreen] XHR error:', xhr.status, xhr.responseText?.slice(0, 200))
           reject(new Error('Stream request failed'))
         }
 
