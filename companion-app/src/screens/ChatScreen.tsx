@@ -27,21 +27,27 @@ export function ChatScreen() {
   }, [])
 
   const startSession = async () => {
+    // Show instant greeting, then connect in background
+    setMessages([{
+      id: '0',
+      role: 'assistant',
+      content: `Hi! I'm ${brand.short}. What would you like to do today?`,
+    }])
+    setStarting(false)
+
     try {
       const res = await api<{ session_id: string; greeting: string }>(
         '/api/v1/conversation/start',
         { method: 'POST', body: JSON.stringify({ context: 'user_initiated' }) },
       )
       setSessionId(res.session_id)
-      setMessages([{ id: '0', role: 'assistant', content: res.greeting }])
+      // Update greeting with LLM-generated one if different
+      if (res.greeting) {
+        setMessages([{ id: '0', role: 'assistant', content: res.greeting }])
+      }
     } catch {
-      setMessages([{
-        id: '0',
-        role: 'assistant',
-        content: `Hi! I'm ${brand.short}. I'm having trouble connecting. Try again in a moment.`,
-      }])
-    } finally {
-      setStarting(false)
+      // Keep the static greeting, just log the error
+      console.log('[ChatScreen] Failed to start session')
     }
   }
 
@@ -167,7 +173,7 @@ export function ChatScreen() {
         }
 
         xhr.timeout = 60000
-        xhr.send(JSON.stringify({ session_id: sessionId, message: text }))
+        xhr.send(JSON.stringify({ text }))
       })
     } catch {
       // On error, replace the empty streaming bubble with an error message

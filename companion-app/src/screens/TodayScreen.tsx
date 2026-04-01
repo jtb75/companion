@@ -3,6 +3,7 @@ import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator
 import { api } from '../api/client'
 import { colors, brand } from '../theme/colors'
 import { useAuth } from '../auth/AuthProvider'
+import { ScanButton } from '../components/ScanButton'
 
 interface TodayData {
   medications: { id: string; name: string; dosage: string; schedule: string[] }[]
@@ -63,6 +64,7 @@ export function TodayScreen() {
   const dueBills = data?.bills?.slice(0, 3) || []
 
   return (
+    <View style={{ flex: 1, backgroundColor: colors.cream }}>
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* Greeting */}
       <View style={styles.header}>
@@ -143,6 +145,8 @@ export function TodayScreen() {
         </View>
       )}
     </ScrollView>
+    <ScanButton />
+    </View>
   )
 }
 

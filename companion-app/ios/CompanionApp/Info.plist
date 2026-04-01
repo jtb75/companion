@@ -67,5 +67,9 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
+	<key>NSCameraUsageDescription</key>
+	<string>D.D. Companion needs camera access to scan documents and mail</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>D.D. Companion needs photo library access to select documents</string>
 </dict>
 </plist>

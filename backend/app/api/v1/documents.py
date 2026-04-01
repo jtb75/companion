@@ -1,32 +1,149 @@
 """App API — Document routes."""
 
+import asyncio
+import logging
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
+from google.cloud import storage
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import User, require_complete_profile
+from app.config import settings
 from app.db import get_db
+from app.db.session import async_session_factory
+from app.models.enums import DocumentStatus, SourceChannel
 from app.pipeline.orchestrator import process_document
-from app.schemas.document import DocumentScanRequest, DocumentStatusUpdate
+from app.schemas.document import DocumentStatusUpdate
 from app.services import document_service
+from app.services.push_notification_service import (
+    notify_document_processed,
+)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
+
+ALLOWED_SCAN_TYPES = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/heic": "heic",
+    "application/pdf": "pdf",
+}
+MAX_SCAN_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
+async def _upload_to_gcs(
+    blob_path: str, data: bytes, content_type: str
+) -> str:
+    """Upload bytes to GCS in a thread (sync client)."""
+    def _upload():
+        client = storage.Client()
+        bucket = client.bucket(settings.gcs_bucket_documents)
+        blob = bucket.blob(blob_path)
+        blob.upload_from_string(data, content_type=content_type)
+        return f"gs://{bucket.name}/{blob_path}"
+
+    return await asyncio.to_thread(_upload)
+
+
+async def _run_pipeline_background(
+    document_id: uuid.UUID,
+    user_id: uuid.UUID,
+) -> None:
+    """Run the pipeline in a background task with its own session."""
+    async with async_session_factory() as db:
+        try:
+            result = await process_document(db, document_id, user_id)
+            await db.commit()
+
+            summary = result.summarization.card_summary or ""
+            await notify_document_processed(db, user_id, summary)
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            logger.exception(
+                "Background pipeline failed for doc %s",
+                document_id,
+            )
 
 
 @router.post("/scan", status_code=status.HTTP_201_CREATED)
 async def scan_document(
-    data: DocumentScanRequest,
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
     user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
-    """Submit a camera scan for processing."""
-    doc = await document_service.create_document(db, user.id, data.model_dump())
+    """Upload a camera-scanned document for processing."""
+    # Validate content type
+    content_type = file.content_type or ""
+    if content_type not in ALLOWED_SCAN_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=(
+                "Unsupported file type. "
+                "Accepted: JPEG, PNG, HEIC, PDF."
+            ),
+        )
 
-    # Run the document through the 6-stage intelligence pipeline (V1: synchronous)
-    await process_document(db, doc.id, user.id)
+    # Read and validate size
+    data = await file.read()
+    if len(data) > MAX_SCAN_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="File exceeds 10 MB limit.",
+        )
 
-    return doc
+    # Upload to GCS
+    ext = ALLOWED_SCAN_TYPES[content_type]
+    file_id = uuid.uuid4()
+    blob_path = f"scans/{user.id}/{file_id}.{ext}"
+    try:
+        gcs_uri = await _upload_to_gcs(
+            blob_path, data, content_type
+        )
+    except Exception:
+        logger.exception("GCS upload failed for user %s", user.id)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to upload file to storage.",
+        ) from None
+
+    # Create document record
+    doc = await document_service.create_document(
+        db,
+        user.id,
+        {
+            "source_channel": SourceChannel.CAMERA_SCAN,
+            "status": DocumentStatus.RECEIVED,
+            "raw_text_ref": gcs_uri,
+            "source_metadata": {
+                "original_filename": file.filename,
+                "content_type": content_type,
+                "size_bytes": len(data),
+            },
+        },
+    )
+
+    # Trigger pipeline in the background
+    background_tasks.add_task(
+        _run_pipeline_background, doc.id, user.id
+    )
+
+    return {
+        "document_id": doc.id,
+        "status": "processing",
+    }
 
 
 @router.get("")
@@ -42,6 +159,28 @@ async def list_documents(
         db, user.id, status=document_status, classification=classification, urgency=urgency
     )
     return {"documents": docs, "total": len(docs)}
+
+
+@router.get("/{document_id}/status")
+async def get_document_status(
+    document_id: uuid.UUID,
+    user: User = Depends(require_complete_profile),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get the current processing status of a document."""
+    doc = await document_service.get_document(
+        db, user.id, document_id
+    )
+    if doc is None:
+        raise HTTPException(
+            status_code=404, detail="Document not found"
+        )
+    return {
+        "document_id": doc.id,
+        "status": doc.status,
+        "classification": doc.classification,
+        "processed_at": doc.processed_at,
+    }
 
 
 @router.get("/{document_id}")

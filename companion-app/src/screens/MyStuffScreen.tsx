@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native'
 import { api } from '../api/client'
 import { colors } from '../theme/colors'
+import { ScanButton } from '../components/ScanButton'
 
 type Tab = 'meds' | 'appointments' | 'bills' | 'todos'
 
@@ -77,6 +78,7 @@ export function MyStuffScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         {renderContent()}
       </ScrollView>
+      <ScanButton />
     </View>
   )
 }
