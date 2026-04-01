@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.firebase import verify_firebase_token
 from app.config import settings
 from app.db import get_db
+from app.models.trusted_contact import TrustedContact
 from app.models.user import User
 
 router = APIRouter(tags=["Profile"])
@@ -47,6 +48,52 @@ async def get_my_profile(
         "preferred_name": user.preferred_name,
         "display_name": user.display_name,
         "phone": user.phone,
+    }
+
+
+@router.get("/api/v1/me/caregivers")
+async def get_my_caregivers(
+    db: AsyncSession = Depends(get_db),
+    authorization: str | None = Header(None, alias="Authorization"),
+):
+    """Get the current member's caregivers."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(401, "No token")
+
+    token = authorization.removeprefix("Bearer ").strip()
+    try:
+        decoded = await verify_firebase_token(token)
+    except ValueError as e:
+        raise HTTPException(401, str(e)) from None
+
+    email = decoded.get("email")
+    if not email:
+        raise HTTPException(401, "No email")
+
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        return {"caregivers": []}
+
+    contacts_result = await db.execute(
+        select(TrustedContact).where(TrustedContact.user_id == user.id)
+    )
+    contacts = contacts_result.scalars().all()
+
+    return {
+        "caregivers": [
+            {
+                "id": str(c.id),
+                "contact_name": c.contact_name,
+                "contact_email": c.contact_email,
+                "relationship_type": c.relationship_type,
+                "access_tier": c.access_tier,
+                "invitation_status": c.invitation_status or "accepted",
+                "is_active": c.is_active,
+            }
+            for c in contacts
+        ]
     }
 
 

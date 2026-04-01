@@ -5,12 +5,14 @@ import {
 } from 'react-native'
 import { colors, brand } from '../theme/colors'
 import { api } from '../api/client'
+import { InviteCaregiverForm } from '../components/InviteCaregiverForm'
 
 interface Props {
   onComplete: () => void
 }
 
 export function OnboardingScreen({ onComplete }: Props) {
+  const [step, setStep] = useState<'profile' | 'invite'>('profile')
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [preferredName, setPreferredName] = useState('')
@@ -18,7 +20,7 @@ export function OnboardingScreen({ onComplete }: Props) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
-  const handleSubmit = async () => {
+  const handleProfileSubmit = async () => {
     if (!firstName.trim()) {
       setError('First name is required')
       return
@@ -35,7 +37,7 @@ export function OnboardingScreen({ onComplete }: Props) {
           phone: phone.trim() || null,
         }),
       })
-      onComplete()
+      setStep('invite')
     } catch (e: any) {
       setError(e.message || 'Failed to save profile')
     } finally {
@@ -50,53 +52,77 @@ export function OnboardingScreen({ onComplete }: Props) {
     >
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.card}>
-          <Text style={styles.emoji}>{brand.emoji}</Text>
-          <Text style={styles.title}>Welcome!</Text>
-          <Text style={styles.subtitle}>Let's set up your profile</Text>
+          {step === 'profile' ? (
+            <>
+              <Text style={styles.emoji}>{brand.emoji}</Text>
+              <Text style={styles.title}>Welcome!</Text>
+              <Text style={styles.subtitle}>Let's set up your profile</Text>
 
-          <TextInput
-            style={styles.input}
-            placeholder="First name *"
-            placeholderTextColor={colors.gray400}
-            value={firstName}
-            onChangeText={setFirstName}
-            autoCapitalize="words"
-            autoFocus
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Last name"
-            placeholderTextColor={colors.gray400}
-            value={lastName}
-            onChangeText={setLastName}
-            autoCapitalize="words"
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="What should we call you?"
-            placeholderTextColor={colors.gray400}
-            value={preferredName}
-            onChangeText={setPreferredName}
-            autoCapitalize="words"
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Phone number (optional)"
-            placeholderTextColor={colors.gray400}
-            value={phone}
-            onChangeText={setPhone}
-            keyboardType="phone-pad"
-          />
+              <TextInput
+                style={styles.input}
+                placeholder="First name *"
+                placeholderTextColor={colors.gray400}
+                value={firstName}
+                onChangeText={setFirstName}
+                autoCapitalize="words"
+                autoFocus
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Last name"
+                placeholderTextColor={colors.gray400}
+                value={lastName}
+                onChangeText={setLastName}
+                autoCapitalize="words"
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="What should we call you?"
+                placeholderTextColor={colors.gray400}
+                value={preferredName}
+                onChangeText={setPreferredName}
+                autoCapitalize="words"
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Phone number (optional)"
+                placeholderTextColor={colors.gray400}
+                value={phone}
+                onChangeText={setPhone}
+                keyboardType="phone-pad"
+              />
 
-          {error ? <Text style={styles.error}>{error}</Text> : null}
+              {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <TouchableOpacity style={styles.button} onPress={handleSubmit} disabled={busy}>
-            {busy ? (
-              <ActivityIndicator color={colors.white} />
-            ) : (
-              <Text style={styles.buttonText}>Get Started</Text>
-            )}
-          </TouchableOpacity>
+              <TouchableOpacity style={styles.button} onPress={handleProfileSubmit} disabled={busy}>
+                {busy ? (
+                  <ActivityIndicator color={colors.white} />
+                ) : (
+                  <Text style={styles.buttonText}>Next</Text>
+                )}
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <Text style={styles.emoji}>🤝</Text>
+              <Text style={styles.title}>Add a Caregiver</Text>
+              <Text style={styles.subtitle}>
+                Invite someone you trust to help support you
+              </Text>
+
+              <InviteCaregiverForm
+                showSkip
+                onSkip={onComplete}
+                onSuccess={() => {}}
+              />
+            </>
+          )}
+        </View>
+
+        {/* Step indicator */}
+        <View style={styles.dots}>
+          <View style={[styles.dot, step === 'profile' && styles.dotActive]} />
+          <View style={[styles.dot, step === 'invite' && styles.dotActive]} />
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -129,7 +155,7 @@ const styles = StyleSheet.create({
   },
   emoji: { fontSize: 48, marginBottom: 8 },
   title: { fontSize: 24, fontWeight: '700', color: colors.blue, marginBottom: 4 },
-  subtitle: { fontSize: 14, color: colors.gray500, marginBottom: 24 },
+  subtitle: { fontSize: 14, color: colors.gray500, marginBottom: 24, textAlign: 'center' },
   input: {
     width: '100%',
     borderWidth: 2,
@@ -151,4 +177,20 @@ const styles = StyleSheet.create({
   },
   buttonText: { color: colors.white, fontSize: 16, fontWeight: '600' },
   error: { color: colors.rose, fontSize: 13, marginTop: 4, marginBottom: 4, textAlign: 'center' },
+  dots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 20,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.gray300,
+  },
+  dotActive: {
+    backgroundColor: colors.blue,
+    width: 20,
+  },
 })
