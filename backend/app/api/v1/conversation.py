@@ -134,7 +134,9 @@ async def send_message(
     session.add_message("user", data.text)
 
     # Build prompt with full context
-    system_prompt = await build_system_prompt(db, user)
+    system_prompt = await build_system_prompt(
+        db, user, user_query=data.text
+    )
 
     # Apply sliding window to limit context
     window = await _get_context_window(db)
@@ -222,7 +224,9 @@ async def send_message_stream(
     session.add_message("user", data.text)
     await state_manager.update_session(session)
 
-    system_prompt = await build_system_prompt(db, user)
+    system_prompt = await build_system_prompt(
+        db, user, user_query=data.text
+    )
     window = await _get_context_window(db)
     recent = session.messages[-window:]
     llm_messages = [

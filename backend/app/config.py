@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-2.5-flash"
     gemini_location: str = "us-central1"
 
+    # RAG / Embeddings
+    embedding_model: str = "text-embedding-005"
+    rag_chunk_size: int = 800
+    rag_chunk_overlap: int = 100
+    rag_top_k: int = 5
+
     # Pipeline service-to-service auth
     pipeline_api_key: str = ""  # Required in production
 

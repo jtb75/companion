@@ -21,15 +21,17 @@ async def build_system_prompt(
     db: AsyncSession,
     user: User,
     session_trigger: str = "user_initiated",
+    user_query: str | None = None,
 ) -> str:
-    """Assemble the 5-component system prompt.
+    """Assemble the 6-component system prompt.
 
     Components:
     1. D.D. persona definition (fixed)
     2. User's functional memory (dynamic)
     3. Session context (dynamic)
-    4. Active alerts and pending items (dynamic)
-    5. Conversation constraints (fixed)
+    4. RAG document context (dynamic, query-dependent)
+    5. Active alerts and pending items (dynamic)
+    6. Conversation constraints (fixed)
     """
     parts = []
 
@@ -39,19 +41,39 @@ async def build_system_prompt(
     # 2. User's functional memory
     memory_context = await _build_memory_context(db, user)
     if memory_context:
-        parts.append(f"\n--- User Context ---\n{memory_context}")
+        parts.append(
+            f"\n--- User Context ---\n{memory_context}"
+        )
 
     # 3. Session context
-    session_context = _build_session_context(user, session_trigger)
-    parts.append(f"\n--- Session Context ---\n{session_context}")
+    session_context = _build_session_context(
+        user, session_trigger
+    )
+    parts.append(
+        f"\n--- Session Context ---\n{session_context}"
+    )
 
-    # 4. Active alerts / pending items
+    # 4. RAG document context
+    if user_query:
+        doc_context = await _build_document_context(
+            db, user.id, user_query
+        )
+        if doc_context:
+            parts.append(
+                f"\n--- Document Context ---\n{doc_context}"
+            )
+
+    # 5. Active alerts / pending items
     alerts_context = await _build_alerts_context(db, user.id)
     if alerts_context:
-        parts.append(f"\n--- Active Items ---\n{alerts_context}")
+        parts.append(
+            f"\n--- Active Items ---\n{alerts_context}"
+        )
 
-    # 5. Constraints (fixed)
-    parts.append(f"\n--- Response Rules ---\n{DEFAULT_CONSTRAINTS}")
+    # 6. Constraints (fixed)
+    parts.append(
+        f"\n--- Response Rules ---\n{DEFAULT_CONSTRAINTS}"
+    )
 
     return "\n".join(parts)
 
@@ -106,6 +128,37 @@ def _build_session_context(user: User, trigger: str) -> str:
         ),
     }
     return triggers.get(trigger, f"{name} is interacting with {BRAND_MID}.")
+
+
+async def _build_document_context(
+    db: AsyncSession, user_id: UUID, query: str
+) -> str:
+    """Retrieve relevant document chunks via RAG."""
+    try:
+        from app.conversation.retrieval import (
+            retrieve_relevant_chunks,
+        )
+        chunks = await retrieve_relevant_chunks(
+            db, user_id, query
+        )
+        if not chunks:
+            return ""
+        lines = [
+            "Relevant information from the user's documents:"
+        ]
+        for c in chunks:
+            source = c["source_field"].replace("_", " ")
+            doc_type = c.get("classification", "document")
+            lines.append(
+                f"- [{doc_type}/{source}] {c['chunk_text']}"
+            )
+        return "\n".join(lines)
+    except Exception:
+        logger.warning(
+            "RAG retrieval failed for user %s", user_id,
+            exc_info=True,
+        )
+        return ""
 
 
 async def _build_alerts_context(db: AsyncSession, user_id: UUID) -> str:

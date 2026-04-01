@@ -92,6 +92,30 @@ async def process_document(
         await db.flush()
         await _record_metric(db, document_id, "summarization", "completed", stage_start)
 
+        # Stage 4.5: Embedding (non-blocking)
+        try:
+            stage_start = time.monotonic()
+            from app.pipeline.embeddings import embed_document
+            chunk_count = await embed_document(
+                db, document_id, user_id,
+                classification_result,
+                extraction_result,
+                summarization_result,
+            )
+            await _record_metric(
+                db, document_id, "embedding", "completed",
+                stage_start, {"chunks": chunk_count},
+            )
+        except Exception as emb_err:
+            logger.warning(
+                "Embedding failed for doc %s: %s",
+                document_id, emb_err,
+            )
+            await _record_metric(
+                db, document_id, "embedding", "failed",
+                stage_start, {"error": str(emb_err)},
+            )
+
         # Stage 5: Routing
         stage_start = time.monotonic()
         routing_result = await route(

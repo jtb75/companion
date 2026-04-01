@@ -58,4 +58,9 @@ class Document(Base):
     user = relationship("User", back_populates="documents")
     appointments = relationship("Appointment", back_populates="source_document")
     bills = relationship("Bill", back_populates="source_document")
+    chunks = relationship(
+        "DocumentChunk",
+        back_populates="document",
+        cascade="all, delete-orphan",
+    )
     pipeline_metrics = relationship("PipelineMetric", back_populates="document")

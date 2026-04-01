@@ -7,6 +7,7 @@ from app.models.bill import Bill
 from app.models.chat_session import ChatMessage, ChatSession
 from app.models.device_token import DeviceToken
 from app.models.document import Document
+from app.models.document_chunk import DocumentChunk
 from app.models.enums import (
     AccessTier,
     AccountStatus,
@@ -68,6 +69,7 @@ __all__ = [
     # Models
     "User",
     "Document",
+    "DocumentChunk",
     "Medication",
     "MedicationConfirmation",
     "Appointment",
