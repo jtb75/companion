@@ -4,8 +4,6 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from app.db.redis import SESSION_TTL, get_redis, session_key
-
 logger = logging.getLogger(__name__)
 
 
@@ -48,7 +46,11 @@ class ConversationState:
             "user_id": self.user_id,
             "current_topic": self.current_topic,
             "messages": [
-                {"role": m.role, "content": m.content, "timestamp": m.timestamp}
+                {
+                    "role": m.role,
+                    "content": m.content,
+                    "timestamp": m.timestamp,
+                }
                 for m in self.messages
             ],
             "active_task": self.active_task,
@@ -74,53 +76,135 @@ class ConversationState:
         )
 
 
-class ConversationStateManager:
-    """Manages conversation sessions in Redis."""
+def _redis_available() -> bool:
+    """Check if Redis is configured and reachable."""
+    try:
+        from app.db.redis import get_redis
+        get_redis()
+        return True
+    except Exception:
+        return False
 
-    async def create_session(self, user_id: str) -> ConversationState:
+
+class InMemoryStateManager:
+    """Fallback state manager using in-memory dict."""
+
+    def __init__(self):
+        self._sessions: dict[str, ConversationState] = {}
+
+    async def create_session(
+        self, user_id: str
+    ) -> ConversationState:
         sid = str(uuid.uuid4())
-        state = ConversationState(session_id=sid, user_id=user_id)
+        state = ConversationState(
+            session_id=sid, user_id=user_id
+        )
+        self._sessions[f"{user_id}:{sid}"] = state
+        return state
+
+    async def get_session(
+        self, user_id: str, session_id: str
+    ) -> ConversationState | None:
+        return self._sessions.get(f"{user_id}:{session_id}")
+
+    async def get_active_session(
+        self, user_id: str
+    ) -> ConversationState | None:
+        best = None
+        for key, state in self._sessions.items():
+            if key.startswith(f"{user_id}:"):
+                if (
+                    best is None
+                    or state.last_activity > best.last_activity
+                ):
+                    best = state
+        return best
+
+    async def update_session(
+        self, state: ConversationState
+    ):
+        key = f"{state.user_id}:{state.session_id}"
+        self._sessions[key] = state
+
+    async def end_session(
+        self, user_id: str, session_id: str
+    ) -> bool:
+        key = f"{user_id}:{session_id}"
+        return self._sessions.pop(key, None) is not None
+
+
+class RedisStateManager:
+    """Redis-backed conversation state manager."""
+
+    async def create_session(
+        self, user_id: str
+    ) -> ConversationState:
+        sid = str(uuid.uuid4())
+        state = ConversationState(
+            session_id=sid, user_id=user_id
+        )
         await self._save(state)
         return state
 
-    async def get_session(self, user_id: str, session_id: str) -> ConversationState | None:
+    async def get_session(
+        self, user_id: str, session_id: str
+    ) -> ConversationState | None:
+        from app.db.redis import get_redis, session_key
+
         r = get_redis()
         try:
             key = session_key(user_id, session_id)
             raw = await r.get(key)
             if raw is None:
                 return None
-            return ConversationState.from_dict(json.loads(raw))
+            return ConversationState.from_dict(
+                json.loads(raw)
+            )
         finally:
             await r.aclose()
 
-    async def get_active_session(self, user_id: str) -> ConversationState | None:
-        """Get the most recent active session for a user."""
+    async def get_active_session(
+        self, user_id: str
+    ) -> ConversationState | None:
+        from app.db.redis import get_redis, session_key
+
         r = get_redis()
         try:
-            # Scan for session keys for this user
             pattern = session_key(user_id, "*")
             keys = []
-            async for key in r.scan_iter(match=pattern, count=10):
+            async for key in r.scan_iter(
+                match=pattern, count=10
+            ):
                 keys.append(key)
             if not keys:
                 return None
-            # Get the most recent one (by last_activity)
             best = None
             for key in keys:
                 raw = await r.get(key)
                 if raw:
-                    state = ConversationState.from_dict(json.loads(raw))
-                    if best is None or state.last_activity > best.last_activity:
+                    state = ConversationState.from_dict(
+                        json.loads(raw)
+                    )
+                    if (
+                        best is None
+                        or state.last_activity
+                        > best.last_activity
+                    ):
                         best = state
             return best
         finally:
             await r.aclose()
 
-    async def update_session(self, state: ConversationState):
+    async def update_session(
+        self, state: ConversationState
+    ):
         await self._save(state)
 
-    async def end_session(self, user_id: str, session_id: str) -> bool:
+    async def end_session(
+        self, user_id: str, session_id: str
+    ) -> bool:
+        from app.db.redis import get_redis, session_key
+
         r = get_redis()
         try:
             key = session_key(user_id, session_id)
@@ -130,12 +214,35 @@ class ConversationStateManager:
             await r.aclose()
 
     async def _save(self, state: ConversationState):
+        from app.db.redis import (
+            SESSION_TTL,
+            get_redis,
+            session_key,
+        )
+
         r = get_redis()
         try:
-            key = session_key(state.user_id, state.session_id)
-            await r.set(key, json.dumps(state.to_dict()), ex=SESSION_TTL)
+            key = session_key(
+                state.user_id, state.session_id
+            )
+            await r.set(
+                key,
+                json.dumps(state.to_dict()),
+                ex=SESSION_TTL,
+            )
         finally:
             await r.aclose()
 
 
-state_manager = ConversationStateManager()
+def _create_state_manager():
+    """Create the appropriate state manager."""
+    if _redis_available():
+        logger.info("Using Redis-backed state manager")
+        return RedisStateManager()
+    logger.info(
+        "Redis unavailable, using in-memory state manager"
+    )
+    return InMemoryStateManager()
+
+
+state_manager = _create_state_manager()
