@@ -33,39 +33,66 @@ class GeminiClient(LLMClient):
     def __init__(self):
         self._model = None
 
-    def _get_model(self):
-        if self._model is None:
+    def __init__(self):
+        self._initialized = False
+
+    def _ensure_init(self):
+        if not self._initialized:
             try:
                 import vertexai
-                from vertexai.generative_models import GenerativeModel
-
                 vertexai.init(
                     project=settings.gcp_project_id,
                     location=settings.gemini_location,
                 )
-                self._model = GenerativeModel(
-                    settings.gemini_model,
-                )
+                self._initialized = True
             except Exception:
-                logger.exception("Gemini client initialization failed")
-        return self._model
+                logger.exception("Vertex AI init failed")
+
+    def _get_model(self, system_prompt: str = ""):
+        self._ensure_init()
+        if not self._initialized:
+            return None
+        try:
+            from vertexai.generative_models import (
+                GenerativeModel,
+            )
+            return GenerativeModel(
+                settings.gemini_model,
+                system_instruction=system_prompt,
+            )
+        except Exception:
+            logger.exception("Gemini model init failed")
+            return None
 
     async def generate(
-        self, system_prompt: str, messages: list[dict], max_tokens: int = 500
+        self,
+        system_prompt: str,
+        messages: list[dict],
+        max_tokens: int = 500,
     ) -> str:
-        model = self._get_model()
+        model = self._get_model(system_prompt)
         if model is None:
             return self._fallback_response(messages)
 
         try:
-            from vertexai.generative_models import Content, GenerationConfig, Part
+            from vertexai.generative_models import (
+                Content,
+                GenerationConfig,
+                Part,
+            )
 
-            # Build Gemini content from messages
             contents = []
             for msg in messages:
-                role = "user" if msg["role"] == "user" else "model"
+                role = (
+                    "user"
+                    if msg["role"] == "user"
+                    else "model"
+                )
                 contents.append(
-                    Content(role=role, parts=[Part.from_text(msg["content"])])
+                    Content(
+                        role=role,
+                        parts=[Part.from_text(msg["content"])],
+                    )
                 )
 
             response = await model.generate_content_async(
@@ -74,7 +101,6 @@ class GeminiClient(LLMClient):
                     max_output_tokens=max_tokens,
                     temperature=0.7,
                 ),
-                system_instruction=system_prompt,
             )
             return response.text
         except Exception:
@@ -87,7 +113,7 @@ class GeminiClient(LLMClient):
         messages: list[dict],
         max_tokens: int = 500,
     ) -> AsyncIterator[str]:
-        model = self._get_model()
+        model = self._get_model(system_prompt)
         if model is None:
             yield self._fallback_response(messages)
             return
@@ -118,7 +144,6 @@ class GeminiClient(LLMClient):
                     max_output_tokens=max_tokens,
                     temperature=0.7,
                 ),
-                system_instruction=system_prompt,
             )
             async for chunk in response:
                 if chunk.text:
