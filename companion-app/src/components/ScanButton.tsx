@@ -68,16 +68,28 @@ export function ScanButton() {
         quality: 0.8,
         maxWidth: 2048,
         maxHeight: 2048,
+        selectionLimit: 1,
       })
       if (result.didCancel) return
       if (result.errorCode) {
-        Alert.alert('Error', result.errorMessage || 'Could not open photo library')
+        if (result.errorCode === 'permission') {
+          Alert.alert(
+            'Permission Required',
+            'Please allow photo library access in Settings.',
+          )
+        } else {
+          Alert.alert(
+            'Error',
+            result.errorMessage || 'Could not open photo library',
+          )
+        }
         return
       }
       const asset = result.assets?.[0]
       if (asset) uploadImage(asset)
-    } catch (err) {
-      Alert.alert('Error', 'Failed to open photo library')
+    } catch (err: any) {
+      console.log('[ScanButton] library error:', err)
+      Alert.alert('Error', err.message || 'Failed to open photo library')
     }
   }
 
