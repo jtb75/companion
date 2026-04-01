@@ -3,7 +3,7 @@
 import logging
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import AdminUser, require_admin_role
