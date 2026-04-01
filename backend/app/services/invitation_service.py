@@ -118,8 +118,10 @@ async def get_invitation_by_token(
 
     # Check expiry
     if contact.invited_at:
-        invited = contact.invited_at.replace(tzinfo=None) if contact.invited_at.tzinfo else contact.invited_at
-        expires = invited + timedelta(days=INVITATION_TTL_DAYS)
+        invited_at = contact.invited_at
+        if invited_at.tzinfo:
+            invited_at = invited_at.replace(tzinfo=None)
+        expires = invited_at + timedelta(days=INVITATION_TTL_DAYS)
         if datetime.utcnow() > expires:
             contact.invitation_status = InvitationStatus.EXPIRED
             await db.flush()
