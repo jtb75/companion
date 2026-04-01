@@ -79,8 +79,10 @@ class ConversationState:
 def _redis_available() -> bool:
     """Check if Redis is configured and reachable."""
     try:
-        from app.db.redis import get_redis
-        get_redis()
+        from app.config import settings
+        url = settings.redis_url
+        if not url or "disabled" in url or "localhost" in url:
+            return False
         return True
     except Exception:
         return False
