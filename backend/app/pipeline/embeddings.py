@@ -88,7 +88,10 @@ async def _get_embeddings(
 ) -> list[list[float]]:
     """Get embeddings from Vertex AI text-embedding model."""
     import vertexai
-    from vertexai.language_models import TextEmbeddingModel
+    from vertexai.language_models import (
+        TextEmbeddingInput,
+        TextEmbeddingModel,
+    )
 
     def _sync_embed():
         vertexai.init(
@@ -98,10 +101,13 @@ async def _get_embeddings(
         model = TextEmbeddingModel.from_pretrained(
             settings.embedding_model
         )
-        result = model.get_embeddings(
-            texts,
-            task_type="RETRIEVAL_DOCUMENT",
-        )
+        inputs = [
+            TextEmbeddingInput(
+                text=t, task_type="RETRIEVAL_DOCUMENT"
+            )
+            for t in texts
+        ]
+        result = model.get_embeddings(inputs)
         return [e.values for e in result]
 
     return await asyncio.to_thread(_sync_embed)

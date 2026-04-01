@@ -75,7 +75,10 @@ async def retrieve_relevant_chunks(
 async def _embed_query(query: str) -> list[float]:
     """Embed a query string using Vertex AI."""
     import vertexai
-    from vertexai.language_models import TextEmbeddingModel
+    from vertexai.language_models import (
+        TextEmbeddingInput,
+        TextEmbeddingModel,
+    )
 
     def _sync_embed():
         vertexai.init(
@@ -85,10 +88,13 @@ async def _embed_query(query: str) -> list[float]:
         model = TextEmbeddingModel.from_pretrained(
             settings.embedding_model
         )
-        result = model.get_embeddings(
-            [query],
-            task_type="RETRIEVAL_QUERY",
-        )
+        inputs = [
+            TextEmbeddingInput(
+                text=query,
+                task_type="RETRIEVAL_QUERY",
+            )
+        ]
+        result = model.get_embeddings(inputs)
         return result[0].values
 
     return await asyncio.to_thread(_sync_embed)
