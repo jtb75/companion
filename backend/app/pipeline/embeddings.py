@@ -8,6 +8,7 @@ from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
 from app.pipeline.chunking import chunk_document
 from app.pipeline.schemas import (
@@ -31,12 +32,20 @@ async def embed_document(
 
     Returns the number of chunks embedded.
     """
+    # Get OCR text from the document's source_metadata
+    doc = await db.get(Document, document_id)
+    ocr_text = ""
+    if doc and doc.source_metadata:
+        ocr_text = doc.source_metadata.get("ocr_text", "")
+    if not ocr_text:
+        ocr_text = extraction_result.extracted_fields.get(
+            "raw_text", ""
+        )
+
     # Build chunks from pipeline results
     chunks = chunk_document(
         classification=classification_result.classification,
-        ocr_text=extraction_result.extracted_fields.get(
-            "raw_text", ""
-        ),
+        ocr_text=ocr_text,
         spoken_summary=summarization_result.spoken_summary,
         card_summary=summarization_result.card_summary,
         extracted_fields=extraction_result.extracted_fields,
