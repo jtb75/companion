@@ -11,8 +11,23 @@ revision = "011"
 down_revision = "010"
 
 
+def _has_pgvector(connection) -> bool:
+    """Check if pgvector extension is available."""
+    result = connection.execute(
+        sa.text(
+            "SELECT 1 FROM pg_available_extensions "
+            "WHERE name = 'vector'"
+        )
+    )
+    return result.scalar() is not None
+
+
 def upgrade() -> None:
-    op.execute("CREATE EXTENSION IF NOT EXISTS vector")
+    conn = op.get_bind()
+    pgvector = _has_pgvector(conn)
+
+    if pgvector:
+        op.execute("CREATE EXTENSION IF NOT EXISTS vector")
 
     op.create_table(
         "document_chunks",
@@ -43,10 +58,11 @@ def upgrade() -> None:
     )
 
     # Add vector column via raw SQL (alembic doesn't know pgvector types)
-    op.execute(
-        "ALTER TABLE document_chunks "
-        "ADD COLUMN embedding vector(768)"
-    )
+    if pgvector:
+        op.execute(
+            "ALTER TABLE document_chunks "
+            "ADD COLUMN embedding vector(768)"
+        )
 
     op.create_index(
         "ix_document_chunks_user_id",
@@ -58,11 +74,13 @@ def upgrade() -> None:
         "document_chunks",
         ["document_id"],
     )
-    op.execute(
-        "CREATE INDEX ix_document_chunks_embedding_hnsw "
-        "ON document_chunks "
-        "USING hnsw (embedding vector_cosine_ops)"
-    )
+
+    if pgvector:
+        op.execute(
+            "CREATE INDEX ix_document_chunks_embedding_hnsw "
+            "ON document_chunks "
+            "USING hnsw (embedding vector_cosine_ops)"
+        )
 
 
 def downgrade() -> None:
