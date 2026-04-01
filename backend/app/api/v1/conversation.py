@@ -9,9 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
 
 from app.auth.dependencies import User, require_complete_profile
-from app.conversation.llm import get_llm_client
+from app.conversation.llm import GeminiClient, get_llm_client
 from app.conversation.prompt_builder import build_system_prompt
 from app.conversation.state_manager import state_manager
+from app.conversation.tool_executor import execute_tool
+from app.conversation.tools import get_dd_tools
 from app.db import get_db
 from app.models.system_config import SystemConfig
 from app.schemas.conversation import (
@@ -44,6 +46,96 @@ async def _get_context_window(db: AsyncSession) -> int:
     except Exception:
         pass
     return DEFAULT_CONTEXT_WINDOW
+
+
+MAX_TOOL_ITERATIONS = 5
+
+
+async def _generate_with_tools(
+    llm,
+    system_prompt: str,
+    llm_messages: list[dict],
+    db,
+    user_id,
+) -> str:
+    """Generate a response, executing tool calls.
+
+    Falls back to plain generate for non-Gemini clients.
+    """
+    if not isinstance(llm, GeminiClient):
+        return await llm.generate(
+            system_prompt, llm_messages, max_tokens=1024
+        )
+
+    from vertexai.generative_models import Content, Part
+
+    # Convert dict messages to Content objects
+    contents = []
+    for msg in llm_messages:
+        role = (
+            "user" if msg["role"] == "user" else "model"
+        )
+        contents.append(
+            Content(
+                role=role,
+                parts=[Part.from_text(msg["content"])],
+            )
+        )
+
+    tools = get_dd_tools()
+
+    for _ in range(MAX_TOOL_ITERATIONS):
+        response = await llm.generate_with_tools(
+            system_prompt,
+            contents,
+            tools=tools,
+            max_tokens=1024,
+        )
+        if response is None:
+            return llm._fallback_response(llm_messages)
+
+        candidate = response.candidates[0]
+        parts = candidate.content.parts
+
+        # Check for function calls
+        fn_call = None
+        for part in parts:
+            if part.function_call:
+                fn_call = part.function_call
+                break
+
+        if fn_call is None:
+            # No tool call — return text
+            return response.text
+
+        # Execute the tool
+        fn_name = fn_call.name
+        fn_args = dict(fn_call.args) if fn_call.args else {}
+        logger.info(
+            "TOOL_CALL: %s args=%s user=%s",
+            fn_name,
+            fn_args,
+            user_id,
+        )
+        result = await execute_tool(
+            fn_name, fn_args, db, user_id
+        )
+
+        # Append model response + function result
+        contents.append(candidate.content)
+        contents.append(
+            Content(
+                parts=[
+                    Part.from_function_response(
+                        name=fn_name,
+                        response={"result": result},
+                    )
+                ]
+            )
+        )
+
+    # Exhausted iterations — return whatever we have
+    return response.text
 
 
 @router.post("/start", status_code=status.HTTP_201_CREATED)
@@ -145,10 +237,10 @@ async def send_message(
         for m in recent
     ]
 
-    # Generate response
+    # Generate response — with tool use for Gemini
     llm = get_llm_client()
-    response_text = await llm.generate(
-        system_prompt, llm_messages, max_tokens=1024
+    response_text = await _generate_with_tools(
+        llm, system_prompt, llm_messages, db, user.id
     )
 
     # Add assistant response to session

@@ -45,7 +45,9 @@ class GeminiClient(LLMClient):
             except Exception:
                 logger.exception("Vertex AI init failed")
 
-    def _get_model(self, system_prompt: str = ""):
+    def _get_model(
+        self, system_prompt: str = "", tools=None
+    ):
         self._ensure_init()
         if not self._initialized:
             return None
@@ -53,10 +55,17 @@ class GeminiClient(LLMClient):
             from vertexai.generative_models import (
                 GenerativeModel,
             )
-            return GenerativeModel(
-                settings.gemini_model,
-                system_instruction=system_prompt,
-            )
+            kwargs = {
+                "model_name": settings.gemini_model,
+                "system_instruction": system_prompt,
+            }
+            if tools is not None:
+                kwargs["tools"] = (
+                    tools
+                    if isinstance(tools, list)
+                    else [tools]
+                )
+            return GenerativeModel(**kwargs)
         except Exception:
             logger.exception("Gemini model init failed")
             return None
@@ -148,6 +157,41 @@ class GeminiClient(LLMClient):
         except Exception:
             logger.exception("Gemini streaming failed")
             yield self._fallback_response(messages)
+
+    async def generate_with_tools(
+        self,
+        system_prompt: str,
+        contents: list,
+        tools=None,
+        max_tokens: int = 1024,
+    ):
+        """Generate with tool support.
+
+        Accepts Content objects directly and returns
+        the full GenerationResponse.
+        """
+        model = self._get_model(system_prompt, tools=tools)
+        if model is None:
+            return None
+
+        try:
+            from vertexai.generative_models import (
+                GenerationConfig,
+            )
+
+            response = await model.generate_content_async(
+                contents,
+                generation_config=GenerationConfig(
+                    max_output_tokens=max_tokens,
+                    temperature=0.7,
+                ),
+            )
+            return response
+        except Exception:
+            logger.exception(
+                "Gemini tool-use call failed"
+            )
+            return None
 
     def _fallback_response(self, messages: list[dict]) -> str:
         last = messages[-1]["content"] if messages else ""
