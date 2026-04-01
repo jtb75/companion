@@ -31,9 +31,6 @@ class GeminiClient(LLMClient):
     """Gemini via Vertex AI. Uses service account auth (no API key needed)."""
 
     def __init__(self):
-        self._model = None
-
-    def __init__(self):
         self._initialized = False
 
     def _ensure_init(self):
