@@ -2,6 +2,7 @@
 
 import json
 import logging
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -75,8 +76,6 @@ async def start_conversation(
     await state_manager.update_session(session)
 
     # Persist chat session to DB for audit
-    from datetime import datetime as dt
-
     from app.models.chat_session import (
         ChatMessage,
         ChatSession,
@@ -86,7 +85,7 @@ async def start_conversation(
         db_session = ChatSession(
             user_id=user.id,
             session_id=session.session_id,
-            started_at=dt.utcnow(),
+            started_at=datetime.now(datetime.UTC),
             message_count=1,
         )
         db.add(db_session)
@@ -99,11 +98,13 @@ async def start_conversation(
             )
         )
         await db.commit()
-        print(
-            f"CHAT_PERSIST: session {session.session_id} saved"
+        logger.info(
+            "CHAT_PERSIST: Session %s saved for user %s",
+            session.session_id,
+            user.email
         )
     except Exception as e:
-        print(f"CHAT_PERSIST_FAIL: {e}")
+        logger.error("CHAT_PERSIST_FAIL: %s", str(e), exc_info=True)
         await db.rollback()
 
     return {
@@ -181,8 +182,17 @@ async def send_message(
             ))
             db_session.message_count += 2
             await db.commit()
-    except Exception:
-        logger.exception("Failed to persist chat")
+            logger.info(
+                "CHAT_PERSIST: Session %s updated with new message",
+                session.session_id
+            )
+        else:
+            logger.warning(
+                "CHAT_PERSIST_MISSING: No session record found for sid %s",
+                session.session_id
+            )
+    except Exception as e:
+        logger.error("Failed to persist chat: %s", str(e), exc_info=True)
         await db.rollback()
 
     return {
@@ -249,23 +259,31 @@ async def send_message_stream(
                         == session.session_id
                     )
                 )
-                db_sess = res.scalar_one()
-                db.add(ChatMessage(
-                    chat_session_id=db_sess.id,
-                    role="user",
-                    content=data.text,
-                ))
-                db.add(ChatMessage(
-                    chat_session_id=db_sess.id,
-                    role="assistant",
-                    content=full_response,
-                ))
-                db_sess.message_count += 2
-                await db.commit()
-            except Exception:
-                logger.exception(
-                    "Failed to persist streamed chat"
-                )
+                db_sess = res.scalar_one_or_none()
+                if db_sess:
+                    db.add(ChatMessage(
+                        chat_session_id=db_sess.id,
+                        role="user",
+                        content=data.text,
+                    ))
+                    db.add(ChatMessage(
+                        chat_session_id=db_sess.id,
+                        role="assistant",
+                        content=full_response,
+                    ))
+                    db_sess.message_count += 2
+                    await db.commit()
+                    logger.info(
+                        "CHAT_PERSIST: Streamed session %s updated",
+                        session.session_id
+                    )
+                else:
+                    logger.warning(
+                        "CHAT_PERSIST_MISSING: No streamed session for sid %s",
+                        session.session_id
+                    )
+            except Exception as e:
+                logger.error("Failed to persist streamed chat: %s", str(e), exc_info=True)
                 await db.rollback()
 
             done_event = json.dumps(

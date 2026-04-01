@@ -78,7 +78,7 @@ async def list_conversations(
         })
 
     return {
-        "sessions": sessions,
+        "conversations": sessions,
         "total": len(sessions),
         "limit": limit,
         "offset": offset,
@@ -143,7 +143,7 @@ async def export_conversations(
             ],
         })
 
-    return {"sessions": export, "total": len(export)}
+    return {"conversations": export, "total": len(export)}
 
 
 @router.get("/{session_id}")
