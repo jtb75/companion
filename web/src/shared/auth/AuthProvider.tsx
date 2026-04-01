@@ -6,7 +6,6 @@ import {
   signInWithEmailAndPassword,
   signOut,
   createUserWithEmailAndPassword,
-  sendEmailVerification,
 } from 'firebase/auth'
 import { auth, googleProvider } from './firebase'
 
@@ -18,11 +17,9 @@ interface AuthContextType {
   authorized: boolean | null // null = still checking, true/false = result
   profileComplete: boolean | null
   caregiverUsers: Array<{ user_id: string; contact_name: string; access_tier: string }> | null
-  needsVerification: boolean
   loginWithGoogle: () => Promise<void>
   loginWithEmail: (email: string, password: string) => Promise<void>
   registerWithEmail: (email: string, password: string) => Promise<void>
-  resendVerification: () => Promise<void>
   logout: () => Promise<void>
   getToken: () => Promise<string | null>
 }
@@ -37,15 +34,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authorized, setAuthorized] = useState<boolean | null>(null)
   const [profileComplete, setProfileComplete] = useState<boolean | null>(null)
   const [caregiverUsers, setCaregiverUsers] = useState<Array<{ user_id: string; contact_name: string; access_tier: string }> | null>(null)
-  const [needsVerification, setNeedsVerification] = useState(false)
-
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
-      if (u && !u.emailVerified && u.providerData.some((p) => p.providerId === 'password')) {
-        setNeedsVerification(true)
-      } else {
-        setNeedsVerification(false)
-      }
       setUser(u)
       setLoading(false)
     })
@@ -101,19 +91,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const registerWithEmail = async (email: string, password: string) => {
-    const result = await createUserWithEmailAndPassword(auth, email, password)
-    await sendEmailVerification(result.user)
-    setNeedsVerification(true)
-  }
-
-  const resendVerification = async () => {
-    if (auth.currentUser) {
-      await sendEmailVerification(auth.currentUser)
-    }
+    await createUserWithEmailAndPassword(auth, email, password)
   }
 
   const logout = async () => {
-    setNeedsVerification(false)
     await signOut(auth)
   }
 
@@ -124,9 +105,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      user, loading, role, adminRole, authorized, profileComplete, caregiverUsers, needsVerification,
+      user, loading, role, adminRole, authorized, profileComplete, caregiverUsers,
       loginWithGoogle, loginWithEmail,
-      registerWithEmail, resendVerification, logout, getToken,
+      registerWithEmail, logout, getToken,
     }}>
       {children}
     </AuthContext.Provider>

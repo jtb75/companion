@@ -4,7 +4,7 @@ import { Navigate } from 'react-router-dom'
 import { BRAND_MID } from '../branding'
 
 export default function LoginPage() {
-  const { user, loading, role, authorized, needsVerification, loginWithGoogle, loginWithEmail, registerWithEmail, resendVerification, logout } = useAuth()
+  const { user, loading, role, authorized, loginWithGoogle, loginWithEmail, registerWithEmail, logout } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -14,32 +14,6 @@ export default function LoginPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-companion-cream">
         <div className="text-companion-blue text-lg">Loading...</div>
-      </div>
-    )
-  }
-
-  if (user && needsVerification) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-companion-cream">
-        <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md text-center">
-          <div className="text-4xl mb-4">&#x1F4E7;</div>
-          <h1 className="text-2xl font-bold text-companion-blue mb-2">Check Your Email</h1>
-          <p className="text-gray-500 text-sm mb-6">
-            We sent a verification link to <strong>{user.email}</strong>. Click the link to verify your account.
-          </p>
-          <button
-            onClick={async () => { await resendVerification(); setError('Verification email sent!') }}
-            className="text-companion-blue hover:underline text-sm font-medium"
-          >
-            Resend verification email
-          </button>
-          {error && <p className="text-sm text-green-600 mt-2">{error}</p>}
-          <div className="mt-6">
-            <button onClick={logout} className="text-gray-400 hover:text-gray-600 text-sm">
-              Sign out
-            </button>
-          </div>
-        </div>
       </div>
     )
   }
