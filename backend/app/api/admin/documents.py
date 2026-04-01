@@ -66,7 +66,7 @@ async def list_documents(
     items = []
     for row in rows:
         items.append({
-            "document_id": str(row.id),
+            "id": str(row.id),
             "user_name": row.user_name,
             "user_email": row.user_email,
             "source_channel": (
