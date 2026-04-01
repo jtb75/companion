@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../../shared/api/client'
 import { Card } from '../../shared/components/Card'
 import { StatusBadge } from '../../shared/components/StatusBadge'
@@ -78,7 +79,12 @@ export function PipelinePage() {
       <h1 className="text-xl font-semibold text-gray-900">Pipeline Health</h1>
 
       <Card title="Documents in Flight">
-        <p className="text-3xl font-bold text-companion-blue">{health.documents_in_flight}</p>
+        <div className="flex items-center justify-between">
+          <p className="text-3xl font-bold text-companion-blue">{health.documents_in_flight}</p>
+          {health.documents_in_flight > 0 && (
+            <ReprocessButton />
+          )}
+        </div>
       </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -127,6 +133,40 @@ export function PipelinePage() {
           </div>
         </Card>
       )}
+    </div>
+  )
+}
+
+function ReprocessButton() {
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState<string | null>(null)
+  const queryClient = useQueryClient()
+
+  const handleReprocess = async () => {
+    setBusy(true)
+    setResult(null)
+    try {
+      const res = await api<{ reprocessed: number; results: { id: string; status: string; classification?: string; error?: string }[] }>('/admin/workers/reprocess-documents', { method: 'POST' })
+      const summary = res.results.map(r => r.status === 'processed' ? `${r.classification}` : `failed: ${r.error}`).join(', ')
+      setResult(`${res.reprocessed} docs: ${summary}`)
+      queryClient.invalidateQueries({ queryKey: ['pipeline-health'] })
+    } catch (e: any) {
+      setResult(`Error: ${e.message}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="text-right">
+      <button
+        onClick={handleReprocess}
+        disabled={busy}
+        className="rounded-lg bg-companion-blue px-4 py-2 text-sm font-medium text-white hover:bg-companion-blue-mid disabled:opacity-50"
+      >
+        {busy ? 'Reprocessing...' : 'Reprocess Stuck'}
+      </button>
+      {result && <p className="mt-2 text-xs text-gray-500">{result}</p>}
     </div>
   )
 }
