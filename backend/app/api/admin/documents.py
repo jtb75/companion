@@ -17,6 +17,7 @@ from app.auth.dependencies import AdminUser, require_admin_role
 from app.db import get_db
 from app.models.document import Document
 from app.models.enums import DocumentStatus
+from app.models.pipeline_metrics import PipelineMetric
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -63,10 +64,32 @@ async def list_documents(
     rows = await db.execute(base.limit(limit).offset(offset))
     total = await db.scalar(count_q)
 
+    # Collect document IDs for pipeline metrics query
+    doc_ids = [row.id for row in rows]
+
+    # Fetch pipeline metrics for all documents
+    stage_map: dict[str, list] = {}
+    if doc_ids:
+        metrics_q = await db.execute(
+            select(PipelineMetric)
+            .where(PipelineMetric.document_id.in_(doc_ids))
+            .order_by(PipelineMetric.recorded_at)
+        )
+        for m in metrics_q.scalars().all():
+            did = str(m.document_id)
+            if did not in stage_map:
+                stage_map[did] = []
+            stage_map[did].append({
+                "stage": m.stage.capitalize(),
+                "status": "completed" if m.status == "completed" else "failed",
+                "duration_ms": m.duration_ms,
+            })
+
     items = []
     for row in rows:
+        did = str(row.id)
         items.append({
-            "id": str(row.id),
+            "id": did,
             "user_name": row.user_name,
             "user_email": row.user_email,
             "source_channel": (
@@ -75,14 +98,16 @@ async def list_documents(
                 else None
             ),
             "status": (
-                row.status.value if row.status else None
+                row.status.value
+                if row.status
+                else None
             ),
             "classification": (
                 row.classification.value
                 if row.classification
                 else None
             ),
-            "urgency": (
+            "urgency_level": (
                 row.urgency_level.value
                 if row.urgency_level
                 else None
@@ -98,6 +123,7 @@ async def list_documents(
                 if row.processed_at
                 else None
             ),
+            "pipeline_stages": stage_map.get(did, []),
         })
 
     return {
