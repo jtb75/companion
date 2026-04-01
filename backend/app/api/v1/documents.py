@@ -60,14 +60,29 @@ async def _run_pipeline_background(
     document_id: uuid.UUID,
     user_id: uuid.UUID,
 ) -> None:
-    """Run the pipeline in a background task with its own session."""
+    """Run the pipeline in a background task."""
+    logger.info(
+        "Starting background pipeline for doc %s",
+        document_id,
+    )
     async with async_session_factory() as db:
         try:
-            result = await process_document(db, document_id, user_id)
+            result = await process_document(
+                db, document_id, user_id
+            )
             await db.commit()
+            logger.info(
+                "Pipeline complete for doc %s: %s",
+                document_id,
+                result.classification.classification,
+            )
 
-            summary = result.summarization.card_summary or ""
-            await notify_document_processed(db, user_id, summary)
+            summary = (
+                result.summarization.card_summary or ""
+            )
+            await notify_document_processed(
+                db, user_id, summary
+            )
             await db.commit()
         except Exception:
             await db.rollback()
