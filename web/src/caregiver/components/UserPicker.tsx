@@ -11,7 +11,7 @@ interface Charge {
 
 interface Props {
   selectedUserId: string | null
-  onSelect: (userId: string) => void
+  onSelect: (userId: string, userName?: string) => void
 }
 
 export function UserPicker({ selectedUserId, onSelect }: Props) {
@@ -40,7 +40,7 @@ export function UserPicker({ selectedUserId, onSelect }: Props) {
 
   // Auto-select if only one charge
   if (charges.length === 1 && !selectedUserId) {
-    setTimeout(() => onSelect(charges[0].user_id), 0)
+    setTimeout(() => onSelect(charges[0].user_id, charges[0].name), 0)
   }
 
   return (
@@ -52,7 +52,7 @@ export function UserPicker({ selectedUserId, onSelect }: Props) {
         {charges.map((charge) => (
           <button
             key={charge.user_id}
-            onClick={() => onSelect(charge.user_id)}
+            onClick={() => onSelect(charge.user_id, charge.name)}
             className={`px-4 py-3 rounded-xl border-2 text-left transition ${
               selectedUserId === charge.user_id
                 ? 'border-companion-blue bg-blue-50 text-companion-blue'

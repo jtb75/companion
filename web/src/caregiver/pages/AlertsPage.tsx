@@ -18,9 +18,10 @@ const typeIcons: Record<string, string> = {
 
 interface Props {
   userId: string
+  userName?: string
 }
 
-export function AlertsPage({ userId }: Props) {
+export function AlertsPage({ userId, userName }: Props) {
   const { data, isLoading, error } = useQuery({
     queryKey: ['caregiver-alerts', userId],
     queryFn: () => api<{ alerts: Alert[] }>(`/api/v1/caregiver/alerts?user_id=${userId}`),
@@ -41,7 +42,7 @@ export function AlertsPage({ userId }: Props) {
     return (
       <div className="text-center py-16">
         <p className="text-2xl text-companion-sage mb-2">All clear</p>
-        <p className="text-gray-500">No alerts. Sam is managing well.</p>
+        <p className="text-gray-500">No alerts. {userName || 'Your charge'} is managing well.</p>
       </div>
     )
   }
