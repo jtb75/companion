@@ -351,6 +351,7 @@ export function PipelinePage() {
     queryFn: async () => {
       return api<DocumentsResponse>('/admin/documents?limit=50&offset=0')
     },
+    refetchInterval: 5000,
   })
 
   // Sync fetched data into local state
