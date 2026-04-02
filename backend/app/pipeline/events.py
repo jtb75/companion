@@ -2,7 +2,7 @@
 
 import json
 import logging
-from datetime import UTC, datetime
+from datetime import datetime
 
 from app.db.redis import get_redis
 
@@ -25,7 +25,7 @@ async def publish_pipeline_event(
         "document_id": str(document_id),
         "stage": stage,
         "status": status,
-        "timestamp": datetime.now(UTC).isoformat(),
+        "timestamp": datetime.utcnow().isoformat(),
     }
     if metadata:
         event["metadata"] = metadata
