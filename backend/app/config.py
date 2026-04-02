@@ -13,7 +13,7 @@ class Settings(BaseSettings):
 
     # Google Cloud
     gcp_project_id: str = "companion-dev"
-    pubsub_emulator_host: str | None = "localhost:8085"
+    pubsub_emulator_host: str | None = None
     gcs_bucket_documents: str = "companion-docs-dev"
 
     # Firebase
