@@ -44,21 +44,21 @@ async def _get_summarization_prompt(db: AsyncSession | None) -> str:
     """Load summarization prompt from system_config, falling back to default."""
     if db is not None:
         try:
-            result = await db.execute(
-                select(SystemConfig).where(
-                    SystemConfig.category == "summarization_prompt",
-                    SystemConfig.key == "default",
-                    SystemConfig.is_active.is_(True),
+            async with db.begin_nested():
+                result = await db.execute(
+                    select(SystemConfig).where(
+                        SystemConfig.category == "summarization_prompt",
+                        SystemConfig.key == "default",
+                        SystemConfig.is_active.is_(True),
+                    )
                 )
-            )
-            config = result.scalar_one_or_none()
-            if config and config.value and config.value.get("prompt"):
-                return config.value["prompt"]
+                config = result.scalar_one_or_none()
+                if config and config.value and config.value.get("prompt"):
+                    return config.value["prompt"]
         except Exception:
             logger.warning(
                 "Failed to load summarization prompt, using default"
             )
-            await db.rollback()
     return _DEFAULT_SUMMARIZATION_PROMPT
 
 

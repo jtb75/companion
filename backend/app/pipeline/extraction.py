@@ -103,22 +103,22 @@ async def _get_extraction_prompt(
     """Load extraction prompt from system_config, falling back to defaults."""
     if db is not None:
         try:
-            result = await db.execute(
-                select(SystemConfig).where(
-                    SystemConfig.category == "extraction_prompt",
-                    SystemConfig.key == classification,
-                    SystemConfig.is_active.is_(True),
+            async with db.begin_nested():
+                result = await db.execute(
+                    select(SystemConfig).where(
+                        SystemConfig.category == "extraction_prompt",
+                        SystemConfig.key == classification,
+                        SystemConfig.is_active.is_(True),
+                    )
                 )
-            )
-            config = result.scalar_one_or_none()
-            if config and config.value and config.value.get("prompt"):
-                return config.value["prompt"]
+                config = result.scalar_one_or_none()
+                if config and config.value and config.value.get("prompt"):
+                    return config.value["prompt"]
         except Exception:
             logger.warning(
                 "Failed to load extraction prompt for %s, using default",
                 classification,
             )
-            await db.rollback()
     return DEFAULT_PROMPTS.get(classification, DEFAULT_PROMPTS["generic"])
 
 
