@@ -163,5 +163,6 @@ class ConfigCategory(enum.StrEnum):
     NOTIFICATION_DEFAULT = "notification_default"
     EMAIL_PREFILTER = "email_prefilter"
     SUMMARIZATION_PROMPT = "summarization_prompt"
+    EXTRACTION_PROMPT = "extraction_prompt"
     FEATURE_FLAG = "feature_flag"
     DELETION_SETTINGS = "deletion_settings"

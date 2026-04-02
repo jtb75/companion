@@ -102,7 +102,7 @@ async def process_document(
         await publish_pipeline_event(
             document_id, "extraction", "started",
         )
-        extraction_result = await extract(normalized, classification_result)
+        extraction_result = await extract(normalized, classification_result, db)
         # Convert Decimals to floats for JSONB storage
         import json
         doc.extracted_fields = json.loads(
@@ -121,7 +121,7 @@ async def process_document(
         await publish_pipeline_event(
             document_id, "summarization", "started",
         )
-        summarization_result = await summarize(classification_result, extraction_result)
+        summarization_result = await summarize(classification_result, extraction_result, db)
         doc.spoken_summary = summarization_result.spoken_summary
         doc.card_summary = summarization_result.card_summary
         doc.status = DocumentStatus.SUMMARIZED
