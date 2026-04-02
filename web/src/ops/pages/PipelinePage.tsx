@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { collection, onSnapshot } from 'firebase/firestore'
 import { api } from '../../shared/api/client'
@@ -236,7 +236,6 @@ function DocumentCard({
 // ---------------------------------------------------------------------------
 
 function usePipelineFirestore(
-  documents: PipelineDocument[],
   setDocuments: React.Dispatch<React.SetStateAction<PipelineDocument[]>>,
 ) {
   const [connected, setConnected] = useState(false)
@@ -401,7 +400,7 @@ export function PipelinePage() {
   const health = healthData ?? placeholderHealth
 
   // --- Firestore for real-time updates ---
-  const firestoreConnected = usePipelineFirestore(documents, setDocuments)
+  const firestoreConnected = usePipelineFirestore(setDocuments)
 
   // --- Actions ---
   const handleCancel = async (id: string) => {
