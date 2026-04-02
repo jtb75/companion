@@ -311,6 +311,56 @@ async def _complete_todo(
 # ── Document review tools ──
 
 
+async def _resolve_review_id(
+    db: AsyncSession, user_id: UUID, raw_id: str
+) -> UUID | None:
+    """Resolve a review ID from various formats.
+
+    Accepts: short ID ("1"), full UUID, or garbage.
+    Falls back to the most recent pending review.
+    """
+    from app.models.pending_review import PendingReview
+
+    # Try as a short numeric ID (index into pending list)
+    if raw_id.isdigit():
+        idx = int(raw_id) - 1  # 1-based
+        result = await db.execute(
+            select(PendingReview).where(
+                PendingReview.user_id == user_id,
+                PendingReview.review_status.in_(
+                    ["pending", "presented"]
+                ),
+            ).order_by(
+                PendingReview.is_urgent.desc(),
+                PendingReview.created_at,
+            )
+        )
+        reviews = result.scalars().all()
+        if 0 <= idx < len(reviews):
+            return reviews[idx].id
+
+    # Try as UUID
+    try:
+        return UUID(raw_id)
+    except (ValueError, AttributeError):
+        pass
+
+    # Fallback: most recent pending review
+    result = await db.execute(
+        select(PendingReview).where(
+            PendingReview.user_id == user_id,
+            PendingReview.review_status.in_(
+                ["pending", "presented"]
+            ),
+        ).order_by(
+            PendingReview.is_urgent.desc(),
+            PendingReview.created_at.desc(),
+        ).limit(1)
+    )
+    review = result.scalar_one_or_none()
+    return review.id if review else None
+
+
 async def _get_pending_reviews(
     db: AsyncSession, user_id: UUID, args: dict
 ) -> dict:
@@ -335,10 +385,11 @@ async def _get_pending_reviews(
     reviews = result.scalars().all()
 
     items = []
-    for r in reviews:
+    for i, r in enumerate(reviews, 1):
         doc = await db.get(Document, r.document_id) if r.document_id else None
         items.append({
-            "review_id": str(r.id),
+            "review_id": str(i),
+            "review_uuid": str(r.id),
             "source": r.source_description,
             "recommended_action": r.recommended_action,
             "proposed_data": r.proposed_record_data,
@@ -375,31 +426,16 @@ async def _confirm_document_action(
     raw_id = str(args.get("review_id", "")).strip()
     action = args.get("action", "confirm")
 
-    # Try to parse review_id — Gemini may pass it with
-    # extra characters or without dashes
-    try:
-        review_id = UUID(raw_id)
-    except (ValueError, AttributeError):
-        # If Gemini didn't pass a valid UUID, find the most
-        # recent pending review for this user instead
-        result = await db.execute(
-            select(PendingReview).where(
-                PendingReview.user_id == user_id,
-                PendingReview.review_status.in_(
-                    ["pending", "presented"]
-                ),
-            ).order_by(
-                PendingReview.is_urgent.desc(),
-                PendingReview.created_at.desc(),
-            ).limit(1)
-        )
-        review = result.scalar_one_or_none()
-        if review is None:
-            return {
-                "error": True,
-                "message": "No pending reviews found.",
-            }
-        review_id = review.id
+    # Resolve review_id — could be a short ID ("1"),
+    # a UUID, or garbage from Gemini
+    review_id = await _resolve_review_id(
+        db, user_id, raw_id
+    )
+    if review_id is None:
+        return {
+            "error": True,
+            "message": "No pending reviews found.",
+        }
 
     result = await db.execute(
         select(PendingReview).where(
@@ -494,12 +530,13 @@ async def _update_review_fields(
     raw_id = str(args.get("review_id", "")).strip()
     updates = args.get("field_updates", {})
 
-    try:
-        review_id = UUID(raw_id)
-    except (ValueError, AttributeError):
+    review_id = await _resolve_review_id(
+        db, user_id, raw_id
+    )
+    if review_id is None:
         return {
             "error": True,
-            "message": "Invalid review ID.",
+            "message": "No pending reviews found.",
         }
 
     result = await db.execute(
