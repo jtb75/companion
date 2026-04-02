@@ -67,7 +67,7 @@ extend-exclude = ["alembic/versions"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B"]
-ignore = ["B008"]  # Depends() in function defaults is standard FastAPI pattern
+ignore = ["B008", "UP017"]  # B008: Depends() in defaults; UP017: datetime.utcnow() is fine for naive columns
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
