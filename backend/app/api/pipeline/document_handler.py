@@ -33,7 +33,7 @@ async def verify_pipeline_key(
 
 
 @router.post(
-    "/pipeline/document-received",
+    "/api/pipeline/document-received",
     status_code=status.HTTP_200_OK,
     dependencies=[Depends(verify_pipeline_key)]
 )
