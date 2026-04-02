@@ -63,11 +63,9 @@ module "pubsub" {
   pipeline_api_key_secret_id = module.secrets.pipeline_api_key_secret_id
 }
 
-# Import manually-created secrets into Terraform state
-import {
-  to = module.secrets.google_secret_manager_secret.manual["gmail-smtp-password"]
-  id = "projects/${var.project_id}/secrets/companion-${var.environment}-gmail-smtp-password"
-}
+# NOTE: Secret imports are done via CLI:
+# terraform import 'module.secrets.google_secret_manager_secret.manual["pipeline-api-key"]' \
+#   "projects/companion-staging-491606/secrets/companion-staging-pipeline-api-key"
 
 module "secrets" {
   source                   = "./modules/secrets"

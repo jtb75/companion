@@ -58,7 +58,6 @@ variable "pipeline_api_key_secret_id" {
 }
 
 variable "documents_bucket" {
-...
   description = "GCS bucket name for documents"
   type        = string
 }
