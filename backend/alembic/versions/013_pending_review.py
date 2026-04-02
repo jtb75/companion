@@ -16,20 +16,26 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Add new enum types
-    review_status = sa.Enum(
-        "pending", "presented", "confirmed", "skipped",
-        "expired", "auto_created",
-        name="reviewstatus",
-    )
-    review_status.create(op.get_bind(), checkfirst=True)
+    # Add new enum types (using DO blocks for idempotency)
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE reviewstatus AS ENUM (
+                'pending', 'presented', 'confirmed',
+                'skipped', 'expired', 'auto_created'
+            );
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$
+    """)
 
-    recommended_action = sa.Enum(
-        "add_bill", "add_appointment", "review_with_contact",
-        "file_only", "discard",
-        name="recommendedaction",
-    )
-    recommended_action.create(op.get_bind(), checkfirst=True)
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE recommendedaction AS ENUM (
+                'add_bill', 'add_appointment',
+                'review_with_contact', 'file_only', 'discard'
+            );
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$
+    """)
 
     # Add pending_review to documentstatus enum
     op.execute(
@@ -37,6 +43,19 @@ def upgrade() -> None:
     )
 
     # Create pending_reviews table
+    review_status = sa.Enum(
+        "pending", "presented", "confirmed", "skipped",
+        "expired", "auto_created",
+        name="reviewstatus",
+        create_type=False,
+    )
+    recommended_action = sa.Enum(
+        "add_bill", "add_appointment", "review_with_contact",
+        "file_only", "discard",
+        name="recommendedaction",
+        create_type=False,
+    )
+
     op.create_table(
         "pending_reviews",
         sa.Column("id", UUID(as_uuid=True), primary_key=True),
