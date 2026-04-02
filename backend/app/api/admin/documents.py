@@ -10,7 +10,7 @@ from fastapi import (
     HTTPException,
     Query,
 )
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import AdminUser, require_admin_role
@@ -172,7 +172,21 @@ async def resubmit_document(
         raise HTTPException(
             status_code=404, detail="Document not found"
         )
+    # Clear previous pipeline metrics so stepper resets
+    await db.execute(
+        delete(PipelineMetric).where(
+            PipelineMetric.document_id == document_id
+        )
+    )
     doc.status = DocumentStatus.RECEIVED
+    doc.classification = None
+    doc.confidence_score = None
+    doc.urgency_level = None
+    doc.extracted_fields = None
+    doc.spoken_summary = None
+    doc.card_summary = None
+    doc.routing_destination = None
+    doc.processed_at = None
     await db.commit()
 
     async def _run_pipeline(
