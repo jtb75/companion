@@ -387,19 +387,36 @@ async def _get_pending_reviews(
     items = []
     for i, r in enumerate(reviews, 1):
         doc = await db.get(Document, r.document_id) if r.document_id else None
+        # Get OCR text for full document context
+        ocr_text = ""
+        if doc and doc.source_metadata:
+            ocr_text = doc.source_metadata.get(
+                "ocr_text", ""
+            )[:500]
+
         items.append({
             "review_id": str(i),
             "review_uuid": str(r.id),
             "source": r.source_description,
             "recommended_action": r.recommended_action,
             "proposed_data": r.proposed_record_data,
-            "confidence": float(r.confidence_score) if r.confidence_score else None,
+            "confidence": (
+                float(r.confidence_score)
+                if r.confidence_score else None
+            ),
             "is_urgent": r.is_urgent,
             "is_past_due": r.is_past_due,
             "is_duplicate": r.is_duplicate,
             "card_summary": doc.card_summary if doc else None,
+            "spoken_summary": (
+                doc.spoken_summary if doc else None
+            ),
+            "document_text": ocr_text,
             "classification": (
-                getattr(doc.classification, "value", str(doc.classification))
+                getattr(
+                    doc.classification, "value",
+                    str(doc.classification),
+                )
                 if doc and doc.classification else None
             ),
         })
