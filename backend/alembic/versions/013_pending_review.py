@@ -4,9 +4,6 @@ Revision ID: 013
 Revises: 012
 """
 
-import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import JSONB, UUID
-
 from alembic import op
 
 revision = "013"
@@ -16,7 +13,13 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Add new enum types (using DO blocks for idempotency)
+    # Add pending_review to documentstatus enum
+    op.execute(
+        "ALTER TYPE documentstatus ADD VALUE IF NOT EXISTS"
+        " 'pending_review'"
+    )
+
+    # Create enum types and table via raw SQL for full control
     op.execute("""
         DO $$ BEGIN
             CREATE TYPE reviewstatus AS ENUM (
@@ -26,85 +29,44 @@ def upgrade() -> None:
         EXCEPTION WHEN duplicate_object THEN NULL;
         END $$
     """)
-
     op.execute("""
         DO $$ BEGIN
             CREATE TYPE recommendedaction AS ENUM (
                 'add_bill', 'add_appointment',
-                'review_with_contact', 'file_only', 'discard'
+                'review_with_contact', 'file_only',
+                'discard'
             );
         EXCEPTION WHEN duplicate_object THEN NULL;
         END $$
     """)
 
-    # Add pending_review to documentstatus enum
-    op.execute(
-        "ALTER TYPE documentstatus ADD VALUE IF NOT EXISTS 'pending_review'"
-    )
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS pending_reviews (
+            id UUID PRIMARY KEY,
+            user_id UUID NOT NULL
+                REFERENCES users(id) ON DELETE CASCADE,
+            document_id UUID
+                REFERENCES documents(id) ON DELETE SET NULL,
+            review_status reviewstatus NOT NULL
+                DEFAULT 'pending',
+            recommended_action recommendedaction NOT NULL,
+            proposed_record_data JSONB NOT NULL,
+            confidence_score NUMERIC(4, 3),
+            source_description TEXT NOT NULL
+                DEFAULT 'a document',
+            is_urgent BOOLEAN NOT NULL DEFAULT false,
+            is_past_due BOOLEAN NOT NULL DEFAULT false,
+            is_duplicate BOOLEAN NOT NULL DEFAULT false,
+            duplicate_of_id UUID,
+            presented_at TIMESTAMP,
+            resolved_at TIMESTAMP,
+            created_record_type TEXT,
+            created_record_id UUID,
+            created_at TIMESTAMP NOT NULL DEFAULT now(),
+            updated_at TIMESTAMP NOT NULL DEFAULT now()
+        )
+    """)
 
-    # Create pending_reviews table (use sa.Text for enum columns
-    # since enum types are created above via raw SQL)
-    op.create_table(
-        "pending_reviews",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
-        sa.Column(
-            "user_id", UUID(as_uuid=True),
-            sa.ForeignKey("users.id", ondelete="CASCADE"),
-            nullable=False,
-        ),
-        sa.Column(
-            "document_id", UUID(as_uuid=True),
-            sa.ForeignKey("documents.id", ondelete="SET NULL"),
-            nullable=True,
-        ),
-        sa.Column(
-            "review_status", sa.Text,
-            nullable=False, server_default="pending",
-        ),
-        sa.Column(
-            "recommended_action", sa.Text,
-            nullable=False,
-        ),
-        sa.Column("proposed_record_data", JSONB, nullable=False),
-        sa.Column(
-            "confidence_score", sa.Numeric(4, 3), nullable=True
-        ),
-        sa.Column(
-            "source_description", sa.Text,
-            nullable=False, server_default="a document",
-        ),
-        sa.Column(
-            "is_urgent", sa.Boolean,
-            nullable=False, server_default="false",
-        ),
-        sa.Column(
-            "is_past_due", sa.Boolean,
-            nullable=False, server_default="false",
-        ),
-        sa.Column(
-            "is_duplicate", sa.Boolean,
-            nullable=False, server_default="false",
-        ),
-        sa.Column(
-            "duplicate_of_id", UUID(as_uuid=True), nullable=True
-        ),
-        sa.Column("presented_at", sa.DateTime, nullable=True),
-        sa.Column("resolved_at", sa.DateTime, nullable=True),
-        sa.Column("created_record_type", sa.Text, nullable=True),
-        sa.Column(
-            "created_record_id", UUID(as_uuid=True), nullable=True
-        ),
-        sa.Column(
-            "created_at", sa.DateTime,
-            nullable=False, server_default=sa.func.now(),
-        ),
-        sa.Column(
-            "updated_at", sa.DateTime,
-            nullable=False, server_default=sa.func.now(),
-        ),
-    )
-
-    # Index for querying pending reviews by user
     op.create_index(
         "ix_pending_reviews_user_status",
         "pending_reviews",
