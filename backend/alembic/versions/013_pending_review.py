@@ -58,23 +58,11 @@ def upgrade() -> None:
             nullable=True,
         ),
         sa.Column(
-            "review_status",
-            sa.Enum(
-                "pending", "presented", "confirmed",
-                "skipped", "expired", "auto_created",
-                name="reviewstatus",
-                create_type=False,
-            ),
+            "review_status", sa.Text,
             nullable=False, server_default="pending",
         ),
         sa.Column(
-            "recommended_action",
-            sa.Enum(
-                "add_bill", "add_appointment",
-                "review_with_contact", "file_only", "discard",
-                name="recommendedaction",
-                create_type=False,
-            ),
+            "recommended_action", sa.Text,
             nullable=False,
         ),
         sa.Column("proposed_record_data", JSONB, nullable=False),
