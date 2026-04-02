@@ -157,13 +157,28 @@ async def start_conversation(
 
     name = user.nickname or user.preferred_name
 
-    # Document review triggers use a static greeting to avoid
-    # hallucination — the LLM can't call tools during greeting
+    # Document review triggers: static intro + tool call to
+    # get real document data (avoids hallucination)
     if trigger in ("document_review", "document_arrived"):
-        greeting = (
+        intro = (
             f"Hi {name}. I have some mail for you. "
             "Let me pull it up."
         )
+        session.add_message("assistant", intro)
+        # Simulate a user prompt to trigger tool call
+        session.add_message(
+            "user", "[Show me the document]"
+        )
+        llm_messages = [
+            {"role": m.role, "content": m.content}
+            for m in session.messages
+        ]
+        followup = await _generate_with_tools(
+            llm, system_prompt, llm_messages,
+            db, user.id,
+        )
+        session.add_message("assistant", followup)
+        greeting = f"{intro}\n\n{followup}"
     else:
         greeting_messages = [
             {
@@ -174,8 +189,7 @@ async def start_conversation(
         greeting = await llm.generate(
             system_prompt, greeting_messages, max_tokens=1024
         )
-
-    session.add_message("assistant", greeting)
+        session.add_message("assistant", greeting)
     await state_manager.update_session(session)
 
     # Persist chat session to DB for audit
