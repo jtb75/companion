@@ -561,6 +561,7 @@ export function PipelinePage() {
       )}
 
       {/* Stage health cards */}
+      {health.stages.length > 0 && (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {health.stages.map((stage) => (
           <Card key={stage.stage} title={stage.stage}>
@@ -588,6 +589,7 @@ export function PipelinePage() {
           </Card>
         ))}
       </div>
+      )}
 
       {/* Recent failures */}
       {health.recent_failures.length > 0 && (
