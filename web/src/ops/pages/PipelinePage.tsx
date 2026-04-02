@@ -105,7 +105,7 @@ function PipelineStepper({ stages }: { stages: PipelineStage[] }) {
             {/* Stage dot + label */}
             <div className="flex flex-col items-center">
               <div
-                className={`flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs font-bold transition-all ${
+                className={`flex h-5 w-5 items-center justify-center rounded-full border-2 text-xs font-bold transition-all ${
                   status === 'completed'
                     ? 'border-emerald-500 bg-emerald-500 text-white'
                     : status === 'in_progress'
@@ -116,17 +116,17 @@ function PipelineStepper({ stages }: { stages: PipelineStage[] }) {
                 }`}
               >
                 {status === 'completed' ? (
-                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor">
+                  <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                   </svg>
                 ) : status === 'failed' ? (
-                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor">
+                  <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 ) : status === 'in_progress' ? (
-                  <div className="h-2 w-2 rounded-full bg-companion-blue" />
+                  <div className="h-1.5 w-1.5 rounded-full bg-companion-blue" />
                 ) : (
-                  <div className="h-2 w-2 rounded-full bg-gray-300" />
+                  <div className="h-1.5 w-1.5 rounded-full bg-gray-300" />
                 )}
               </div>
               <span
@@ -173,14 +173,13 @@ function DocumentCard({
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+    <div className="rounded-lg border border-gray-200 bg-white px-4 py-2.5 shadow-sm">
+      <div className="flex items-center gap-3">
         {/* Left: Member info */}
-        <div className="min-w-0 shrink-0 lg:w-48">
+        <div className="min-w-0 shrink-0 w-40">
           <p className="text-sm font-semibold text-gray-900 truncate">{doc.user_name}</p>
-          <p className="text-xs text-gray-500 truncate">{doc.user_email}</p>
-          <div className="mt-1 flex items-center gap-2">
-            <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className="inline-flex items-center rounded-full bg-gray-100 px-1.5 py-0 text-[10px] font-medium text-gray-600">
               {sourceLabel}
             </span>
             <span className="text-[10px] text-gray-400">{uploadTime}</span>
@@ -192,42 +191,42 @@ function DocumentCard({
           <PipelineStepper stages={doc.pipeline_stages ?? []} />
         </div>
 
-        {/* Right: Badges + summary */}
-        <div className="shrink-0 lg:w-52 flex flex-col gap-1.5 items-end">
-          <div className="flex items-center gap-1.5 flex-wrap justify-end">
-            {doc.classification && (
-              <span className="inline-flex items-center rounded-full bg-sky-100 px-2.5 py-0.5 text-xs font-medium text-sky-800">
-                {doc.classification}
-              </span>
-            )}
-            {doc.urgency_level && (
-              <span
-                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${urgencyColors[doc.urgency_level] || 'bg-gray-100 text-gray-700'}`}
-              >
-                {doc.urgency_level}
-              </span>
+        {/* Right: Badges + summary + actions */}
+        <div className="shrink-0 flex items-center gap-3">
+          <div className="flex flex-col items-end gap-0.5">
+            <div className="flex items-center gap-1 flex-wrap justify-end">
+              {doc.classification && (
+                <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0 text-[10px] font-medium text-sky-800">
+                  {doc.classification}
+                </span>
+              )}
+              {doc.urgency_level && (
+                <span
+                  className={`inline-flex items-center rounded-full px-2 py-0 text-[10px] font-medium ${urgencyColors[doc.urgency_level] || 'bg-gray-100 text-gray-700'}`}
+                >
+                  {doc.urgency_level}
+                </span>
+              )}
+            </div>
+            {doc.card_summary && (
+              <p className="text-[11px] text-gray-500 text-right line-clamp-1 max-w-[200px]">{doc.card_summary}</p>
             )}
           </div>
-          {doc.card_summary && (
-            <p className="text-xs text-gray-500 text-right line-clamp-2">{doc.card_summary}</p>
-          )}
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => onCancel(doc.id)}
+              className="rounded border border-rose-300 px-2 py-0.5 text-[10px] font-medium text-rose-600 hover:bg-rose-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => onResubmit(doc.id)}
+              className="rounded border border-companion-blue px-2 py-0.5 text-[10px] font-medium text-companion-blue hover:bg-companion-blue/5 transition-colors"
+            >
+              Resubmit
+            </button>
+          </div>
         </div>
-      </div>
-
-      {/* Bottom actions */}
-      <div className="mt-3 flex items-center justify-end gap-2 border-t border-gray-100 pt-3">
-        <button
-          onClick={() => onCancel(doc.id)}
-          className="rounded-md border border-rose-300 px-3 py-1 text-xs font-medium text-rose-600 hover:bg-rose-50 transition-colors"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={() => onResubmit(doc.id)}
-          className="rounded-md border border-companion-blue px-3 py-1 text-xs font-medium text-companion-blue hover:bg-companion-blue/5 transition-colors"
-        >
-          Resubmit
-        </button>
       </div>
     </div>
   )
@@ -346,13 +345,11 @@ export function PipelinePage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [documents, setDocuments] = useState<PipelineDocument[]>([])
 
-  // --- Fetch documents ---
+  // --- Fetch ALL documents (unfiltered for counts) ---
   const { data: docsData, isLoading: docsLoading } = useQuery({
-    queryKey: ['pipeline-documents', statusFilter],
+    queryKey: ['pipeline-documents'],
     queryFn: async () => {
-      const params = new URLSearchParams({ limit: '50', offset: '0' })
-      if (statusFilter !== 'all') params.set('status', statusFilter)
-      return api<DocumentsResponse>(`/admin/documents?${params.toString()}`)
+      return api<DocumentsResponse>('/admin/documents?limit=50&offset=0')
     },
   })
 
@@ -471,16 +468,32 @@ export function PipelinePage() {
     }
   }
 
-  // --- Counts per status ---
-  const total = docsData?.total ?? documents.length
-  const countByStatus = (s: string) => documents.filter((d) => d.status === s).length
+  // --- Counts from full (unfiltered) list ---
+  const isProcessing = (d: PipelineDocument) =>
+    d.status === 'processing' || d.status === 'received' || d.status === 'classified' || d.status === 'summarized'
+  const isCompleted = (d: PipelineDocument) =>
+    d.status === 'routed' || d.status === 'pending_review' || d.status === 'acknowledged' || d.status === 'handled'
+  const isFailed = (d: PipelineDocument) => d.status === 'failed'
+
+  const countProcessing = documents.filter(isProcessing).length
+  const countCompleted = documents.filter(isCompleted).length
+  const countFailed = documents.filter(isFailed).length
 
   const filters: { key: StatusFilter; label: string; count: number }[] = [
-    { key: 'all', label: 'All', count: total },
-    { key: 'processing', label: 'Processing', count: countByStatus('processing') },
-    { key: 'completed', label: 'Completed', count: countByStatus('completed') },
-    { key: 'failed', label: 'Failed', count: countByStatus('failed') },
+    { key: 'all', label: 'All', count: documents.length },
+    { key: 'processing', label: 'Processing', count: countProcessing },
+    { key: 'completed', label: 'Completed', count: countCompleted },
+    { key: 'failed', label: 'Failed', count: countFailed },
   ]
+
+  // Client-side filter
+  const filteredDocs = statusFilter === 'all'
+    ? documents
+    : statusFilter === 'processing'
+      ? documents.filter(isProcessing)
+      : statusFilter === 'completed'
+        ? documents.filter(isCompleted)
+        : documents.filter(isFailed)
 
   return (
     <div className="space-y-6">
@@ -530,13 +543,13 @@ export function PipelinePage() {
       {/* Document list */}
       {docsLoading ? (
         <p className="text-gray-500">Loading documents...</p>
-      ) : documents.length === 0 ? (
+      ) : filteredDocs.length === 0 ? (
         <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
           No documents found.
         </div>
       ) : (
-        <div className="space-y-3">
-          {documents.map((doc) => (
+        <div className="space-y-2">
+          {filteredDocs.map((doc) => (
             <DocumentCard
               key={doc.id}
               doc={doc}
