@@ -402,6 +402,12 @@ async def _get_pending_reviews(
                     doc.extracted_fields, indent=2
                 )
         ocr_text = ocr_text[:1500]  # Generous context
+        logger.info(
+            "REVIEW_DATA: doc=%s spoken=%s text_len=%d",
+            r.document_id,
+            bool(doc.spoken_summary if doc else None),
+            len(ocr_text),
+        )
 
         items.append({
             "review_id": str(i),
