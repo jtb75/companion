@@ -112,9 +112,9 @@ async def _generate_with_tools(
         fn_name = fn_call.name
         fn_args = dict(fn_call.args) if fn_call.args else {}
         logger.info(
-            "TOOL_CALL: %s args=%s user=%s",
+            "TOOL_CALL: %s arg_keys=%s user=%s",
             fn_name,
-            fn_args,
+            list(fn_args.keys()),
             user_id,
         )
         result = await execute_tool(
@@ -191,7 +191,7 @@ async def start_conversation(
         logger.info(
             "CHAT_PERSIST: Session %s saved for user %s",
             session.session_id,
-            user.email
+            user.id
         )
     except Exception as e:
         logger.error("CHAT_PERSIST_FAIL: %s", str(e), exc_info=True)

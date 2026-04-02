@@ -23,7 +23,13 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
+    # Startup: block dev_auth_bypass in production
+    if settings.dev_auth_bypass and settings.environment == "prod":
+        raise RuntimeError(
+            "FATAL: dev_auth_bypass is enabled in production. "
+            "This exposes all endpoints without authentication. "
+            "Set COMPANION_DEV_AUTH_BYPASS=false and redeploy."
+        )
     yield
     # Shutdown
     await engine.dispose()
@@ -42,7 +48,6 @@ CORS_ORIGINS = {
         "https://app.mydailydignity.com",
         "https://companion-staging-web-44gbcsdrnq-uc.a.run.app",
         "https://companion-staging-web-381910341082.us-central1.run.app",
-        "http://localhost:5173",
     ],
     "prod": [
         "https://app.mydailydignity.com",
