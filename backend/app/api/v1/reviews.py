@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.dependencies import User, require_complete_profile
 from app.db import get_db
 from app.models.document import Document
-from app.models.enums import ReviewStatus
 from app.models.pending_review import PendingReview
 
 router = APIRouter(prefix="/reviews", tags=["Reviews"])
@@ -24,7 +23,7 @@ async def get_pending_reviews(
         .where(
             PendingReview.user_id == user.id,
             PendingReview.review_status.in_(
-                [ReviewStatus.PENDING, ReviewStatus.PRESENTED]
+                ["pending", "presented"]
             ),
         )
         .order_by(

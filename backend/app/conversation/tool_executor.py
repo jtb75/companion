@@ -315,7 +315,6 @@ async def _get_pending_reviews(
     db: AsyncSession, user_id: UUID, args: dict
 ) -> dict:
     from app.models.document import Document
-    from app.models.enums import ReviewStatus
     from app.models.pending_review import PendingReview
 
     result = await db.execute(
@@ -323,7 +322,7 @@ async def _get_pending_reviews(
         .where(
             PendingReview.user_id == user_id,
             PendingReview.review_status.in_(
-                [ReviewStatus.PENDING, ReviewStatus.PRESENTED]
+                ["pending", "presented"]
             ),
         )
         .order_by(
@@ -354,8 +353,8 @@ async def _get_pending_reviews(
         })
 
         # Mark as presented
-        if r.review_status == ReviewStatus.PENDING:
-            r.review_status = ReviewStatus.PRESENTED
+        if r.review_status == "pending":
+            r.review_status = "presented"
             r.presented_at = datetime.utcnow()
 
     await db.flush()
@@ -365,7 +364,7 @@ async def _get_pending_reviews(
 async def _confirm_document_action(
     db: AsyncSession, user_id: UUID, args: dict
 ) -> dict:
-    from app.models.enums import ReviewStatus
+
     from app.models.pending_review import PendingReview
     from app.services.record_creation_service import (
         create_appointment_from_fields,
@@ -386,7 +385,7 @@ async def _confirm_document_action(
         return {"error": True, "message": "Review not found."}
 
     if action == "skip":
-        review.review_status = ReviewStatus.SKIPPED
+        review.review_status = "skipped"
         review.resolved_at = datetime.utcnow()
         await db.flush()
         return {"success": True, "action": "skipped"}
@@ -414,7 +413,7 @@ async def _confirm_document_action(
                 review.created_record_type = "bill"
                 review.created_record_id = bill.id
 
-        review.review_status = ReviewStatus.CONFIRMED
+        review.review_status = "confirmed"
         review.resolved_at = datetime.utcnow()
         await db.flush()
 
@@ -436,7 +435,7 @@ async def _confirm_document_action(
         if appt:
             review.created_record_type = "appointment"
             review.created_record_id = appt.id
-        review.review_status = ReviewStatus.CONFIRMED
+        review.review_status = "confirmed"
         review.resolved_at = datetime.utcnow()
         await db.flush()
 
@@ -450,7 +449,7 @@ async def _confirm_document_action(
 
     else:
         # file_only, review_with_contact, discard
-        review.review_status = ReviewStatus.CONFIRMED
+        review.review_status = "confirmed"
         review.resolved_at = datetime.utcnow()
         await db.flush()
         return {

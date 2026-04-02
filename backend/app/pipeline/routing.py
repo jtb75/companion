@@ -9,10 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.bill import Bill
-from app.models.enums import (
-    RecommendedAction,
-    ReviewStatus,
-)
+from app.models.enums import RecommendedAction
 from app.models.pending_review import PendingReview
 from app.pipeline.schemas import (
     ClassificationResult,
@@ -88,7 +85,7 @@ async def route(
         review = PendingReview(
             user_id=user_id,
             document_id=classification.document_id,
-            review_status=ReviewStatus.PENDING,
+            review_status="pending",
             recommended_action=RecommendedAction.REVIEW_WITH_CONTACT,
             proposed_record_data=fields,
             confidence_score=Decimal(
@@ -113,7 +110,7 @@ async def route(
             review = PendingReview(
                 user_id=user_id,
                 document_id=classification.document_id,
-                review_status=ReviewStatus.AUTO_CREATED,
+                review_status="auto_created",
                 recommended_action=RecommendedAction.FILE_ONLY,
                 proposed_record_data=fields,
                 confidence_score=Decimal(
@@ -127,7 +124,7 @@ async def route(
             review = PendingReview(
                 user_id=user_id,
                 document_id=classification.document_id,
-                review_status=ReviewStatus.PENDING,
+                review_status="pending",
                 recommended_action=RecommendedAction.FILE_ONLY,
                 proposed_record_data=fields,
                 confidence_score=Decimal(
@@ -186,7 +183,7 @@ async def _handle_bill(
         review = PendingReview(
             user_id=user_id,
             document_id=classification.document_id,
-            review_status=ReviewStatus.AUTO_CREATED,
+            review_status="auto_created",
             recommended_action=RecommendedAction.ADD_BILL,
             proposed_record_data=fields,
             confidence_score=Decimal(
@@ -214,7 +211,7 @@ async def _handle_bill(
     review = PendingReview(
         user_id=user_id,
         document_id=classification.document_id,
-        review_status=ReviewStatus.PENDING,
+        review_status="pending",
         recommended_action=RecommendedAction.ADD_BILL,
         proposed_record_data=fields,
         confidence_score=Decimal(
@@ -259,7 +256,7 @@ async def _handle_medical(
         review = PendingReview(
             user_id=user_id,
             document_id=classification.document_id,
-            review_status=ReviewStatus.AUTO_CREATED,
+            review_status="auto_created",
             recommended_action=RecommendedAction.ADD_APPOINTMENT,
             proposed_record_data=fields,
             confidence_score=Decimal(
@@ -281,7 +278,7 @@ async def _handle_medical(
     review = PendingReview(
         user_id=user_id,
         document_id=classification.document_id,
-        review_status=ReviewStatus.PENDING,
+        review_status="pending",
         recommended_action=RecommendedAction.ADD_APPOINTMENT,
         proposed_record_data=fields,
         confidence_score=Decimal(
