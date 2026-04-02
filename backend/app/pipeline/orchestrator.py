@@ -54,6 +54,7 @@ async def process_document(
         stage_start = time.monotonic()
         await publish_pipeline_event(
             document_id, "ingestion", "started",
+            user_id=str(user_id),
         )
         source = getattr(
             doc.source_channel, "value", str(doc.source_channel)

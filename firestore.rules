@@ -2,10 +2,14 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Pipeline events — read requires authentication,
-    // writes only via backend service account (bypasses rules)
+    // Pipeline events — authenticated users can read their own
+    // documents or all events if they have admin access.
+    // Writes only via backend service account (bypasses rules).
     match /pipeline_events/{docId} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null && (
+        resource.data.user_id == request.auth.uid ||
+        request.auth.token.admin == true
+      );
       allow write: if false;
     }
 

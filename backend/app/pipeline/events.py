@@ -24,6 +24,7 @@ async def publish_pipeline_event(
     stage: str,
     status: str,
     metadata: dict | None = None,
+    user_id: str | None = None,
 ) -> None:
     """Write pipeline stage status to Firestore.
 
@@ -42,6 +43,8 @@ async def publish_pipeline_event(
             stage: status,
             "updated_at": datetime.utcnow().isoformat(),
         }
+        if user_id:
+            update["user_id"] = str(user_id)
         if metadata:
             update[f"{stage}_metadata"] = metadata
 
