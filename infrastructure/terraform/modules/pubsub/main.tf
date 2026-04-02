@@ -83,6 +83,12 @@ resource "google_pubsub_subscription" "events" {
   }
 }
 
+# Read pipeline API key from Secret Manager
+data "google_secret_manager_secret_version" "pipeline_api_key" {
+  secret  = var.pipeline_api_key_secret_id
+  project = var.project_id
+}
+
 # Push subscription for document-received
 resource "google_pubsub_subscription" "document_received_push" {
   name    = "companion-${var.environment}-document-received-push"
@@ -93,7 +99,7 @@ resource "google_pubsub_subscription" "document_received_push" {
   message_retention_duration = "604800s"
 
   push_config {
-    push_endpoint = "${var.backend_url}/api/pipeline/document-received"
+    push_endpoint = "${var.backend_url}/api/pipeline/document-received?key=${data.google_secret_manager_secret_version.pipeline_api_key.secret_data}"
 
     attributes = {
       "x-goog-version" = "v1"

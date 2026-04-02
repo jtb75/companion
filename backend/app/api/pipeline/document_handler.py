@@ -5,7 +5,16 @@ import json
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    Header,
+    HTTPException,
+    status,
+)
+from fastapi import (
+    Query as QueryParam,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -20,15 +29,23 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Internal Pipeline"])
 
 async def verify_pipeline_key(
-    x_pipeline_key: str | None = Header(None, alias="X-Pipeline-Key"),
+    x_pipeline_key: str | None = Header(
+        None, alias="X-Pipeline-Key"
+    ),
+    key: str | None = QueryParam(
+        None, alias="key"
+    ),
 ):
-    """Verify pipeline API key for service-to-service auth."""
+    """Verify pipeline API key (header or query param)."""
     if not settings.pipeline_api_key:
         if settings.environment in ("development", "test"):
             return
-        raise HTTPException(503, "Pipeline API key not configured")
+        raise HTTPException(
+            503, "Pipeline API key not configured"
+        )
 
-    if x_pipeline_key != settings.pipeline_api_key:
+    provided = x_pipeline_key or key
+    if provided != settings.pipeline_api_key:
         raise HTTPException(401, "Invalid pipeline API key")
 
 
