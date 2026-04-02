@@ -13,7 +13,7 @@ from app.models.pending_review import PendingReview
 router = APIRouter(prefix="/reviews", tags=["Reviews"])
 
 
-@router.get("")
+@router.get("/pending")
 async def get_pending_reviews(
     user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
