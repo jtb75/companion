@@ -32,8 +32,12 @@ async def publish_pipeline_event(
 
     try:
         r = get_redis()
-        await r.publish(CHANNEL, json.dumps(event))
+        listeners = await r.publish(CHANNEL, json.dumps(event))
         await r.aclose()
+        logger.info(
+            "PIPELINE_EVENT: doc=%s stage=%s status=%s listeners=%d",
+            document_id, stage, status, listeners,
+        )
     except Exception:
         logger.warning(
             "Failed to publish pipeline event for doc %s",
