@@ -6,11 +6,23 @@ import logging
 from fastapi import WebSocket, WebSocketDisconnect
 
 from app.auth.firebase import verify_firebase_token
-from app.db.redis import get_redis
+from app.pipeline.events import subscribe, unsubscribe
 
 logger = logging.getLogger(__name__)
 
 CHANNEL = "pipeline:updates"
+
+
+def _redis_available() -> bool:
+    """Check if Redis is configured and reachable."""
+    try:
+        from app.config import settings
+        url = settings.redis_url
+        if not url or "disabled" in url or "localhost" in url:
+            return False
+        return True
+    except Exception:
+        return False
 
 
 async def pipeline_ws_handler(websocket: WebSocket):
@@ -33,12 +45,21 @@ async def pipeline_ws_handler(websocket: WebSocket):
         await websocket.close(code=1008)
         return
 
-    # Subscribe to Redis pub/sub
+    if _redis_available():
+        await _redis_subscriber(websocket)
+    else:
+        await _memory_subscriber(websocket)
+
+
+async def _redis_subscriber(websocket: WebSocket):
+    """Subscribe to Redis pub/sub and forward events."""
+    from app.db.redis import get_redis
+
     r = get_redis()
     pubsub = r.pubsub()
     try:
         await pubsub.subscribe(CHANNEL)
-        logger.info("WebSocket client subscribed to %s", CHANNEL)
+        logger.info("WebSocket client subscribed to Redis %s", CHANNEL)
 
         while True:
             msg = await pubsub.get_message(
@@ -48,13 +69,34 @@ async def pipeline_ws_handler(websocket: WebSocket):
             if msg and msg["type"] == "message":
                 await websocket.send_text(msg["data"])
             else:
-                # Yield control so disconnect can be detected
                 await asyncio.sleep(0.1)
     except WebSocketDisconnect:
         logger.info("WebSocket client disconnected")
     except Exception:
-        logger.exception("WebSocket pipeline error")
+        logger.exception("WebSocket Redis pipeline error")
     finally:
         await pubsub.unsubscribe(CHANNEL)
         await pubsub.aclose()
         await r.aclose()
+
+
+async def _memory_subscriber(websocket: WebSocket):
+    """Subscribe to in-process event queue."""
+    queue = subscribe()
+    logger.info("WebSocket client subscribed to in-process events")
+    try:
+        while True:
+            try:
+                event_json = await asyncio.wait_for(
+                    queue.get(), timeout=1.0
+                )
+                await websocket.send_text(event_json)
+            except TimeoutError:
+                # Keep alive — check if client is still connected
+                pass
+    except WebSocketDisconnect:
+        logger.info("WebSocket client disconnected")
+    except Exception:
+        logger.exception("WebSocket memory pipeline error")
+    finally:
+        unsubscribe(queue)
