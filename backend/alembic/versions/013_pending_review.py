@@ -13,7 +13,12 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Add pending_review to documentstatus enum
+    # Add PENDING_REVIEW to documentstatus enum (uppercase to match existing values)
+    op.execute(
+        "ALTER TYPE documentstatus ADD VALUE IF NOT EXISTS"
+        " 'PENDING_REVIEW'"
+    )
+    # Also add lowercase in case it was already created
     op.execute(
         "ALTER TYPE documentstatus ADD VALUE IF NOT EXISTS"
         " 'pending_review'"
