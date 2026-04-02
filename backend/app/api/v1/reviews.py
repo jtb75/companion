@@ -7,28 +7,29 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.dependencies import User, require_complete_profile
 from app.db import get_db
 from app.models.document import Document
+from app.models.enums import ReviewStatus
 from app.models.pending_review import PendingReview
 
 router = APIRouter(prefix="/reviews", tags=["Reviews"])
 
 
-@router.get("/pending")
+@router.get("")
 async def get_pending_reviews(
     user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get pending document reviews for the TodayScreen."""
+    """List pending document reviews for the user."""
     result = await db.execute(
         select(PendingReview)
         .where(
             PendingReview.user_id == user.id,
             PendingReview.review_status.in_(
-                ["pending", "presented"]
+                [ReviewStatus.PENDING, ReviewStatus.PRESENTED]
             ),
         )
         .order_by(
             PendingReview.is_urgent.desc(),
-            PendingReview.created_at,
+            PendingReview.created_at.desc(),
         )
         .limit(5)
     )

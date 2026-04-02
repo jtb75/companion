@@ -210,18 +210,19 @@ async def _build_alerts_context(db: AsyncSession, user_id: UUID) -> str:
 
     # Pending document reviews
     try:
+        from app.models.enums import ReviewStatus
         from app.models.pending_review import PendingReview
         async with db.begin_nested():
             result = await db.execute(
                 select(PendingReview).where(
                     PendingReview.user_id == user_id,
                     PendingReview.review_status.in_(
-                        ["pending", "presented"]
+                        [ReviewStatus.PENDING, ReviewStatus.PRESENTED]
                     ),
                 ).order_by(
                     PendingReview.is_urgent.desc(),
-                    PendingReview.created_at,
-                ).limit(1)
+                    PendingReview.created_at.desc(),
+                )
             )
             review = result.scalar_one_or_none()
     except Exception:

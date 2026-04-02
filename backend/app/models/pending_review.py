@@ -2,11 +2,12 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, Text
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Numeric, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
+from app.models.enums import RecommendedAction, ReviewStatus
 
 
 class PendingReview(TimestampMixin, Base):
@@ -25,11 +26,14 @@ class PendingReview(TimestampMixin, Base):
         ForeignKey("documents.id", ondelete="SET NULL"),
         nullable=True,
     )
-    review_status: Mapped[str] = mapped_column(
-        Text, nullable=False, server_default="pending",
+    review_status: Mapped[ReviewStatus] = mapped_column(
+        Enum(ReviewStatus, native_enum=False),
+        nullable=False,
+        server_default=ReviewStatus.PENDING.value,
     )
-    recommended_action: Mapped[str] = mapped_column(
-        Text, nullable=False,
+    recommended_action: Mapped[RecommendedAction] = mapped_column(
+        Enum(RecommendedAction, native_enum=False),
+        nullable=False,
     )
     proposed_record_data: Mapped[dict] = mapped_column(
         JSONB, nullable=False
