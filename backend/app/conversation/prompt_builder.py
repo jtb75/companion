@@ -119,18 +119,17 @@ def _build_session_context(user: User, trigger: str) -> str:
             "Summarize what needs attention today."
         ),
         "document_arrived": (
-            f"A new document was just processed for {name}. "
-            "IMPORTANT: You MUST call get_pending_reviews first "
-            "before saying anything about documents. Do NOT guess "
-            "or fabricate document details. Only present facts "
-            "returned by the tool."
+            f"You already greeted {name} and told them you have "
+            "mail. Now call get_pending_reviews to get the actual "
+            "document data. Present ONLY facts from the tool "
+            "result. NEVER guess or make up document details."
         ),
         "document_review": (
-            f"{name} wants to review a pending document. "
-            "IMPORTANT: You MUST call get_pending_reviews first "
-            "before saying anything about documents. Do NOT guess "
-            "or fabricate document details. Only present facts "
-            "returned by the tool. Present one document at a time."
+            f"You already greeted {name} and told them you have "
+            "mail. Now call get_pending_reviews to get the actual "
+            "document data. Present ONLY facts from the tool "
+            "result. NEVER guess or make up document details. "
+            "Present one document at a time."
         ),
         "notification_tapped": (
             f"{name} tapped a notification. "

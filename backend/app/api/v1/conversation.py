@@ -156,12 +156,24 @@ async def start_conversation(
     llm = get_llm_client()
 
     name = user.nickname or user.preferred_name
-    greeting_messages = [
-        {"role": "user", "content": f"[Session started by {name}]"}
-    ]
-    greeting = await llm.generate(
-        system_prompt, greeting_messages, max_tokens=1024
-    )
+
+    # Document review triggers use a static greeting to avoid
+    # hallucination — the LLM can't call tools during greeting
+    if trigger in ("document_review", "document_arrived"):
+        greeting = (
+            f"Hi {name}. I have some mail for you. "
+            "Let me pull it up."
+        )
+    else:
+        greeting_messages = [
+            {
+                "role": "user",
+                "content": f"[Session started by {name}]",
+            }
+        ]
+        greeting = await llm.generate(
+            system_prompt, greeting_messages, max_tokens=1024
+        )
 
     session.add_message("assistant", greeting)
     await state_manager.update_session(session)
