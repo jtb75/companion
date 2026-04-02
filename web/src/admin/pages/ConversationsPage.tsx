@@ -31,8 +31,8 @@ interface ConversationDetail {
 
 /* ── Helpers ───────────────────────────────────────────────── */
 
-function formatDuration(seconds: number | null): string {
-  if (seconds === null || seconds === 0) return '-'
+function formatDuration(seconds: number | null | undefined): string {
+  if (seconds == null || isNaN(seconds) || seconds === 0) return '-'
   const m = Math.floor(seconds / 60)
   const s = seconds % 60
   if (m === 0) return `${s}s`

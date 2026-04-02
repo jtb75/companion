@@ -75,6 +75,17 @@ async def list_conversations(
                 else None
             ),
             "message_count": chat_session.message_count,
+            "duration_seconds": (
+                int(
+                    (
+                        chat_session.ended_at
+                        - chat_session.started_at
+                    ).total_seconds()
+                )
+                if chat_session.ended_at
+                and chat_session.started_at
+                else None
+            ),
         })
 
     return {
