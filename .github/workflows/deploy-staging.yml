@@ -56,6 +56,18 @@ jobs:
           terraform init \
             -backend-config="bucket=${{ env.GCP_PROJECT_ID }}-tf-state" \
             -backend-config="prefix=${{ env.ENVIRONMENT }}"
+      - name: Import manually-created secrets
+        working-directory: infrastructure/terraform
+        continue-on-error: true
+        run: |
+          terraform import \
+            -var-file="environments/${{ env.ENVIRONMENT }}.tfvars" \
+            -var="project_id=${{ env.GCP_PROJECT_ID }}" \
+            -var="backend_image=placeholder" \
+            -var="web_image=placeholder" \
+            'module.secrets.google_secret_manager_secret.manual["pipeline-api-key"]' \
+            "projects/${{ env.GCP_PROJECT_ID }}/secrets/companion-${{ env.ENVIRONMENT }}-pipeline-api-key" \
+            2>/dev/null || true
       - name: Terraform plan
         working-directory: infrastructure/terraform
         run: |
