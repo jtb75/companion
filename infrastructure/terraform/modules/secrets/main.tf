@@ -12,6 +12,7 @@ locals {
     "openai-api-key"          = "OpenAI API key for embeddings"
     "gmail-oauth-credentials" = "Gmail OAuth credentials for email processing"
     "gmail-smtp-password"     = "Gmail SMTP app password for sending transactional email"
+    "pipeline-api-key"        = "Secret key for internal pipeline API calls"
   }
 }
 

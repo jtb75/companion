@@ -32,3 +32,8 @@ output "gmail_smtp_password_secret_id" {
   description = "Secret Manager secret ID for Gmail SMTP app password"
   value       = google_secret_manager_secret.manual["gmail-smtp-password"].secret_id
 }
+
+output "pipeline_api_key_secret_id" {
+  description = "Secret Manager secret ID for internal pipeline API"
+  value       = google_secret_manager_secret.manual["pipeline-api-key"].secret_id
+}

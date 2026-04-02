@@ -56,9 +56,11 @@ module "storage" {
 }
 
 module "pubsub" {
-  source      = "./modules/pubsub"
-  project_id  = var.project_id
-  environment = var.environment
+  source                     = "./modules/pubsub"
+  project_id                 = var.project_id
+  environment                = var.environment
+  backend_url                = module.compute.backend_url
+  pipeline_api_key_secret_id = module.secrets.pipeline_api_key_secret_id
 }
 
 # Import manually-created secrets into Terraform state
@@ -93,6 +95,7 @@ module "compute" {
   firebase_credentials_secret_id = module.secrets.firebase_credentials_secret_id
   redis_url_secret_id            = module.secrets.redis_url_secret_id
   gmail_smtp_password_secret_id  = module.secrets.gmail_smtp_password_secret_id
+  pipeline_api_key_secret_id     = module.secrets.pipeline_api_key_secret_id
   documents_bucket               = module.storage.documents_bucket_name
   app_url                        = var.app_url
   artifact_registry_repo         = module.storage.artifact_registry_repo

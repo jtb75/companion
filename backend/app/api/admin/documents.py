@@ -5,7 +5,6 @@ import uuid
 
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Depends,
     HTTPException,
     Query,
@@ -162,11 +161,13 @@ async def cancel_document(
 @router.post("/{document_id}/resubmit")
 async def resubmit_document(
     document_id: uuid.UUID,
-    background_tasks: BackgroundTasks,
     admin: AdminUser = Depends(_editor),
     db: AsyncSession = Depends(get_db),
 ):
     """Reset a document to RECEIVED and re-trigger the pipeline."""
+    from app.events.publisher import event_publisher
+    from app.events.schemas import DocumentReceivedPayload
+
     doc = await db.get(Document, document_id)
     if doc is None:
         raise HTTPException(
@@ -187,30 +188,23 @@ async def resubmit_document(
     doc.card_summary = None
     doc.routing_destination = None
     doc.processed_at = None
+    
+    # Save resets
     await db.commit()
 
-    async def _run_pipeline(
-        doc_id: uuid.UUID, user_id: uuid.UUID
-    ):
-        from app.db.session import async_session_factory
-        from app.pipeline.orchestrator import process_document
-
-        async with async_session_factory() as session:
-            try:
-                await process_document(
-                    session, doc_id, user_id
-                )
-                await session.commit()
-            except Exception:
-                await session.rollback()
-                logger.exception(
-                    "Resubmit pipeline failed for %s",
-                    doc_id,
-                )
-
-    background_tasks.add_task(
-        _run_pipeline, doc.id, doc.user_id
+    # Trigger pipeline via event
+    await event_publisher.publish(
+        "document.received",
+        user_id=doc.user_id,
+        payload=DocumentReceivedPayload(
+            document_id=doc.id,
+            source_channel=getattr(
+                doc.source_channel, "value",
+                str(doc.source_channel),
+            ),
+        ),
     )
+
     logger.info(
         "Document %s resubmitted by admin %s",
         document_id,

@@ -1,5 +1,5 @@
 locals {
-  topic_names = [
+  all_topic_names = [
     "document-received",
     "document-processed",
     "document-routed",
@@ -24,6 +24,9 @@ locals {
     "checkin-morning-acknowledged",
     "config-updated",
   ]
+
+  # Topics that use standard pull subscriptions
+  pull_topic_names = setsubtract(toset(local.all_topic_names), ["document-received"])
 }
 
 # Dead letter topic
@@ -46,7 +49,7 @@ resource "google_pubsub_subscription" "dead_letter" {
 
 # Event topics
 resource "google_pubsub_topic" "events" {
-  for_each = toset(local.topic_names)
+  for_each = toset(local.all_topic_names)
 
   name    = "companion-${var.environment}-${each.value}"
   project = var.project_id
@@ -54,9 +57,9 @@ resource "google_pubsub_topic" "events" {
   message_retention_duration = "604800s" # 7 days
 }
 
-# Default pull subscriptions for each topic
+# Default pull subscriptions for each topic (except push ones)
 resource "google_pubsub_subscription" "events" {
-  for_each = toset(local.topic_names)
+  for_each = local.pull_topic_names
 
   name    = "companion-${var.environment}-${each.value}-sub"
   project = var.project_id
@@ -77,5 +80,23 @@ resource "google_pubsub_subscription" "events" {
 
   expiration_policy {
     ttl = "" # Never expires
+  }
+}
+
+# Push subscription for document-received
+resource "google_pubsub_subscription" "document_received_push" {
+  name    = "companion-${var.environment}-document-received-push"
+  project = var.project_id
+  topic   = google_pubsub_topic.events["document-received"].id
+
+  ack_deadline_seconds       = 300 # 5 mins for LLM pipeline
+  message_retention_duration = "604800s"
+
+  push_config {
+    push_endpoint = "${var.backend_url}/api/pipeline/document-received"
+
+    attributes = {
+      "x-goog-version" = "v1"
+    }
   }
 }

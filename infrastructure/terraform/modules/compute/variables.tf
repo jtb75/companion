@@ -47,13 +47,18 @@ variable "redis_url_secret_id" {
   description = "Secret Manager secret ID for Redis URL"
   type        = string
 }
-
 variable "gmail_smtp_password_secret_id" {
   description = "Secret Manager secret ID for Gmail SMTP app password"
   type        = string
 }
 
+variable "pipeline_api_key_secret_id" {
+  description = "Secret Manager secret ID for internal pipeline API key"
+  type        = string
+}
+
 variable "documents_bucket" {
+...
   description = "GCS bucket name for documents"
   type        = string
 }

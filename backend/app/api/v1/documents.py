@@ -6,7 +6,6 @@ import uuid
 
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Depends,
     File,
     HTTPException,
@@ -20,14 +19,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.dependencies import User, require_complete_profile
 from app.config import settings
 from app.db import get_db
-from app.db.session import async_session_factory
 from app.models.enums import DocumentStatus, SourceChannel
-from app.pipeline.orchestrator import process_document
 from app.schemas.document import DocumentStatusUpdate
 from app.services import document_service
-from app.services.push_notification_service import (
-    notify_document_processed,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -56,45 +50,8 @@ async def _upload_to_gcs(
     return await asyncio.to_thread(_upload)
 
 
-async def _run_pipeline_background(
-    document_id: uuid.UUID,
-    user_id: uuid.UUID,
-) -> None:
-    """Run the pipeline in a background task."""
-    logger.info(
-        "Starting background pipeline for doc %s",
-        document_id,
-    )
-    async with async_session_factory() as db:
-        try:
-            result = await process_document(
-                db, document_id, user_id
-            )
-            await db.commit()
-            logger.info(
-                "Pipeline complete for doc %s: %s",
-                document_id,
-                result.classification.classification,
-            )
-
-            summary = (
-                result.summarization.card_summary or ""
-            )
-            await notify_document_processed(
-                db, user_id, summary
-            )
-            await db.commit()
-        except Exception:
-            await db.rollback()
-            logger.exception(
-                "Background pipeline failed for doc %s",
-                document_id,
-            )
-
-
 @router.post("/scan", status_code=status.HTTP_201_CREATED)
 async def scan_document(
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
@@ -134,7 +91,7 @@ async def scan_document(
             detail="Failed to upload file to storage.",
         ) from None
 
-    # Create document record
+    # Create document record (publishes document.received event)
     doc = await document_service.create_document(
         db,
         user.id,
@@ -150,13 +107,8 @@ async def scan_document(
         },
     )
 
-    # Commit so background task can find the document
+    # Commit the transaction
     await db.commit()
-
-    # Trigger pipeline in the background
-    background_tasks.add_task(
-        _run_pipeline_background, doc.id, user.id
-    )
 
     return {
         "document_id": doc.id,
