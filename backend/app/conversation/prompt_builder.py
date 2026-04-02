@@ -209,12 +209,13 @@ async def _build_alerts_context(db: AsyncSession, user_id: UUID) -> str:
         )
 
     # Pending document reviews
+    from app.models.enums import ReviewStatus
     from app.models.pending_review import PendingReview
     result = await db.execute(
         select(PendingReview).where(
             PendingReview.user_id == user_id,
             PendingReview.review_status.in_(
-                ["pending", "presented"]
+                [ReviewStatus.PENDING, ReviewStatus.PRESENTED]
             ),
         ).order_by(
             PendingReview.is_urgent.desc(),

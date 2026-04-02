@@ -315,6 +315,7 @@ async def _get_pending_reviews(
     db: AsyncSession, user_id: UUID, args: dict
 ) -> dict:
     from app.models.document import Document
+    from app.models.enums import ReviewStatus
     from app.models.pending_review import PendingReview
 
     result = await db.execute(
@@ -322,7 +323,7 @@ async def _get_pending_reviews(
         .where(
             PendingReview.user_id == user_id,
             PendingReview.review_status.in_(
-                ["pending", "presented"]
+                [ReviewStatus.PENDING, ReviewStatus.PRESENTED]
             ),
         )
         .order_by(
@@ -353,8 +354,8 @@ async def _get_pending_reviews(
         })
 
         # Mark as presented
-        if r.review_status == "pending":
-            r.review_status = "presented"
+        if r.review_status == ReviewStatus.PENDING:
+            r.review_status = ReviewStatus.PRESENTED
             r.presented_at = datetime.utcnow()
 
     await db.flush()
