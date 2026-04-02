@@ -3,6 +3,7 @@ import {
   View, Text, TextInput, TouchableOpacity, FlatList,
   StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native'
+import { useRoute } from '@react-navigation/native'
 import { api } from '../api/client'
 import { colors, brand } from '../theme/colors'
 
@@ -13,6 +14,8 @@ interface Message {
 }
 
 export function ChatScreen() {
+  const route = useRoute<any>()
+  const reviewId = route.params?.reviewId as string | undefined
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [sessionId, setSessionId] = useState<string | null>(null)
@@ -22,21 +25,26 @@ export function ChatScreen() {
 
   useEffect(() => {
     startSession()
-  }, [])
+  }, [reviewId])
 
   const startSession = async () => {
+    // Determine trigger based on navigation context
+    const trigger = reviewId ? 'document_review' : 'user_initiated'
+
     // Show instant greeting, then connect in background
     setMessages([{
       id: '0',
       role: 'assistant',
-      content: `Hi! I'm ${brand.short}. What would you like to do today?`,
+      content: reviewId
+        ? `Let me pull up that document for you...`
+        : `Hi! I'm ${brand.short}. What would you like to do today?`,
     }])
     setStarting(false)
 
     try {
       const res = await api<{ session_id: string; greeting: string }>(
         '/api/v1/conversation/start',
-        { method: 'POST', body: JSON.stringify({ context: 'user_initiated' }) },
+        { method: 'POST', body: JSON.stringify({ initial_context: trigger }) },
       )
       setSessionId(res.session_id)
       // Update greeting with LLM-generated one if different

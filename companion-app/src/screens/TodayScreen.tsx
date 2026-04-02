@@ -1,19 +1,34 @@
 import React, { useEffect, useState } from 'react'
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native'
+import { useNavigation } from '@react-navigation/native'
 import { api } from '../api/client'
 import { colors, brand } from '../theme/colors'
 import { useAuth } from '../auth/AuthProvider'
 import { ScanButton } from '../components/ScanButton'
+
+interface PendingReview {
+  id: string
+  source_description: string
+  recommended_action: string
+  is_urgent: boolean
+  is_past_due: boolean
+  is_duplicate: boolean
+  card_summary: string | null
+  classification: string | null
+  proposed_data: Record<string, any>
+}
 
 interface TodayData {
   medications: { id: string; name: string; dosage: string; schedule: string[] }[]
   appointments: { id: string; provider_name: string; appointment_at: string }[]
   bills: { id: string; sender: string; amount: string; due_date: string }[]
   todos: { id: string; title: string; completed_at: string | null }[]
+  pendingReviews: PendingReview[]
 }
 
 export function TodayScreen() {
   const { user } = useAuth()
+  const navigation = useNavigation<any>()
   const [data, setData] = useState<TodayData | null>(null)
   const [loading, setLoading] = useState(true)
   const [greeting, setGreeting] = useState('')
@@ -29,18 +44,20 @@ export function TodayScreen() {
 
   const loadData = async () => {
     try {
-      const [sections, meds, appts, bills, todos] = await Promise.all([
+      const [sections, meds, appts, bills, todos, reviews] = await Promise.all([
         api<any>('/api/v1/sections/today').catch(() => null),
         api<any>('/api/v1/medications').catch(() => ({ medications: [] })),
         api<any>('/api/v1/appointments').catch(() => ({ appointments: [] })),
         api<any>('/api/v1/bills').catch(() => ({ bills: [] })),
         api<any>('/api/v1/todos').catch(() => ({ todos: [] })),
+        api<any>('/api/v1/reviews/pending').catch(() => ({ reviews: [] })),
       ])
       setData({
         medications: meds?.medications || [],
         appointments: appts?.appointments || [],
         bills: bills?.bills || [],
         todos: todos?.todos || [],
+        pendingReviews: reviews?.reviews || [],
       })
     } catch {
       // Fallback
@@ -72,6 +89,38 @@ export function TodayScreen() {
         <Text style={styles.greeting}>{greeting}, {name}</Text>
         <Text style={styles.subtitle}>Here's your day at a glance</Text>
       </View>
+
+      {/* Pending Document Review */}
+      {(data?.pendingReviews?.length ?? 0) > 0 && (() => {
+        const review = data!.pendingReviews[0]
+        const sender = review.proposed_data?.sender
+        const amount = review.proposed_data?.amount_due
+        const summary = review.card_summary || (sender ? `From ${sender}` : 'New document')
+        return (
+          <TouchableOpacity
+            style={[styles.card, review.is_urgent && styles.urgentCard]}
+            onPress={() => navigation.navigate('Chat', { reviewId: review.id })}
+            activeOpacity={0.7}
+          >
+            <View style={styles.reviewHeader}>
+              <Text style={styles.reviewIcon}>📬</Text>
+              <Text style={[styles.cardTitle, { marginBottom: 0 }]}>
+                {review.is_urgent ? 'NEEDS ATTENTION' : 'NEW MAIL'}
+              </Text>
+            </View>
+            <Text style={styles.reviewSummary}>{summary}</Text>
+            {amount && <Text style={styles.rowSub}>${amount}</Text>}
+            <View style={styles.reviewCta}>
+              <Text style={styles.reviewCtaText}>Review with {brand.short} →</Text>
+            </View>
+            {(data?.pendingReviews?.length ?? 0) > 1 && (
+              <Text style={styles.reviewMore}>
+                +{data!.pendingReviews.length - 1} more to review
+              </Text>
+            )}
+          </TouchableOpacity>
+        )
+      })()}
 
       {/* Medications */}
       {activeMeds.length > 0 && (
@@ -176,4 +225,11 @@ const styles = StyleSheet.create({
   rowTitle: { fontSize: 15, fontWeight: '500', color: colors.gray800 },
   rowSub: { fontSize: 13, color: colors.gray500, marginTop: 1 },
   emptyText: { fontSize: 15, color: colors.gray400, textAlign: 'center', paddingVertical: 20 },
+  urgentCard: { borderWidth: 2, borderColor: '#D4832A' },
+  reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  reviewIcon: { fontSize: 20 },
+  reviewSummary: { fontSize: 16, fontWeight: '600', color: colors.gray800, marginBottom: 4 },
+  reviewCta: { marginTop: 8, backgroundColor: colors.blue, borderRadius: 12, paddingVertical: 10, alignItems: 'center' },
+  reviewCtaText: { color: colors.white, fontWeight: '700', fontSize: 14 },
+  reviewMore: { fontSize: 12, color: colors.gray400, textAlign: 'center', marginTop: 6 },
 })
