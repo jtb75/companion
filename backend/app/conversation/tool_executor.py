@@ -387,12 +387,21 @@ async def _get_pending_reviews(
     items = []
     for i, r in enumerate(reviews, 1):
         doc = await db.get(Document, r.document_id) if r.document_id else None
-        # Get OCR text for full document context
+        # Get document content for full context
         ocr_text = ""
-        if doc and doc.source_metadata:
-            ocr_text = doc.source_metadata.get(
-                "ocr_text", ""
-            )[:500]
+        if doc:
+            # Try OCR text first
+            if doc.source_metadata:
+                ocr_text = doc.source_metadata.get(
+                    "ocr_text", ""
+                )
+            # Fallback to extracted fields as content source
+            if not ocr_text and doc.extracted_fields:
+                import json
+                ocr_text = json.dumps(
+                    doc.extracted_fields, indent=2
+                )
+        ocr_text = ocr_text[:1500]  # Generous context
 
         items.append({
             "review_id": str(i),
