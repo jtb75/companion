@@ -61,15 +61,9 @@ async def _redis_subscriber(websocket: WebSocket):
         await pubsub.subscribe(CHANNEL)
         logger.info("WebSocket client subscribed to Redis %s", CHANNEL)
 
-        while True:
-            msg = await pubsub.get_message(
-                ignore_subscribe_messages=True,
-                timeout=1.0,
-            )
-            if msg and msg["type"] == "message":
+        async for msg in pubsub.listen():
+            if msg["type"] == "message":
                 await websocket.send_text(msg["data"])
-            else:
-                await asyncio.sleep(0.1)
     except WebSocketDisconnect:
         logger.info("WebSocket client disconnected")
     except Exception:

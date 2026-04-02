@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 CHANNEL = "pipeline:updates"
 
 # In-process fallback when Redis is unavailable
-_subscribers: list[asyncio.Queue] = []
+_subscribers: set[asyncio.Queue] = set()
 
 
 def _redis_available() -> bool:
@@ -81,13 +81,10 @@ async def publish_pipeline_event(
 def subscribe() -> asyncio.Queue:
     """Create a new subscriber queue for pipeline events."""
     queue: asyncio.Queue = asyncio.Queue(maxsize=100)
-    _subscribers.append(queue)
+    _subscribers.add(queue)
     return queue
 
 
 def unsubscribe(queue: asyncio.Queue) -> None:
     """Remove a subscriber queue."""
-    try:
-        _subscribers.remove(queue)
-    except ValueError:
-        pass
+    _subscribers.discard(queue)
