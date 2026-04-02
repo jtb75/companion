@@ -42,20 +42,8 @@ def upgrade() -> None:
         "ALTER TYPE documentstatus ADD VALUE IF NOT EXISTS 'pending_review'"
     )
 
-    # Create pending_reviews table
-    review_status = sa.Enum(
-        "pending", "presented", "confirmed", "skipped",
-        "expired", "auto_created",
-        name="reviewstatus",
-        create_type=False,
-    )
-    recommended_action = sa.Enum(
-        "add_bill", "add_appointment", "review_with_contact",
-        "file_only", "discard",
-        name="recommendedaction",
-        create_type=False,
-    )
-
+    # Create pending_reviews table (use sa.Text for enum columns
+    # since enum types are created above via raw SQL)
     op.create_table(
         "pending_reviews",
         sa.Column("id", UUID(as_uuid=True), primary_key=True),
@@ -70,11 +58,23 @@ def upgrade() -> None:
             nullable=True,
         ),
         sa.Column(
-            "review_status", review_status,
+            "review_status",
+            sa.Enum(
+                "pending", "presented", "confirmed",
+                "skipped", "expired", "auto_created",
+                name="reviewstatus",
+                create_type=False,
+            ),
             nullable=False, server_default="pending",
         ),
         sa.Column(
-            "recommended_action", recommended_action,
+            "recommended_action",
+            sa.Enum(
+                "add_bill", "add_appointment",
+                "review_with_contact", "file_only", "discard",
+                name="recommendedaction",
+                create_type=False,
+            ),
             nullable=False,
         ),
         sa.Column("proposed_record_data", JSONB, nullable=False),
