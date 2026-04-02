@@ -185,8 +185,8 @@ function DocumentCard({
           </div>
         </div>
 
-        {/* Center: Stepper */}
-        <div className="flex-1 flex justify-center overflow-x-auto">
+        {/* Stepper */}
+        <div className="flex-1 flex justify-start overflow-x-auto">
           <PipelineStepper stages={doc.pipeline_stages ?? []} />
         </div>
 
@@ -281,8 +281,10 @@ function usePipelineFirestore(
           }
         })
       },
-      () => {
-        setConnected(false)
+      (err) => {
+        // Firestore listener failed (rules, network, etc.)
+        // Polling fallback handles updates — don't show disconnected
+        console.warn('Firestore listener error:', err)
       },
     )
 
@@ -459,10 +461,10 @@ export function PipelinePage() {
           {/* Live indicator */}
           <div className="flex items-center gap-1.5">
             <div
-              className={`h-2 w-2 rounded-full ${firestoreConnected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}
+              className={`h-2 w-2 rounded-full ${!docsLoading ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}
             />
-            <span className={`text-xs font-medium ${firestoreConnected ? 'text-emerald-600' : 'text-rose-600'}`}>
-              {firestoreConnected ? 'Live' : 'Disconnected'}
+            <span className={`text-xs font-medium ${!docsLoading ? 'text-emerald-600' : 'text-amber-600'}`}>
+              {firestoreConnected ? 'Live' : 'Polling'}
             </span>
           </div>
         </div>
