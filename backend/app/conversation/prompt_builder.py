@@ -80,9 +80,16 @@ async def build_system_prompt(
 
 async def _build_memory_context(db: AsyncSession, user: User) -> str:
     """Build context from user's functional memory."""
+    from datetime import date
+
     lines = []
     name = user.nickname or user.preferred_name
+    today = date.today()
     lines.append(f"The user's name is {name}.")
+    lines.append(
+        f"Today's date is {today.strftime('%B %d, %Y')} "
+        f"({today.strftime('%A')})."
+    )
 
     # Fetch memories
     result = await db.execute(
