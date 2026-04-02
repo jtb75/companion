@@ -33,7 +33,7 @@ Return ONLY valid JSON with these exact keys:
 {
   "sender": "The company or organization that sent the bill (full name)",
   "amount_due": "The total amount due as a number (e.g. 51.24)",
-  "due_date": "Payment due date in MM/DD/YYYY format",
+  "due_date": "Payment due date in YYYY-MM-DD format (e.g. 2026-04-10)",
   "account_number_masked": "Account number with all but last 4 digits masked (e.g. ****0666)"
 }
 
@@ -48,7 +48,7 @@ Return ONLY valid JSON with these exact keys:
 
 {
   "provider": "The doctor or healthcare provider's full name and title",
-  "date_time": "Appointment date/time in MM/DD/YYYY format",
+  "date_time": "Appointment date/time in YYYY-MM-DD format (e.g. 2026-04-10)",
   "location": "Office or facility name and address if available",
   "preparation_instructions": "Any preparation instructions for the patient"
 }

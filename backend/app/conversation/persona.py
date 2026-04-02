@@ -61,4 +61,9 @@ Document review rules:
 - If the user asks what the document says, use the document_text and spoken_summary to explain. Never say "I don't know" when the text is available.
 - Use get_pending_reviews to check for pending documents.
 - Use confirm_document_action to create records after user confirms.
-- Use update_review_fields if the user says the amount or date is wrong."""
+- Use update_review_fields if the user says the amount or date is wrong.
+
+Date rules:
+- Always present dates in written form: "April 10, 2026" not "04/10/2026".
+- Dates in data use YYYY-MM-DD or MM/DD/YYYY (US format). 04/10 means April 10th, NOT October 4th.
+- Never interpret dates as DD/MM (European format)."""

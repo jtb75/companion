@@ -41,6 +41,7 @@ async def create_bill_from_fields(
     due: date | None = None
     if due_date_str:
         for fmt in (
+            "%Y-%m-%d",
             "%m/%d/%Y", "%m-%d-%Y",
             "%B %d, %Y", "%b %d, %Y",
         ):
@@ -101,6 +102,8 @@ async def create_appointment_from_fields(
     appt_dt: datetime | None = None
     if date_time_str:
         for fmt in (
+            "%Y-%m-%d",
+            "%Y-%m-%d %H:%M",
             "%m/%d/%Y %I:%M %p",
             "%m/%d/%Y",
             "%B %d, %Y at %I:%M %p",

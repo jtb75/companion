@@ -341,6 +341,7 @@ def _is_past_due(due_date_str: str | None) -> bool:
     if not due_date_str:
         return False
     for fmt in (
+        "%Y-%m-%d",
         "%m/%d/%Y", "%m-%d-%Y",
         "%B %d, %Y", "%b %d, %Y",
     ):
@@ -359,6 +360,7 @@ def _is_due_soon(
     if not due_date_str:
         return False
     for fmt in (
+        "%Y-%m-%d",
         "%m/%d/%Y", "%m-%d-%Y",
         "%B %d, %Y", "%b %d, %Y",
     ):
