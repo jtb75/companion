@@ -58,6 +58,7 @@ async def _get_summarization_prompt(db: AsyncSession | None) -> str:
             logger.warning(
                 "Failed to load summarization prompt, using default"
             )
+            await db.rollback()
     return _DEFAULT_SUMMARIZATION_PROMPT
 
 

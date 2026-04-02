@@ -118,6 +118,7 @@ async def _get_extraction_prompt(
                 "Failed to load extraction prompt for %s, using default",
                 classification,
             )
+            await db.rollback()
     return DEFAULT_PROMPTS.get(classification, DEFAULT_PROMPTS["generic"])
 
 
