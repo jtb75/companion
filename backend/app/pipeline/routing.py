@@ -77,7 +77,11 @@ async def route(
     source_desc = SOURCE_DESCRIPTIONS.get(
         source_channel, "a document"
     )
-    fields = extraction.extracted_fields
+    fields = dict(extraction.extracted_fields)
+    # Include summaries in proposed_record_data so reviews
+    # always have document context
+    fields["_spoken_summary"] = summarization.spoken_summary
+    fields["_card_summary"] = summarization.card_summary
     doc_type = classification.classification
 
     if doc_type == "bill":

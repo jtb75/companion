@@ -424,7 +424,8 @@ async def _get_pending_reviews(
             "is_duplicate": r.is_duplicate,
             "card_summary": doc.card_summary if doc else None,
             "spoken_summary": (
-                doc.spoken_summary if doc else None
+                r.proposed_record_data.get("_spoken_summary")
+                or (doc.spoken_summary if doc else None)
             ),
             "document_text": ocr_text,
             "classification": (
