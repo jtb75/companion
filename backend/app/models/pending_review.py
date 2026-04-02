@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, Text
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Numeric, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -27,9 +27,21 @@ class PendingReview(TimestampMixin, Base):
         nullable=True,
     )
     review_status: Mapped[ReviewStatus] = mapped_column(
-        nullable=False, default=ReviewStatus.PENDING
+        Enum(
+            ReviewStatus,
+            values_callable=lambda e: [m.value for m in e],
+            name="reviewstatus",
+            create_type=False,
+        ),
+        nullable=False, default=ReviewStatus.PENDING,
     )
     recommended_action: Mapped[RecommendedAction] = mapped_column(
+        Enum(
+            RecommendedAction,
+            values_callable=lambda e: [m.value for m in e],
+            name="recommendedaction",
+            create_type=False,
+        ),
         nullable=False,
     )
     proposed_record_data: Mapped[dict] = mapped_column(
