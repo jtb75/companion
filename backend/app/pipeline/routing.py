@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.bill import Bill
@@ -57,6 +57,15 @@ async def route(
     source_channel: str = "camera_scan",
 ) -> RoutingResult:
     """Route document — create pending review or auto-create records."""
+
+    # Clean up any existing pending reviews for this document
+    # (idempotent — safe for reprocessing)
+    await db.execute(
+        delete(PendingReview).where(
+            PendingReview.document_id
+            == classification.document_id
+        )
+    )
 
     destination = ROUTING_TABLE.get(
         classification.classification, "home"

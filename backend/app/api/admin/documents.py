@@ -173,10 +173,16 @@ async def resubmit_document(
         raise HTTPException(
             status_code=404, detail="Document not found"
         )
-    # Clear previous pipeline metrics so stepper resets
+    # Clear previous pipeline metrics and pending reviews
     await db.execute(
         delete(PipelineMetric).where(
             PipelineMetric.document_id == document_id
+        )
+    )
+    from app.models.pending_review import PendingReview
+    await db.execute(
+        delete(PendingReview).where(
+            PendingReview.document_id == document_id
         )
     )
     doc.status = DocumentStatus.RECEIVED
