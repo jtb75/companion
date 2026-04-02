@@ -19,6 +19,7 @@ export function ChatScreen() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [sessionId, setSessionId] = useState<string | null>(null)
+  const sessionIdRef = useRef<string | null>(null)
   const [sending, setSending] = useState(false)
   const [starting, setStarting] = useState(true)
   const flatListRef = useRef<FlatList>(null)
@@ -47,6 +48,7 @@ export function ChatScreen() {
         { method: 'POST', body: JSON.stringify({ initial_context: trigger }) },
       )
       setSessionId(res.session_id)
+      sessionIdRef.current = res.session_id
       // Update greeting with LLM-generated one if different
       if (res.greeting) {
         setMessages([{ id: '0', role: 'assistant', content: res.greeting }])
@@ -59,9 +61,9 @@ export function ChatScreen() {
 
   const sendMessage = useCallback(async () => {
     if (!input.trim() || sending) return
-    if (!sessionId) {
+    if (!sessionIdRef.current) {
       await startSession()
-      return
+      if (!sessionIdRef.current) return
     }
     const text = input.trim()
     setInput('')

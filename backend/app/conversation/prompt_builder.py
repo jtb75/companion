@@ -209,20 +209,28 @@ async def _build_alerts_context(db: AsyncSession, user_id: UUID) -> str:
         )
 
     # Pending document reviews
-    from app.models.enums import ReviewStatus
-    from app.models.pending_review import PendingReview
-    result = await db.execute(
-        select(PendingReview).where(
-            PendingReview.user_id == user_id,
-            PendingReview.review_status.in_(
-                [ReviewStatus.PENDING, ReviewStatus.PRESENTED]
-            ),
-        ).order_by(
-            PendingReview.is_urgent.desc(),
-            PendingReview.created_at,
-        ).limit(1)
-    )
-    review = result.scalar_one_or_none()
+    try:
+        from app.models.enums import ReviewStatus
+        from app.models.pending_review import PendingReview
+        async with db.begin_nested():
+            result = await db.execute(
+                select(PendingReview).where(
+                    PendingReview.user_id == user_id,
+                    PendingReview.review_status.in_(
+                        [ReviewStatus.PENDING, ReviewStatus.PRESENTED]
+                    ),
+                ).order_by(
+                    PendingReview.is_urgent.desc(),
+                    PendingReview.created_at,
+                ).limit(1)
+            )
+            review = result.scalar_one_or_none()
+    except Exception:
+        logger.warning(
+            "Failed to query pending reviews for user %s",
+            user_id, exc_info=True,
+        )
+        review = None
     if review:
         data = review.proposed_record_data or {}
         sender = data.get("sender", "someone")
