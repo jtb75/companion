@@ -1,20 +1,31 @@
-"""Stage 5 — Routes documents to the correct app section and creates records."""
+"""Stage 5 — Routes documents and creates pending reviews or records."""
 
+import logging
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import delete
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.appointment import Appointment
 from app.models.bill import Bill
+from app.models.enums import (
+    RecommendedAction,
+    ReviewStatus,
+)
+from app.models.pending_review import PendingReview
 from app.pipeline.schemas import (
     ClassificationResult,
     ExtractionResult,
     RoutingResult,
     SummarizationResult,
 )
+from app.services.record_creation_service import (
+    create_appointment_from_fields,
+    create_bill_from_fields,
+)
+
+logger = logging.getLogger(__name__)
 
 # Routing table from the spec
 ROUTING_TABLE: dict[str, str] = {
@@ -24,9 +35,15 @@ ROUTING_TABLE: dict[str, str] = {
     "government": "home",
     "insurance": "my_health",
     "form": "home",
-    "junk": "home",  # archived, not surfaced
+    "junk": "home",
     "personal": "home",
     "unknown": "home",
+}
+
+SOURCE_DESCRIPTIONS: dict[str, str] = {
+    "camera_scan": "that picture you took",
+    "email": "your email",
+    "mail_station": "your mail",
 }
 
 
@@ -36,132 +53,309 @@ async def route(
     classification: ClassificationResult,
     extraction: ExtractionResult,
     summarization: SummarizationResult,
+    care_model: str = "self_directed",
+    source_channel: str = "camera_scan",
 ) -> RoutingResult:
-    """Route document to correct section and create linked records."""
+    """Route document — create pending review or auto-create records."""
 
-    destination = ROUTING_TABLE.get(classification.classification, "home")
+    destination = ROUTING_TABLE.get(
+        classification.classification, "home"
+    )
     records_created: list[dict] = []
     suggested_action: str | None = None
+    pending_review_id: UUID | None = None
 
-    # Create linked records based on document type
-    if classification.classification == "bill":
-        record = await _create_bill_record(
-            db, user_id, classification.document_id, extraction.extracted_fields
+    source_desc = SOURCE_DESCRIPTIONS.get(
+        source_channel, "a document"
+    )
+    fields = extraction.extracted_fields
+    doc_type = classification.classification
+
+    if doc_type == "bill":
+        suggested_action, pending_review_id = await _handle_bill(
+            db, user_id, classification, fields,
+            care_model, source_desc, records_created,
         )
-        if record:
-            records_created.append({"type": "bill", "id": str(record.id)})
-            amount = extraction.extracted_fields.get("amount_due", "?")
-            due = extraction.extracted_fields.get("due_date", "soon")
-            suggested_action = f"Pay ${amount} — due {due}"
 
-    elif classification.classification == "medical":
-        record = await _create_appointment_record(
-            db, user_id, classification.document_id, extraction.extracted_fields
+    elif doc_type == "medical":
+        suggested_action, pending_review_id = await _handle_medical(
+            db, user_id, classification, fields,
+            care_model, source_desc, records_created,
         )
-        if record:
-            records_created.append({"type": "appointment", "id": str(record.id)})
-            provider = extraction.extracted_fields.get("provider", "your doctor")
-            suggested_action = f"Check appointment with {provider}"
 
-    elif classification.classification == "legal":
-        suggested_action = "Review this with your trusted contact"
+    elif doc_type == "legal":
+        # Legal always gets review (even managed)
+        review = PendingReview(
+            user_id=user_id,
+            document_id=classification.document_id,
+            review_status=ReviewStatus.PENDING,
+            recommended_action=RecommendedAction.REVIEW_WITH_CONTACT,
+            proposed_record_data=fields,
+            confidence_score=Decimal(
+                str(classification.confidence_score)
+            ),
+            source_description=source_desc,
+            is_urgent=True,
+        )
+        db.add(review)
+        await db.flush()
+        pending_review_id = review.id
+        suggested_action = (
+            "Review this with your trusted contact"
+        )
 
-    elif classification.classification == "junk":
-        suggested_action = None  # no action for junk
+    elif doc_type == "junk":
+        suggested_action = None
+
+    else:
+        # Generic document — file only
+        if care_model == "managed":
+            review = PendingReview(
+                user_id=user_id,
+                document_id=classification.document_id,
+                review_status=ReviewStatus.AUTO_CREATED,
+                recommended_action=RecommendedAction.FILE_ONLY,
+                proposed_record_data=fields,
+                confidence_score=Decimal(
+                    str(classification.confidence_score)
+                ),
+                source_description=source_desc,
+            )
+            db.add(review)
+            await db.flush()
+        else:
+            review = PendingReview(
+                user_id=user_id,
+                document_id=classification.document_id,
+                review_status=ReviewStatus.PENDING,
+                recommended_action=RecommendedAction.FILE_ONLY,
+                proposed_record_data=fields,
+                confidence_score=Decimal(
+                    str(classification.confidence_score)
+                ),
+                source_description=source_desc,
+            )
+            db.add(review)
+            await db.flush()
+            pending_review_id = review.id
 
     return RoutingResult(
         document_id=classification.document_id,
         routing_destination=destination,
         suggested_action=suggested_action,
         records_created=records_created,
+        pending_review_id=pending_review_id,
     )
 
 
-async def _create_bill_record(
-    db: AsyncSession, user_id: UUID, document_id: UUID, fields: dict
-) -> Bill | None:
-    """Create a Bill record from extracted document fields."""
-    sender = fields.get("sender")
-    amount = fields.get("amount_due")
-    due_date_str = fields.get("due_date")
+async def _handle_bill(
+    db: AsyncSession,
+    user_id: UUID,
+    classification: ClassificationResult,
+    fields: dict,
+    care_model: str,
+    source_desc: str,
+    records_created: list[dict],
+) -> tuple[str | None, UUID | None]:
+    """Handle bill routing with care model awareness."""
+    amount = fields.get("amount_due", "?")
+    due_str = fields.get("due_date", "soon")
 
+    # Check if past due
+    is_past_due = _is_past_due(due_str)
+    is_urgent = _is_due_soon(due_str, days=2)
+
+    # Check for duplicate
+    duplicate_bill = await _detect_duplicate_bill(
+        db, user_id,
+        fields.get("sender", ""),
+        fields.get("amount_due"),
+    )
+
+    if care_model == "managed":
+        # Auto-create record
+        record = await create_bill_from_fields(
+            db, user_id, fields,
+            source_document_id=classification.document_id,
+        )
+        if record:
+            records_created.append(
+                {"type": "bill", "id": str(record.id)}
+            )
+        # Audit trail
+        review = PendingReview(
+            user_id=user_id,
+            document_id=classification.document_id,
+            review_status=ReviewStatus.AUTO_CREATED,
+            recommended_action=RecommendedAction.ADD_BILL,
+            proposed_record_data=fields,
+            confidence_score=Decimal(
+                str(classification.confidence_score)
+            ),
+            source_description=source_desc,
+            is_urgent=is_urgent,
+            is_past_due=is_past_due,
+            is_duplicate=duplicate_bill is not None,
+            duplicate_of_id=(
+                duplicate_bill.id if duplicate_bill else None
+            ),
+            created_record_type="bill",
+            created_record_id=(
+                record.id if record else None
+            ),
+            resolved_at=datetime.utcnow(),
+        )
+        db.add(review)
+        await db.flush()
+        action = f"Pay ${amount} — due {due_str}"
+        return action, None
+
+    # Self-directed — create pending review
+    review = PendingReview(
+        user_id=user_id,
+        document_id=classification.document_id,
+        review_status=ReviewStatus.PENDING,
+        recommended_action=RecommendedAction.ADD_BILL,
+        proposed_record_data=fields,
+        confidence_score=Decimal(
+            str(classification.confidence_score)
+        ),
+        source_description=source_desc,
+        is_urgent=is_urgent,
+        is_past_due=is_past_due,
+        is_duplicate=duplicate_bill is not None,
+        duplicate_of_id=(
+            duplicate_bill.id if duplicate_bill else None
+        ),
+    )
+    db.add(review)
+    await db.flush()
+
+    action = f"Review bill from {fields.get('sender', '?')} — ${amount}"
+    return action, review.id
+
+
+async def _handle_medical(
+    db: AsyncSession,
+    user_id: UUID,
+    classification: ClassificationResult,
+    fields: dict,
+    care_model: str,
+    source_desc: str,
+    records_created: list[dict],
+) -> tuple[str | None, UUID | None]:
+    """Handle medical document routing."""
+    provider = fields.get("provider", "your doctor")
+
+    if care_model == "managed":
+        record = await create_appointment_from_fields(
+            db, user_id, fields,
+            source_document_id=classification.document_id,
+        )
+        if record:
+            records_created.append(
+                {"type": "appointment", "id": str(record.id)}
+            )
+        review = PendingReview(
+            user_id=user_id,
+            document_id=classification.document_id,
+            review_status=ReviewStatus.AUTO_CREATED,
+            recommended_action=RecommendedAction.ADD_APPOINTMENT,
+            proposed_record_data=fields,
+            confidence_score=Decimal(
+                str(classification.confidence_score)
+            ),
+            source_description=source_desc,
+            created_record_type="appointment",
+            created_record_id=(
+                record.id if record else None
+            ),
+            resolved_at=datetime.utcnow(),
+        )
+        db.add(review)
+        await db.flush()
+        action = f"Check appointment with {provider}"
+        return action, None
+
+    # Self-directed — pending review
+    review = PendingReview(
+        user_id=user_id,
+        document_id=classification.document_id,
+        review_status=ReviewStatus.PENDING,
+        recommended_action=RecommendedAction.ADD_APPOINTMENT,
+        proposed_record_data=fields,
+        confidence_score=Decimal(
+            str(classification.confidence_score)
+        ),
+        source_description=source_desc,
+    )
+    db.add(review)
+    await db.flush()
+
+    action = f"Review document from {provider}"
+    return action, review.id
+
+
+async def _detect_duplicate_bill(
+    db: AsyncSession,
+    user_id: UUID,
+    sender: str,
+    amount,
+) -> Bill | None:
+    """Check for similar bill in last 60 days."""
     if not sender or not amount:
         return None
 
-    # Delete existing bill from same document (idempotent)
-    await db.execute(
-        delete(Bill).where(
-            Bill.source_document_id == document_id
-        )
-    )
-
-    # Parse due date if available
-    due: date | None = None
-    if due_date_str:
-        for fmt in ("%m/%d/%Y", "%m-%d-%Y", "%B %d, %Y", "%b %d, %Y"):
-            try:
-                due = datetime.strptime(due_date_str, fmt).date()
-                break
-            except ValueError:
-                continue
-
-    if due is None:
-        due = date.today() + timedelta(days=30)  # default 30 days
-
-    bill = Bill(
-        user_id=user_id,
-        sender=sender,
-        description=f"Bill from {sender}",
-        amount=Decimal(str(amount)),
-        due_date=due,
-        account_number_masked=fields.get("account_number_masked"),
-        source_document_id=document_id,
-    )
-    db.add(bill)
-    await db.flush()
-    return bill
-
-
-async def _create_appointment_record(
-    db: AsyncSession, user_id: UUID, document_id: UUID, fields: dict
-) -> Appointment | None:
-    """Create an Appointment record from extracted document fields."""
-    provider = fields.get("provider")
-    date_time_str = fields.get("date_time")
-
-    if not provider:
+    try:
+        amount_val = Decimal(str(amount))
+    except (ValueError, TypeError):
         return None
 
-    # Delete existing appointment from same document (idempotent)
-    await db.execute(
-        delete(Appointment).where(
-            Appointment.source_document_id == document_id
-        )
+    cutoff = date.today() - timedelta(days=60)
+    margin = amount_val * Decimal("0.1")
+
+    result = await db.execute(
+        select(Bill).where(
+            Bill.user_id == user_id,
+            Bill.sender.ilike(f"%{sender[:20]}%"),
+            Bill.amount.between(
+                amount_val - margin, amount_val + margin
+            ),
+            Bill.created_at >= cutoff,
+        ).limit(1)
     )
+    return result.scalar_one_or_none()
 
-    # Parse appointment datetime
-    appt_dt: datetime | None = None
-    if date_time_str:
-        for fmt in ("%m/%d/%Y %I:%M %p", "%m/%d/%Y", "%B %d, %Y at %I:%M %p"):
-            try:
-                appt_dt = datetime.strptime(date_time_str, fmt)
-                break
-            except ValueError:
-                continue
 
-    if appt_dt is None:
-        appt_dt = datetime.combine(
-            date.today() + timedelta(days=7),
-            datetime.min.time(),
-        )
+def _is_past_due(due_date_str: str | None) -> bool:
+    """Check if a due date string is in the past."""
+    if not due_date_str:
+        return False
+    for fmt in (
+        "%m/%d/%Y", "%m-%d-%Y",
+        "%B %d, %Y", "%b %d, %Y",
+    ):
+        try:
+            due = datetime.strptime(due_date_str, fmt).date()
+            return due < date.today()
+        except ValueError:
+            continue
+    return False
 
-    appt = Appointment(
-        user_id=user_id,
-        provider_name=provider,
-        appointment_at=appt_dt,
-        preparation_notes=fields.get("preparation_instructions"),
-        source_document_id=document_id,
-    )
-    db.add(appt)
-    await db.flush()
-    return appt
+
+def _is_due_soon(
+    due_date_str: str | None, days: int = 2
+) -> bool:
+    """Check if a due date is within N days."""
+    if not due_date_str:
+        return False
+    for fmt in (
+        "%m/%d/%Y", "%m-%d-%Y",
+        "%B %d, %Y", "%b %d, %Y",
+    ):
+        try:
+            due = datetime.strptime(due_date_str, fmt).date()
+            return due <= date.today() + timedelta(days=days)
+        except ValueError:
+            continue
+    return False

@@ -203,6 +203,80 @@ def get_dd_tools():
         },
     )
 
+    get_pending_reviews = FunctionDeclaration(
+        name="get_pending_reviews",
+        description=(
+            "List documents waiting for the user to "
+            "review. Returns pending document reviews "
+            "with summaries and recommended actions."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {},
+        },
+    )
+
+    confirm_document_action = FunctionDeclaration(
+        name="confirm_document_action",
+        description=(
+            "Confirm or skip a pending document review. "
+            "Use 'confirm' to create the recommended "
+            "record, 'skip' to dismiss, or 'mark_paid' "
+            "for bills the user already paid."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "review_id": {
+                    "type": "string",
+                    "description": (
+                        "UUID of the pending review."
+                    ),
+                },
+                "action": {
+                    "type": "string",
+                    "description": (
+                        "Action to take on the review."
+                    ),
+                    "enum": [
+                        "confirm",
+                        "skip",
+                        "mark_paid",
+                    ],
+                },
+            },
+            "required": ["review_id", "action"],
+        },
+    )
+
+    update_review_fields = FunctionDeclaration(
+        name="update_review_fields",
+        description=(
+            "Correct extracted fields on a pending "
+            "review before confirming. Use when the "
+            "user says the amount or date is wrong."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "review_id": {
+                    "type": "string",
+                    "description": (
+                        "UUID of the pending review."
+                    ),
+                },
+                "field_updates": {
+                    "type": "object",
+                    "description": (
+                        "Fields to update, e.g. "
+                        '{"amount_due": "142.50"}'
+                    ),
+                },
+            },
+            "required": ["review_id", "field_updates"],
+        },
+    )
+
     _dd_tools = Tool(
         function_declarations=[
             list_medications,
@@ -215,6 +289,9 @@ def get_dd_tools():
             add_appointment,
             add_todo,
             complete_todo,
+            get_pending_reviews,
+            confirm_document_action,
+            update_review_fields,
         ],
     )
     return _dd_tools

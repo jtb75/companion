@@ -38,6 +38,9 @@ async def execute_tool(
         "add_appointment": _add_appointment,
         "add_todo": _add_todo,
         "complete_todo": _complete_todo,
+        "get_pending_reviews": _get_pending_reviews,
+        "confirm_document_action": _confirm_document_action,
+        "update_review_fields": _update_review_fields,
     }
     handler = handlers.get(function_name)
     if handler is None:
@@ -302,4 +305,183 @@ async def _complete_todo(
         "success": True,
         "id": str(todo.id),
         "title": todo.title,
+    }
+
+
+# ── Document review tools ──
+
+
+async def _get_pending_reviews(
+    db: AsyncSession, user_id: UUID, args: dict
+) -> dict:
+    from app.models.document import Document
+    from app.models.pending_review import PendingReview
+
+    result = await db.execute(
+        select(PendingReview)
+        .where(
+            PendingReview.user_id == user_id,
+            PendingReview.review_status.in_(
+                ["pending", "presented"]
+            ),
+        )
+        .order_by(
+            PendingReview.is_urgent.desc(),
+            PendingReview.created_at,
+        )
+        .limit(5)
+    )
+    reviews = result.scalars().all()
+
+    items = []
+    for r in reviews:
+        doc = await db.get(Document, r.document_id) if r.document_id else None
+        items.append({
+            "review_id": str(r.id),
+            "source": r.source_description,
+            "recommended_action": r.recommended_action,
+            "proposed_data": r.proposed_record_data,
+            "confidence": float(r.confidence_score) if r.confidence_score else None,
+            "is_urgent": r.is_urgent,
+            "is_past_due": r.is_past_due,
+            "is_duplicate": r.is_duplicate,
+            "card_summary": doc.card_summary if doc else None,
+            "classification": (
+                getattr(doc.classification, "value", str(doc.classification))
+                if doc and doc.classification else None
+            ),
+        })
+
+        # Mark as presented
+        if r.review_status == "pending":
+            r.review_status = "presented"
+            r.presented_at = datetime.utcnow()
+
+    await db.flush()
+    return {"reviews": items, "count": len(items)}
+
+
+async def _confirm_document_action(
+    db: AsyncSession, user_id: UUID, args: dict
+) -> dict:
+    from app.models.enums import ReviewStatus
+    from app.models.pending_review import PendingReview
+    from app.services.record_creation_service import (
+        create_appointment_from_fields,
+        create_bill_from_fields,
+    )
+
+    review_id = UUID(args["review_id"])
+    action = args["action"]  # confirm, skip, mark_paid
+
+    result = await db.execute(
+        select(PendingReview).where(
+            PendingReview.id == review_id,
+            PendingReview.user_id == user_id,
+        )
+    )
+    review = result.scalar_one_or_none()
+    if review is None:
+        return {"error": True, "message": "Review not found."}
+
+    if action == "skip":
+        review.review_status = ReviewStatus.SKIPPED
+        review.resolved_at = datetime.utcnow()
+        await db.flush()
+        return {"success": True, "action": "skipped"}
+
+    fields = review.proposed_record_data or {}
+    rec_action = review.recommended_action
+
+    if rec_action == "add_bill":
+        if action == "mark_paid":
+            bill = await create_bill_from_fields(
+                db, user_id, fields,
+                source_document_id=review.document_id,
+            )
+            if bill:
+                bill.payment_status = PaymentStatus.PAID
+                await db.flush()
+                review.created_record_type = "bill"
+                review.created_record_id = bill.id
+        else:
+            bill = await create_bill_from_fields(
+                db, user_id, fields,
+                source_document_id=review.document_id,
+            )
+            if bill:
+                review.created_record_type = "bill"
+                review.created_record_id = bill.id
+
+        review.review_status = ReviewStatus.CONFIRMED
+        review.resolved_at = datetime.utcnow()
+        await db.flush()
+
+        sender = fields.get("sender", "Unknown")
+        amount = fields.get("amount_due", "?")
+        return {
+            "success": True,
+            "action": "mark_paid" if action == "mark_paid" else "confirmed",
+            "record_type": "bill",
+            "sender": sender,
+            "amount": str(amount),
+        }
+
+    elif rec_action == "add_appointment":
+        appt = await create_appointment_from_fields(
+            db, user_id, fields,
+            source_document_id=review.document_id,
+        )
+        if appt:
+            review.created_record_type = "appointment"
+            review.created_record_id = appt.id
+        review.review_status = ReviewStatus.CONFIRMED
+        review.resolved_at = datetime.utcnow()
+        await db.flush()
+
+        provider = fields.get("provider", "your doctor")
+        return {
+            "success": True,
+            "action": "confirmed",
+            "record_type": "appointment",
+            "provider": provider,
+        }
+
+    else:
+        # file_only, review_with_contact, discard
+        review.review_status = ReviewStatus.CONFIRMED
+        review.resolved_at = datetime.utcnow()
+        await db.flush()
+        return {
+            "success": True,
+            "action": "acknowledged",
+        }
+
+
+async def _update_review_fields(
+    db: AsyncSession, user_id: UUID, args: dict
+) -> dict:
+    from app.models.pending_review import PendingReview
+
+    review_id = UUID(args["review_id"])
+    updates = args.get("field_updates", {})
+
+    result = await db.execute(
+        select(PendingReview).where(
+            PendingReview.id == review_id,
+            PendingReview.user_id == user_id,
+        )
+    )
+    review = result.scalar_one_or_none()
+    if review is None:
+        return {"error": True, "message": "Review not found."}
+
+    data = dict(review.proposed_record_data)
+    data.update(updates)
+    review.proposed_record_data = data
+    await db.flush()
+
+    return {
+        "success": True,
+        "updated_fields": list(updates.keys()),
     }

@@ -141,3 +141,31 @@ async def notify_document_processed(
         body=document_summary[:200],
         data={"type": "document_processed"},
     )
+
+
+async def notify_document_pending_review(
+    db: AsyncSession,
+    user_id: UUID,
+    source_description: str,
+    is_urgent: bool,
+) -> int:
+    """Notify a user about a pending document review."""
+    if is_urgent:
+        title = "Something needs attention"
+        body = (
+            "Something came in that needs attention "
+            "soon. Tap to take a look."
+        )
+    else:
+        title = "You got mail!"
+        body = f"I found something in {source_description}. Tap to take a look."
+    return await send_push(
+        db,
+        user_id,
+        title=title,
+        body=body,
+        data={
+            "type": "document_review",
+            "trigger": "document_arrived",
+        },
+    )

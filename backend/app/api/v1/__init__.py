@@ -14,6 +14,7 @@ from app.api.v1 import (
     invitations,
     medications,
     notifications,
+    reviews,
     sections,
     todos,
     users,
@@ -35,3 +36,4 @@ router.include_router(conversation.router)
 router.include_router(notifications.router)
 router.include_router(integrations.router)
 router.include_router(device_tokens.router)
+router.include_router(reviews.router)

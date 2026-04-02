@@ -120,7 +120,15 @@ def _build_session_context(user: User, trigger: str) -> str:
         ),
         "document_arrived": (
             f"A new document was just processed for {name}. "
-            "Explain what it is and suggest a next action."
+            "There may be a pending review. Check with "
+            "get_pending_reviews and present the document. "
+            "Make a clear recommendation and ask for confirmation."
+        ),
+        "document_review": (
+            f"{name} wants to review a pending document. "
+            "Use get_pending_reviews to find it. Present one "
+            "document at a time. Make a clear recommendation "
+            "and ask for confirmation before creating records."
         ),
         "notification_tapped": (
             f"{name} tapped a notification. "
@@ -199,6 +207,40 @@ async def _build_alerts_context(db: AsyncSession, user_id: UUID) -> str:
         lines.append(
             f"- Appointment: {a.provider_name} on {a.appointment_at}"
         )
+
+    # Pending document reviews
+    from app.models.pending_review import PendingReview
+    result = await db.execute(
+        select(PendingReview).where(
+            PendingReview.user_id == user_id,
+            PendingReview.review_status.in_(
+                ["pending", "presented"]
+            ),
+        ).order_by(
+            PendingReview.is_urgent.desc(),
+            PendingReview.created_at,
+        ).limit(1)
+    )
+    review = result.scalar_one_or_none()
+    if review:
+        data = review.proposed_record_data or {}
+        sender = data.get("sender", "someone")
+        amount = data.get("amount_due", "")
+        desc = f"from {review.source_description}"
+        if review.recommended_action == "add_bill" and amount:
+            lines.append(
+                f"- Pending review: Bill {desc} — "
+                f"{sender}, ${amount}"
+            )
+        else:
+            lines.append(
+                f"- Pending review: Document {desc} — "
+                f"{review.recommended_action}"
+            )
+        if review.is_past_due:
+            lines.append("  (This bill is past due)")
+        if review.is_duplicate:
+            lines.append("  (Possible duplicate)")
 
     if not lines:
         return ""

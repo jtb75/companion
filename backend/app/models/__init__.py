@@ -24,8 +24,10 @@ from app.models.enums import (
     PaymentStatus,
     QuestionContextType,
     QuestionStatus,
+    RecommendedAction,
     RelationshipType,
     RetentionPhase,
+    ReviewStatus,
     RoutingDestination,
     SourceChannel,
     TodoCategory,
@@ -34,6 +36,7 @@ from app.models.enums import (
 )
 from app.models.functional_memory import FunctionalMemory
 from app.models.medication import Medication, MedicationConfirmation
+from app.models.pending_review import PendingReview
 from app.models.pipeline_metrics import PipelineMetric
 from app.models.question_tracker import QuestionTracker
 from app.models.system_config import ConfigAuditLog, SystemConfig
@@ -65,6 +68,8 @@ __all__ = [
     "SourceChannel",
     "TodoCategory",
     "TodoSource",
+    "RecommendedAction",
+    "ReviewStatus",
     "UrgencyLevel",
     # Models
     "User",
@@ -88,4 +93,5 @@ __all__ = [
     "CaregiverActivityLog",
     "DeletionAuditLog",
     "DeviceToken",
+    "PendingReview",
 ]

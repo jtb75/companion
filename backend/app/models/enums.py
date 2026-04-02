@@ -53,6 +53,7 @@ class DocumentStatus(enum.StrEnum):
     CLASSIFIED = "classified"
     SUMMARIZED = "summarized"
     ROUTED = "routed"
+    PENDING_REVIEW = "pending_review"
     ACKNOWLEDGED = "acknowledged"
     HANDLED = "handled"
 
@@ -153,6 +154,23 @@ class DeletionReason(enum.StrEnum):
     ADMIN_REQUEST = "admin_request"
     TTL_EXPIRY = "ttl_expiry"
     RETENTION_POLICY = "retention_policy"
+
+
+class ReviewStatus(enum.StrEnum):
+    PENDING = "pending"
+    PRESENTED = "presented"
+    CONFIRMED = "confirmed"
+    SKIPPED = "skipped"
+    EXPIRED = "expired"
+    AUTO_CREATED = "auto_created"
+
+
+class RecommendedAction(enum.StrEnum):
+    ADD_BILL = "add_bill"
+    ADD_APPOINTMENT = "add_appointment"
+    REVIEW_WITH_CONTACT = "review_with_contact"
+    FILE_ONLY = "file_only"
+    DISCARD = "discard"
 
 
 class ConfigCategory(enum.StrEnum):

@@ -171,12 +171,31 @@ async def process_document(
         await publish_pipeline_event(
             document_id, "routing", "started",
         )
+        # Fetch user's care model and source channel
+        from app.models.user import User
+        user = await db.get(User, user_id)
+        care_model = (
+            getattr(user, "care_model", "self_directed")
+            if user else "self_directed"
+        )
+        source_ch = getattr(
+            doc.source_channel, "value",
+            str(doc.source_channel),
+        )
+
         routing_result = await route(
             db, user_id, classification_result,
             extraction_result, summarization_result,
+            care_model=care_model,
+            source_channel=source_ch,
         )
-        doc.routing_destination = RoutingDestination(routing_result.routing_destination)
-        doc.status = DocumentStatus.ROUTED
+        doc.routing_destination = RoutingDestination(
+            routing_result.routing_destination
+        )
+        if routing_result.pending_review_id:
+            doc.status = DocumentStatus.PENDING_REVIEW
+        else:
+            doc.status = DocumentStatus.ROUTED
         await db.flush()
         await _record_metric(db, document_id, "routing", "completed", stage_start, {
             "destination": routing_result.routing_destination,

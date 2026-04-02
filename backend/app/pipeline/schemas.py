@@ -106,6 +106,7 @@ class RoutingResult(BaseModel):
     routing_destination: str  # home, my_health, bills, plans
     suggested_action: str | None = None  # verb + object + reason
     records_created: list[dict] = Field(default_factory=list)
+    pending_review_id: UUID | None = None
 
 
 class PipelineResult(BaseModel):
