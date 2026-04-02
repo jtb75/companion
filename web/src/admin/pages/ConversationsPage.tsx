@@ -40,9 +40,7 @@ function formatDuration(seconds: number | null | undefined): string {
 }
 
 function formatDate(iso: string): string {
-  // Backend sends naive UTC timestamps without Z suffix
-  const utcIso = iso.endsWith('Z') ? iso : iso + 'Z'
-  return new Date(utcIso).toLocaleString()
+  return new Date(iso).toLocaleString()
 }
 
 /* ── Export helper ─────────────────────────────────────────── */
