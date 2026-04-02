@@ -3,6 +3,7 @@
 import logging
 import time
 from datetime import datetime
+from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -135,6 +136,7 @@ async def process_document(
         summarization_result = await summarize(classification_result, extraction_result, db)
         doc.spoken_summary = summarization_result.spoken_summary
         doc.card_summary = summarization_result.card_summary
+        doc.reading_grade = Decimal(str(summarization_result.reading_grade))
         doc.status = DocumentStatus.SUMMARIZED
         await db.flush()
         await _record_metric(db, document_id, "summarization", "completed", stage_start)

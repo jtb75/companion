@@ -18,25 +18,37 @@ from app.pipeline.schemas import (
     ExtractionResult,
     SummarizationResult,
 )
+from app.pipeline.text_complexity import get_flesch_kincaid_grade
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_SUMMARIZATION_PROMPT = (  # noqa: E501
-    "You are summarizing a document for an adult with a "
-    "developmental disability.\n"
-    "Use simple, clear language at a 4th-6th grade reading level.\n"
-    "Be warm and reassuring. Never use scary or confusing words.\n\n"
-    "The document is classified as: {classification}\n"
-    "Urgency: {urgency}\n\n"
-    "Extracted information:\n{fields_json}\n\n"
-    "Create two summaries:\n"
-    "1. \"spoken\" — A short, friendly 2-3 sentence summary "
-    "as if telling them out loud. Start with what it IS, "
-    "then what they need to DO.\n"
-    "2. \"card\" — A one-line dashboard summary under 60 chars. "
-    "Format: \"Sender — key detail\"\n\n"
-    "Return ONLY valid JSON:\n"
-    "{{\"spoken\": \"...\", \"card\": \"...\"}}"
+_DEFAULT_SUMMARIZATION_PROMPT = (
+    "You are a compassionate independence assistant for adults with developmental disabilities.\n"
+    "Your goal is to summarize documents using the 'Easy Read' philosophy: "
+    "simple words, clear actions, and no jargon.\n\n"
+    "## INPUT DATA\n"
+    "Classification: {classification}\n"
+    "Urgency: {urgency}\n"
+    "Extracted Data: {fields_json}\n\n"
+    "## GUIDELINES\n"
+    "- Reading Level: 4th-6th grade.\n"
+    "- Tone: Warm, helpful, and reassuring.\n"
+    "- Structure: 'What it is' followed by 'What to do'.\n"
+    "- Safety: If the document is about money owed or medical news, "
+    "stay calm and suggest a small next step.\n\n"
+    "## TASK\n"
+    "1. Internal Reasoning: Briefly analyze the importance of this document.\n"
+    "2. Spoken Summary: A 2-3 sentence friendly explanation for the user.\n"
+    "3. Card Summary: A dashboard line (max 60 chars) in the format 'Sender — Key Detail'.\n\n"
+    "## OUTPUT FORMAT\n"
+    "Return ONLY valid JSON with these keys: 'reasoning', 'spoken', 'card'.\n"
+    "Example:\n"
+    '{{'
+    '  "reasoning": "This is a utility bill with a clear due date.",'
+    '  "spoken": "You have a bill from the Electric Company '
+    'for $45. You should pay it by next Friday.",'
+    '  "card": "Electric Co — $45 due Friday"'
+    '}}'
 )
 
 
@@ -74,7 +86,7 @@ async def summarize(
         classification, extraction, db
     )
     if llm_result is not None:
-        spoken, card = llm_result
+        spoken, card, reasoning = llm_result
     else:
         # Fallback to templates
         logger.warning(
@@ -87,6 +99,7 @@ async def summarize(
         spoken, card = await summarizer(
             extraction.extracted_fields, classification
         )
+        reasoning = "Fallback template used (LLM unavailable or failed)."
 
     urgency_label = {
         "routine": "Can Wait",
@@ -95,11 +108,21 @@ async def summarize(
         "urgent": "Today",
     }.get(classification.urgency_level, "Soon")
 
+    # Reading complexity check
+    grade = get_flesch_kincaid_grade(spoken)
+    if grade > 6.0:
+        logger.warning(
+            "COMPLEX_TEXT_WARNING: doc=%s grade=%.1f summary=%s",
+            classification.document_id, grade, spoken
+        )
+
     return SummarizationResult(
         document_id=classification.document_id,
         spoken_summary=spoken,
         card_summary=card,
         urgency_label=urgency_label,
+        reasoning=reasoning,
+        reading_grade=grade,
     )
 
 
@@ -107,7 +130,7 @@ async def _llm_summarize(
     classification: ClassificationResult,
     extraction: ExtractionResult,
     db: AsyncSession | None,
-) -> tuple[str, str] | None:
+) -> tuple[str, str, str] | None:
     """Use Gemini to generate summaries."""
     try:
         from app.conversation.llm import get_llm_client
@@ -130,7 +153,7 @@ async def _llm_summarize(
                 "Return ONLY valid JSON, no other text."
             ),
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=300,
+            max_tokens=400,
         )
 
         cleaned = response.strip()
@@ -139,11 +162,16 @@ async def _llm_summarize(
             cleaned = re.sub(r"\s*```$", "", cleaned)
 
         parsed = json.loads(cleaned)
+        reasoning = parsed.get("reasoning", "").strip()
         spoken = parsed.get("spoken", "").strip()
         card = parsed.get("card", "").strip()
 
         if spoken and card:
-            return spoken, card
+            logger.info(
+                "LLM_SUMMARIZE_REASONING: doc=%s reasoning=%s",
+                classification.document_id, reasoning
+            )
+            return spoken, card, reasoning
 
         logger.warning("LLM summarization returned empty fields")
         return None

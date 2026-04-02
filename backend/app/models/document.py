@@ -38,6 +38,9 @@ class Document(Base):
     extracted_fields: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     spoken_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     card_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reading_grade: Mapped[Decimal | None] = mapped_column(
+        Numeric(3, 1), nullable=True
+    )
     routing_destination: Mapped[RoutingDestination | None] = mapped_column(
         nullable=True
     )

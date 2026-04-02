@@ -98,6 +98,8 @@ class SummarizationResult(BaseModel):
     spoken_summary: str  # plain language, max 3 sentences
     card_summary: str  # short text for UI card
     urgency_label: str  # Today, Soon, Can Wait
+    reasoning: str | None = None  # LLM's internal reasoning for the summary
+    reading_grade: float = 0.0  # Flesch-Kincaid Grade Level
 
 
 class RoutingResult(BaseModel):
