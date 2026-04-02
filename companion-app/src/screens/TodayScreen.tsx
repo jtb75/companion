@@ -90,37 +90,42 @@ export function TodayScreen() {
         <Text style={styles.subtitle}>Here's your day at a glance</Text>
       </View>
 
-      {/* Pending Document Review */}
-      {(data?.pendingReviews?.length ?? 0) > 0 && (() => {
-        const review = data!.pendingReviews[0]
-        const sender = review.proposed_data?.sender
-        const amount = review.proposed_data?.amount_due
-        const summary = review.card_summary || (sender ? `From ${sender}` : 'New document')
-        return (
-          <TouchableOpacity
-            style={[styles.card, review.is_urgent && styles.urgentCard]}
-            onPress={() => navigation.navigate('Chat', { reviewId: review.id })}
-            activeOpacity={0.7}
-          >
-            <View style={styles.reviewHeader}>
-              <Text style={styles.reviewIcon}>📬</Text>
-              <Text style={[styles.cardTitle, { marginBottom: 0 }]}>
-                {review.is_urgent ? 'NEEDS ATTENTION' : 'NEW MAIL'}
-              </Text>
+      {/* Mail Section */}
+      {(data?.pendingReviews?.length ?? 0) > 0 && (
+        <View style={styles.card}>
+          <View style={styles.mailHeader}>
+            <Text style={styles.mailIcon}>📬</Text>
+            <Text style={styles.cardTitle}>MAIL</Text>
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{data!.pendingReviews.length}</Text>
             </View>
-            <Text style={styles.reviewSummary}>{summary}</Text>
-            {amount && <Text style={styles.rowSub}>${amount}</Text>}
-            <View style={styles.reviewCta}>
-              <Text style={styles.reviewCtaText}>Review with {brand.short} →</Text>
-            </View>
-            {(data?.pendingReviews?.length ?? 0) > 1 && (
-              <Text style={styles.reviewMore}>
-                +{data!.pendingReviews.length - 1} more to review
-              </Text>
-            )}
-          </TouchableOpacity>
-        )
-      })()}
+          </View>
+          {data!.pendingReviews.map((review) => {
+            const sender = review.proposed_data?.sender
+            const amount = review.proposed_data?.amount_due
+            const title = sender || review.card_summary || 'New document'
+            const subtitle = amount
+              ? `$${amount}`
+              : review.classification || 'Document to review'
+            return (
+              <TouchableOpacity
+                key={review.id}
+                style={[styles.mailRow, review.is_urgent && styles.mailRowUrgent]}
+                onPress={() => navigation.navigate('Chat', { reviewId: review.id })}
+                activeOpacity={0.7}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.mailTitle}>{title}</Text>
+                  <Text style={styles.mailSubtitle}>
+                    {subtitle} · {review.source_description}
+                  </Text>
+                </View>
+                <Text style={styles.mailArrow}>→</Text>
+              </TouchableOpacity>
+            )
+          })}
+        </View>
+      )}
 
       {/* Medications */}
       {activeMeds.length > 0 && (
@@ -188,7 +193,7 @@ export function TodayScreen() {
       )}
 
       {/* Empty state */}
-      {!activeMeds.length && !upcomingAppts.length && !pendingTodos.length && !dueBills.length && (
+      {!activeMeds.length && !upcomingAppts.length && !pendingTodos.length && !dueBills.length && !(data?.pendingReviews?.length) && (
         <View style={styles.card}>
           <Text style={styles.emptyText}>Nothing on your plate today. Nice!</Text>
         </View>
@@ -225,11 +230,13 @@ const styles = StyleSheet.create({
   rowTitle: { fontSize: 15, fontWeight: '500', color: colors.gray800 },
   rowSub: { fontSize: 13, color: colors.gray500, marginTop: 1 },
   emptyText: { fontSize: 15, color: colors.gray400, textAlign: 'center', paddingVertical: 20 },
-  urgentCard: { borderWidth: 2, borderColor: '#D4832A' },
-  reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  reviewIcon: { fontSize: 20 },
-  reviewSummary: { fontSize: 16, fontWeight: '600', color: colors.gray800, marginBottom: 4 },
-  reviewCta: { marginTop: 8, backgroundColor: colors.blue, borderRadius: 12, paddingVertical: 10, alignItems: 'center' },
-  reviewCtaText: { color: colors.white, fontWeight: '700', fontSize: 14 },
-  reviewMore: { fontSize: 12, color: colors.gray400, textAlign: 'center', marginTop: 6 },
+  mailHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  mailIcon: { fontSize: 18 },
+  badge: { backgroundColor: colors.blue, borderRadius: 10, minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+  badgeText: { color: colors.white, fontSize: 11, fontWeight: '700' },
+  mailRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderTopWidth: 1, borderTopColor: colors.gray100 || '#f3f4f6' },
+  mailRowUrgent: { backgroundColor: '#FDF3E7', marginHorizontal: -16, paddingHorizontal: 16, borderLeftWidth: 3, borderLeftColor: '#D4832A' },
+  mailTitle: { fontSize: 15, fontWeight: '600', color: colors.gray800 },
+  mailSubtitle: { fontSize: 13, color: colors.gray500, marginTop: 2 },
+  mailArrow: { fontSize: 18, color: colors.gray400, marginLeft: 8 },
 })
