@@ -127,6 +127,40 @@ export function DashboardPage({ userId }: Props) {
           )}
         </Card>
       </div>
+
+      {/* Recent Documents */}
+      {(raw as any).recent_documents?.length > 0 && (
+        <Card title="Recent Documents">
+          <ul className="space-y-3">
+            {(raw as any).recent_documents.map((doc: any, i: number) => {
+              const statusLabels: Record<string, { text: string; color: string }> = {
+                pending: { text: 'Waiting for review', color: 'text-amber-600' },
+                presented: { text: 'In review', color: 'text-blue-600' },
+                confirmed: { text: 'Reviewed and added', color: 'text-green-600' },
+                skipped: { text: 'Skipped', color: 'text-gray-400' },
+                auto_created: { text: 'Added automatically', color: 'text-gray-500' },
+              }
+              const statusInfo = statusLabels[doc.review_status] || { text: doc.review_status, color: 'text-gray-500' }
+              return (
+                <li key={i} className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-gray-700 truncate">
+                      {doc.card_summary || doc.source_description}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {doc.classification} · {doc.source_description}
+                      {doc.created_at && ` · ${new Date(doc.created_at).toLocaleDateString()}`}
+                    </p>
+                  </div>
+                  <span className={`text-xs font-medium whitespace-nowrap ${statusInfo.color}`}>
+                    {statusInfo.text}
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+        </Card>
+      )}
     </div>
   )
 }

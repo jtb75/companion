@@ -226,6 +226,46 @@ async def get_dashboard_summary(db: AsyncSession, user_id: UUID) -> dict:
 
     alerts = await get_alerts(db, user_id)
 
+    # Recent document reviews (last 10)
+    from app.models.document import Document
+    from app.models.pending_review import PendingReview
+    review_result = await db.execute(
+        select(PendingReview)
+        .where(PendingReview.user_id == user_id)
+        .order_by(PendingReview.created_at.desc())
+        .limit(10)
+    )
+    reviews = review_result.scalars().all()
+    recent_documents = []
+    for r in reviews:
+        doc = (
+            await db.get(Document, r.document_id)
+            if r.document_id else None
+        )
+        recent_documents.append({
+            "review_id": str(r.id),
+            "review_status": r.review_status,
+            "recommended_action": r.recommended_action,
+            "source_description": r.source_description,
+            "card_summary": doc.card_summary if doc else None,
+            "classification": (
+                getattr(
+                    doc.classification, "value",
+                    str(doc.classification),
+                )
+                if doc and doc.classification else None
+            ),
+            "created_at": (
+                r.created_at.isoformat()
+                if r.created_at else None
+            ),
+            "resolved_at": (
+                r.resolved_at.isoformat()
+                if r.resolved_at else None
+            ),
+            "created_record_type": r.created_record_type,
+        })
+
     return {
         "active_medications": active_medications,
         "upcoming_appointments": upcoming_appointments,
@@ -234,4 +274,5 @@ async def get_dashboard_summary(db: AsyncSession, user_id: UUID) -> dict:
         "active_contacts": active_contacts,
         "alert_count": len(alerts),
         "alerts": alerts,
+        "recent_documents": recent_documents,
     }
