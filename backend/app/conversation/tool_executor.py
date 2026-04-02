@@ -372,8 +372,34 @@ async def _confirm_document_action(
         create_bill_from_fields,
     )
 
-    review_id = UUID(args["review_id"])
-    action = args["action"]  # confirm, skip, mark_paid
+    raw_id = str(args.get("review_id", "")).strip()
+    action = args.get("action", "confirm")
+
+    # Try to parse review_id — Gemini may pass it with
+    # extra characters or without dashes
+    try:
+        review_id = UUID(raw_id)
+    except (ValueError, AttributeError):
+        # If Gemini didn't pass a valid UUID, find the most
+        # recent pending review for this user instead
+        result = await db.execute(
+            select(PendingReview).where(
+                PendingReview.user_id == user_id,
+                PendingReview.review_status.in_(
+                    ["pending", "presented"]
+                ),
+            ).order_by(
+                PendingReview.is_urgent.desc(),
+                PendingReview.created_at.desc(),
+            ).limit(1)
+        )
+        review = result.scalar_one_or_none()
+        if review is None:
+            return {
+                "error": True,
+                "message": "No pending reviews found.",
+            }
+        review_id = review.id
 
     result = await db.execute(
         select(PendingReview).where(
@@ -465,8 +491,16 @@ async def _update_review_fields(
 ) -> dict:
     from app.models.pending_review import PendingReview
 
-    review_id = UUID(args["review_id"])
+    raw_id = str(args.get("review_id", "")).strip()
     updates = args.get("field_updates", {})
+
+    try:
+        review_id = UUID(raw_id)
+    except (ValueError, AttributeError):
+        return {
+            "error": True,
+            "message": "Invalid review ID.",
+        }
 
     result = await db.execute(
         select(PendingReview).where(
