@@ -120,15 +120,17 @@ def _build_session_context(user: User, trigger: str) -> str:
         ),
         "document_arrived": (
             f"A new document was just processed for {name}. "
-            "There may be a pending review. Check with "
-            "get_pending_reviews and present the document. "
-            "Make a clear recommendation and ask for confirmation."
+            "IMPORTANT: You MUST call get_pending_reviews first "
+            "before saying anything about documents. Do NOT guess "
+            "or fabricate document details. Only present facts "
+            "returned by the tool."
         ),
         "document_review": (
             f"{name} wants to review a pending document. "
-            "Use get_pending_reviews to find it. Present one "
-            "document at a time. Make a clear recommendation "
-            "and ask for confirmation before creating records."
+            "IMPORTANT: You MUST call get_pending_reviews first "
+            "before saying anything about documents. Do NOT guess "
+            "or fabricate document details. Only present facts "
+            "returned by the tool. Present one document at a time."
         ),
         "notification_tapped": (
             f"{name} tapped a notification. "
