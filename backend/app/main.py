@@ -16,7 +16,6 @@ from app.api.v1.profile import router as profile_router
 from app.branding import BRAND_LONG, BRAND_MID
 from app.config import settings
 from app.db.session import engine
-from app.ws.pipeline import pipeline_ws_handler
 
 logger = logging.getLogger(__name__)
 
@@ -86,9 +85,6 @@ if settings.dev_auth_bypass:
     )
 app.include_router(charges_router)
 app.include_router(profile_router)
-
-
-app.add_api_websocket_route("/ws/pipeline", pipeline_ws_handler)
 
 
 @app.get("/health")

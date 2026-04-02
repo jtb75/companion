@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { collection, onSnapshot } from 'firebase/firestore'
 import { api } from '../../shared/api/client'
-import { auth } from '../../shared/auth/firebase'
+import { db } from '../../shared/auth/firebase'
 import { Card } from '../../shared/components/Card'
 import { StatusBadge } from '../../shared/components/StatusBadge'
 
@@ -61,8 +62,6 @@ const PIPELINE_STAGE_ORDER = [
   'Embedding',
   'Routing',
 ]
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
 const placeholderHealth: PipelineHealth = {
   documents_in_flight: 0,
@@ -233,61 +232,63 @@ function DocumentCard({
 }
 
 // ---------------------------------------------------------------------------
-// WebSocket Hook
+// Firestore Real-Time Hook
 // ---------------------------------------------------------------------------
 
-function usePipelineWebSocket(
-  onMessage: (data: PipelineDocument) => void,
+function usePipelineFirestore(
+  documents: PipelineDocument[],
+  setDocuments: React.Dispatch<React.SetStateAction<PipelineDocument[]>>,
 ) {
   const [connected, setConnected] = useState(false)
-  const wsRef = useRef<WebSocket | null>(null)
-  const reconnectTimer = useRef<ReturnType<typeof setTimeout>>()
-  const onMessageRef = useRef(onMessage)
-  onMessageRef.current = onMessage
-
-  const connect = useCallback(async () => {
-    try {
-      const user = auth.currentUser
-      if (!user) return
-      const token = await user.getIdToken()
-      const wsBase = API_BASE.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://')
-      const url = `${wsBase}/ws/pipeline?token=${token}`
-
-      const ws = new WebSocket(url)
-      wsRef.current = ws
-
-      ws.onopen = () => setConnected(true)
-
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data) as PipelineDocument
-          onMessageRef.current(data)
-        } catch {
-          // ignore malformed messages
-        }
-      }
-
-      ws.onclose = () => {
-        setConnected(false)
-        reconnectTimer.current = setTimeout(() => connect(), 3000)
-      }
-
-      ws.onerror = () => {
-        ws.close()
-      }
-    } catch {
-      setConnected(false)
-      reconnectTimer.current = setTimeout(() => connect(), 3000)
-    }
-  }, [])
 
   useEffect(() => {
-    connect()
-    return () => {
-      clearTimeout(reconnectTimer.current)
-      wsRef.current?.close()
-    }
-  }, [connect])
+    const unsubscribe = onSnapshot(
+      collection(db, 'pipeline_events'),
+      (snapshot) => {
+        setConnected(true)
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === 'added' || change.type === 'modified') {
+            const docId = change.doc.id
+            const data = change.doc.data()
+
+            setDocuments((prev) => {
+              const idx = prev.findIndex((d) => d.id === docId)
+              if (idx < 0) return prev
+
+              const next = [...prev]
+              const existing = { ...next[idx] }
+              const stages = [...(existing.pipeline_stages || [])]
+
+              // Update stages from Firestore document fields
+              for (const stageName of PIPELINE_STAGE_ORDER) {
+                const key = stageName.toLowerCase()
+                if (data[key]) {
+                  const si = stages.findIndex((s) => s.stage === stageName)
+                  const stageData: PipelineStage = {
+                    stage: stageName,
+                    status: data[key] as PipelineStage['status'],
+                  }
+                  if (si >= 0) {
+                    stages[si] = stageData
+                  } else {
+                    stages.push(stageData)
+                  }
+                }
+              }
+              existing.pipeline_stages = stages
+              next[idx] = existing
+              return next
+            })
+          }
+        })
+      },
+      () => {
+        setConnected(false)
+      },
+    )
+
+    return () => unsubscribe()
+  }, [setDocuments])
 
   return connected
 }
@@ -399,54 +400,8 @@ export function PipelinePage() {
 
   const health = healthData ?? placeholderHealth
 
-  // --- WebSocket for real-time updates ---
-  const wsConnected = usePipelineWebSocket((updatedDoc) => {
-    setDocuments((prev) => {
-      // WebSocket sends stage events, not full documents
-      // Match by document_id and update pipeline_stages
-      const docId = updatedDoc.id
-        || (updatedDoc as any).document_id
-      if (!docId) return prev
-      const idx = prev.findIndex((d) => d.id === docId)
-      if (idx < 0) {
-        // Unknown doc — refetch instead of adding broken entry
-        queryClient.invalidateQueries({
-          queryKey: ['pipeline-documents'],
-        })
-        return prev
-      }
-      const next = [...prev]
-      const existing = { ...next[idx] }
-      // If the event has stage info, update the stages
-      const stage = (updatedDoc as any).stage
-      const stageStatus = (updatedDoc as any).status
-      if (stage && stageStatus) {
-        const stages = [...(existing.pipeline_stages || [])]
-        const si = stages.findIndex(
-          (s) => s.stage === stage
-        )
-        if (si >= 0) {
-          stages[si] = { ...stages[si], status: stageStatus }
-        } else {
-          stages.push({
-            stage,
-            status: stageStatus,
-          })
-        }
-        existing.pipeline_stages = stages
-      }
-      // Merge any other fields from a full document update
-      if (updatedDoc.status) existing.status = updatedDoc.status
-      if (updatedDoc.classification) {
-        existing.classification = updatedDoc.classification
-      }
-      if (updatedDoc.card_summary) {
-        existing.card_summary = updatedDoc.card_summary
-      }
-      next[idx] = existing
-      return next
-    })
-  })
+  // --- Firestore for real-time updates ---
+  const firestoreConnected = usePipelineFirestore(documents, setDocuments)
 
   // --- Actions ---
   const handleCancel = async (id: string) => {
@@ -505,10 +460,10 @@ export function PipelinePage() {
           {/* Live indicator */}
           <div className="flex items-center gap-1.5">
             <div
-              className={`h-2 w-2 rounded-full ${wsConnected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}
+              className={`h-2 w-2 rounded-full ${firestoreConnected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}
             />
-            <span className={`text-xs font-medium ${wsConnected ? 'text-emerald-600' : 'text-rose-600'}`}>
-              {wsConnected ? 'Live' : 'Disconnected'}
+            <span className={`text-xs font-medium ${firestoreConnected ? 'text-emerald-600' : 'text-rose-600'}`}>
+              {firestoreConnected ? 'Live' : 'Disconnected'}
             </span>
           </div>
         </div>
