@@ -21,7 +21,9 @@ from app.models.enums import (
 )
 from app.models.pipeline_metrics import PipelineMetric
 from app.pipeline.classification import classify
-from app.pipeline.events import publish_pipeline_event
+from app.pipeline.events import (
+    publish_pipeline_event as _publish_event,
+)
 from app.pipeline.extraction import extract
 from app.pipeline.ingestion import (
     process_camera_scan,
@@ -45,6 +47,15 @@ async def process_document(
     if not doc:
         raise ValueError(f"Document {document_id} not found")
 
+    # Wrapper that always includes user_id
+    async def publish_pipeline_event(
+        doc_id, stage, status, metadata=None,
+    ):
+        await _publish_event(
+            doc_id, stage, status,
+            metadata=metadata, user_id=str(user_id),
+        )
+
     # Update status to processing
     doc.status = DocumentStatus.PROCESSING
     await db.flush()
@@ -54,7 +65,6 @@ async def process_document(
         stage_start = time.monotonic()
         await publish_pipeline_event(
             document_id, "ingestion", "started",
-            user_id=str(user_id),
         )
         source = getattr(
             doc.source_channel, "value", str(doc.source_channel)
