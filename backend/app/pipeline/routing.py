@@ -247,7 +247,6 @@ async def _handle_bill(
     action = f"Review bill from {fields.get('sender', '?')} — ${amount}"
     return action, review.id
 
-
 async def _handle_medical(
     db: AsyncSession,
     user_id: UUID,
@@ -259,8 +258,26 @@ async def _handle_medical(
 ) -> tuple[str | None, UUID | None]:
     """Handle medical document routing."""
     provider = fields.get("provider", "your doctor")
+    notice = fields.get("nature_of_notice", "").lower()
+    action = fields.get("required_action")
+    date_time = fields.get("date_time")
 
-    if care_model == "managed":
+    # If it's a retirement or practice change, don't treat it as an appointment
+    if any(kw in notice for kw in ["retire", "change", "move", "leave"]):
+        review = PendingReview(
+            user_id=user_id,
+            document_id=classification.document_id,
+            review_status=ReviewStatus.PENDING,
+            recommended_action=RecommendedAction.REVIEW_WITH_CONTACT,
+            proposed_record_data=fields,
+            confidence_score=Decimal(str(classification.confidence_score)),
+            source_description=source_desc,
+        )
+        db.add(review)
+        await db.flush()
+        return f"Important update from {provider}", review.id
+
+    if care_model == "managed" and date_time:
         record = await create_appointment_from_fields(
             db, user_id, fields,
             source_document_id=classification.document_id,
