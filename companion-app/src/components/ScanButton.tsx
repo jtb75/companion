@@ -9,15 +9,17 @@ import {
   View,
   ActivityIndicator,
 } from 'react-native'
-import { launchCamera, launchImageLibrary } from 'react-native-image-picker'
+import { launchCamera, launchImageLibrary, Asset } from 'react-native-image-picker'
 import auth from '@react-native-firebase/auth'
 import { API_BASE } from '../api/client'
 import { colors } from '../theme/colors'
+import { useImageAnalysis } from '../hooks/useImageAnalysis'
 
-type UploadStatus = 'idle' | 'uploading' | 'processing' | 'done' | 'error'
+type UploadStatus = 'idle' | 'analyzing' | 'uploading' | 'processing' | 'done' | 'error'
 
 export function ScanButton() {
   const [status, setStatus] = useState<UploadStatus>('idle')
+  const { analyzeImage } = useImageAnalysis()
 
   const handlePress = () => {
     if (Platform.OS === 'ios') {
@@ -55,7 +57,7 @@ export function ScanButton() {
         return
       }
       const asset = result.assets?.[0]
-      if (asset) uploadImage(asset)
+      if (asset) handleAssetSelection(asset)
     } catch (err) {
       Alert.alert('Error', 'Failed to open camera')
     }
@@ -86,14 +88,41 @@ export function ScanButton() {
         return
       }
       const asset = result.assets?.[0]
-      if (asset) uploadImage(asset)
+      if (asset) handleAssetSelection(asset)
     } catch (err: any) {
       console.log('[ScanButton] library error:', err)
       Alert.alert('Error', err.message || 'Failed to open photo library')
     }
   }
 
-  const uploadImage = async (asset: { uri?: string; type?: string; fileName?: string }) => {
+  const handleAssetSelection = async (asset: Asset) => {
+    if (!asset.uri) return
+
+    setStatus('analyzing')
+    const analysis = await analyzeImage(asset.uri)
+    
+    if (!analysis || analysis.status === 'error') {
+      // Fallback: upload anyway if analysis fails
+      uploadImage(asset)
+      return
+    }
+
+    if (analysis.status === 'poor') {
+      setStatus('idle')
+      Alert.alert(
+        'Scan Quality',
+        analysis.feedback,
+        [
+          { text: 'Retake', style: 'cancel' },
+          { text: 'Use Anyway', onPress: () => uploadImage(asset) }
+        ]
+      )
+    } else {
+      uploadImage(asset)
+    }
+  }
+
+  const uploadImage = async (asset: Asset) => {
     if (!asset.uri) return
 
     setStatus('uploading')
@@ -146,6 +175,7 @@ export function ScanButton() {
 
   const statusLabel: Record<UploadStatus, string> = {
     idle: '',
+    analyzing: 'Analyzing...',
     uploading: 'Uploading...',
     processing: 'Processing...',
     done: 'Done!',
@@ -156,7 +186,7 @@ export function ScanButton() {
     <View style={styles.wrapper} pointerEvents="box-none">
       {status !== 'idle' && (
         <View style={styles.statusBadge}>
-          {(status === 'uploading' || status === 'processing') && (
+          {(status === 'analyzing' || status === 'uploading' || status === 'processing') && (
             <ActivityIndicator size="small" color={colors.white} style={{ marginRight: 6 }} />
           )}
           <Text style={styles.statusText}>{statusLabel[status]}</Text>
@@ -165,7 +195,7 @@ export function ScanButton() {
       <TouchableOpacity
         style={[styles.fab, status !== 'idle' && status !== 'done' && styles.fabDisabled]}
         onPress={handlePress}
-        disabled={status === 'uploading' || status === 'processing'}
+        disabled={status === 'analyzing' || status === 'uploading' || status === 'processing'}
         activeOpacity={0.7}
       >
         <Text style={styles.fabIcon}>📷</Text>

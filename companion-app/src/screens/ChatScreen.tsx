@@ -16,6 +16,7 @@ interface Message {
 export function ChatScreen() {
   const route = useRoute<any>()
   const reviewId = route.params?.reviewId as string | undefined
+  const morningBriefing = route.params?.briefing as string | undefined
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [sessionId, setSessionId] = useState<string | null>(null)
@@ -30,15 +31,22 @@ export function ChatScreen() {
 
   const startSession = async () => {
     // Determine trigger based on navigation context
-    const trigger = reviewId ? 'document_review' : 'user_initiated'
+    let trigger = 'user_initiated'
+    if (reviewId) trigger = 'document_review'
+    else if (morningBriefing) trigger = 'morning_checkin'
 
     // Show instant greeting, then connect in background
+    let initialText = `Hi! I'm ${brand.short}. What would you like to do today?`
+    if (reviewId) {
+      initialText = `Let me pull up that document for you...`
+    } else if (morningBriefing) {
+      initialText = morningBriefing
+    }
+
     setMessages([{
       id: '0',
       role: 'assistant',
-      content: reviewId
-        ? `Let me pull up that document for you...`
-        : `Hi! I'm ${brand.short}. What would you like to do today?`,
+      content: initialText,
     }])
     setStarting(false)
 
@@ -50,7 +58,7 @@ export function ChatScreen() {
       setSessionId(res.session_id)
       sessionIdRef.current = res.session_id
       // Update greeting with LLM-generated one if different
-      if (res.greeting) {
+      if (res.greeting && !morningBriefing) {
         setMessages([{ id: '0', role: 'assistant', content: res.greeting }])
       }
     } catch {

@@ -49,9 +49,22 @@ async def _upload_to_gcs(
 
     return await asyncio.to_thread(_upload)
 
+@router.post("/scan/analyze")
+async def analyze_scan_quality(
+    file: UploadFile = File(...),
+    user: User = Depends(require_complete_profile),
+):
+    """Analyze a single camera frame for quality and text presence."""
+    from app.services.image_analysis_service import get_image_analysis_service
+
+    data = await file.read()
+    analysis = await get_image_analysis_service().analyze_quality(data)
+    return analysis
+
 
 @router.post("/scan", status_code=status.HTTP_201_CREATED)
 async def scan_document(
+...
     file: UploadFile = File(...),
     user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),

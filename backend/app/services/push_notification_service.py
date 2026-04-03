@@ -124,8 +124,23 @@ async def notify_checkin_prompt(
         data={"type": "checkin_prompt"},
     )
 
+async def notify_morning_briefing(
+    db: AsyncSession,
+    user_id: UUID,
+    briefing: str,
+) -> int:
+    """Send the personalized morning briefing push notification."""
+    return await send_push(
+        db,
+        user_id,
+        title="Good Morning",
+        body=briefing,
+        data={"type": "morning_briefing"},
+    )
+
 
 async def notify_document_processed(
+...
     db: AsyncSession,
     user_id: UUID,
     document_summary: str,

@@ -148,6 +148,7 @@ class CheckinMorningTriggeredPayload(BaseModel):
     user_id: UUID
     checkin_time: str
     items_count: int
+    briefing: str | None = None
 
 class CheckinMorningAcknowledgedPayload(BaseModel):
     user_id: UUID

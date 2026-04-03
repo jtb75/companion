@@ -94,3 +94,20 @@ async def handle_caregiver_dashboard_viewed(envelope: dict):
         f"Caregiver dashboard viewed: contact={payload.get('trusted_contact_id')} "
         f"user={payload.get('user_id')}"
     )
+
+
+@on_event("checkin.morning.triggered")
+async def handle_checkin_morning_triggered(envelope: dict):
+    """Send push notification for morning check-in briefing."""
+    from uuid import UUID
+
+    from app.db.session import async_session_factory
+    from app.services.push_notification_service import notify_morning_briefing
+
+    payload = envelope["payload"]
+    user_id = UUID(payload["user_id"])
+    briefing = payload.get("briefing", "You have a few things to look at today.")
+
+    async with async_session_factory() as db:
+        await notify_morning_briefing(db, user_id, briefing)
+        logger.info(f"Morning briefing sent to user {user_id}")

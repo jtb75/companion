@@ -14,6 +14,7 @@ from app.events.publisher import event_publisher
 from app.events.schemas import CheckinMorningTriggeredPayload
 from app.models.user import User
 from app.notifications.morning_checkin import assemble_morning_checkin
+from app.notifications.briefing import generate_morning_briefing
 
 logger = logging.getLogger(__name__)
 
@@ -46,10 +47,15 @@ async def run_morning_trigger():
                 if user.away_mode:
                     continue
 
-                # Assemble and trigger check-in
+                # Assemble check-in data
                 name = user.nickname or user.preferred_name
-                checkin = await assemble_morning_checkin(
+                checkin_data = await assemble_morning_checkin(
                     db, user.id, name
+                )
+                
+                # Generate LLM briefing
+                briefing = await generate_morning_briefing(
+                    db, user.id, checkin_data
                 )
 
                 await event_publisher.publish(
@@ -58,7 +64,8 @@ async def run_morning_trigger():
                     payload=CheckinMorningTriggeredPayload(
                         user_id=user.id,
                         checkin_time=str(checkin_time),
-                        items_count=checkin.get("total_items", 0),
+                        items_count=checkin_data.get("total_items", 0),
+                        briefing=briefing,
                     ),
                 )
                 triggered += 1

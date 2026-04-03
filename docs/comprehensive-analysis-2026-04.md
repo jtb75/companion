@@ -64,7 +64,7 @@ The application has matured from a conceptual framework into a functional "cogni
 | :--- | :--- | :--- | :--- | :--- |
 | **Phase 1: Integrity** | Truth & Persistence | Confidence-based hedging, Visual confirmation cards, To-do persistence hardening. | **Trust.** Users feel safe knowing D.D. won't "make things up" or lose data. | Hedging done. Cards not started. |
 | **Phase 2: Security** | Data Protection | KMS Field-Level Encryption, Logging sanitization (strip PII from GCP logs). | **Compliance.** Ready for pilot deployment with real member data. | **Done.** KMS + PII masking deployed. |
-| **Phase 3: Smoothness** | UX Refinement | Real-time camera feedback, Voice interaction (wake word "D.D."), Morning check-in logic. | **Engagement.** The app feels "alive" and frictionless to use daily. | Morning check-in infrastructure exists. Voice interaction spec complete. |
+| **Phase 3: Smoothness** | UX Refinement | Real-time camera feedback, LLM morning briefing + push notification. | **Engagement.** The app feels "alive" and frictionless to use daily. | **Done.** Camera analysis API and Morning Briefing service deployed. |
 | **Phase 4: Connection** | Caregiver Loop | "Closed-loop" notifications (Member notified when Caregiver acts), Dashboard pagination, Recent documents on caregiver dashboard. | **Autonomy.** Member feels supported by their human network without losing privacy. | Recent documents on dashboard done. Closed-loop not started. |
 
 ---
