@@ -201,6 +201,27 @@ async def get_dashboard_summary(db: AsyncSession, user_id: UUID) -> dict:
     )
     overdue_bills = overdue_result.scalar_one()
 
+    # Upcoming bills (pending, due in next 30 days)
+    upcoming_bills_result = await db.execute(
+        select(Bill).where(
+            Bill.user_id == user_id,
+            Bill.payment_status.in_(
+                [PaymentStatus.PENDING, PaymentStatus.ACKNOWLEDGED]
+            ),
+            Bill.due_date >= today,
+            Bill.due_date <= today + timedelta(days=30),
+        ).order_by(Bill.due_date).limit(5)
+    )
+    upcoming_bills_rows = upcoming_bills_result.scalars().all()
+    upcoming_bills = [
+        {
+            "description": b.sender,
+            "due_date": b.due_date.isoformat(),
+            "amount": f"${b.amount}",
+        }
+        for b in upcoming_bills_rows
+    ]
+
     # Active todos
     todo_result = await db.execute(
         select(func.count())
@@ -270,6 +291,7 @@ async def get_dashboard_summary(db: AsyncSession, user_id: UUID) -> dict:
         "active_medications": active_medications,
         "upcoming_appointments": upcoming_appointments,
         "overdue_bills": overdue_bills,
+        "upcoming_bills": upcoming_bills,
         "active_todos": active_todos,
         "active_contacts": active_contacts,
         "alert_count": len(alerts),
