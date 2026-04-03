@@ -64,7 +64,6 @@ async def analyze_scan_quality(
 
 @router.post("/scan", status_code=status.HTTP_201_CREATED)
 async def scan_document(
-...
     file: UploadFile = File(...),
     user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),

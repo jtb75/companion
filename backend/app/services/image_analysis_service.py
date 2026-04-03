@@ -1,6 +1,7 @@
 """Service for analyzing image quality for real-time camera feedback."""
 
 import logging
+
 from google.cloud import vision
 
 logger = logging.getLogger(__name__)

@@ -24,7 +24,8 @@ INPUT DATA:
 {checkin_json}
 
 EXAMPLE OUTPUT:
-"Good morning! You have a doctor's appointment at 2:00 PM today. We should leave by 1:15 PM. I'm here if you need help."
+"Good morning! You have a doctor's appointment at 2:00 PM today. 
+We should leave by 1:15 PM. I'm here if you need help."
 """
 
 async def generate_morning_briefing(

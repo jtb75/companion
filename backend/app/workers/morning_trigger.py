@@ -13,8 +13,8 @@ from app.db.session import async_session_factory
 from app.events.publisher import event_publisher
 from app.events.schemas import CheckinMorningTriggeredPayload
 from app.models.user import User
-from app.notifications.morning_checkin import assemble_morning_checkin
 from app.notifications.briefing import generate_morning_briefing
+from app.notifications.morning_checkin import assemble_morning_checkin
 
 logger = logging.getLogger(__name__)
 

@@ -140,7 +140,6 @@ async def notify_morning_briefing(
 
 
 async def notify_document_processed(
-...
     db: AsyncSession,
     user_id: UUID,
     document_summary: str,
