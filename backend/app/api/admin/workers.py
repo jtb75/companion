@@ -33,7 +33,6 @@ async def trigger_retention_worker(admin: AdminUser = Depends(_admin)):
     result = await run_retention_worker()
     return {"triggered": True, **(result or {})}
 
-
 @router.post("/escalation")
 async def trigger_escalation_check(admin: AdminUser = Depends(_admin)):
     """Manually trigger the escalation check."""
@@ -42,7 +41,16 @@ async def trigger_escalation_check(admin: AdminUser = Depends(_admin)):
     return {"triggered": True, **result}
 
 
+@router.post("/morning-checkin")
+async def trigger_morning_checkin(admin: AdminUser = Depends(_admin)):
+    """Manually trigger the morning check-in for all users (ignoring time)."""
+    from app.workers.morning_trigger import run_morning_trigger
+    result = await run_morning_trigger(force=True)
+    return {"triggered": True, **result}
+
+
 @router.post("/reprocess-documents")
+...
 async def reprocess_stuck_documents(
     admin: AdminUser = Depends(_admin),
     db: AsyncSession = Depends(get_db),

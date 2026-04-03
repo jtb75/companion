@@ -11,6 +11,7 @@ import { UsersPage } from './pages/UsersPage'
 import { PeoplePage } from './pages/PeoplePage'
 import { ConversationsPage } from './pages/ConversationsPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { WorkersPage } from './pages/WorkersPage'
 
 export function AdminLayout() {
   return (
@@ -26,6 +27,7 @@ export function AdminLayout() {
         <Route path="contacts" element={<ContactsPage />} />
         <Route path="people" element={<PeoplePage />} />
         <Route path="conversations" element={<ConversationsPage />} />
+        <Route path="workers" element={<WorkersPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="" element={<Navigate to="prompts" replace />} />
       </Routes>

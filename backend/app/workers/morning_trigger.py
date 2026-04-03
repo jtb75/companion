@@ -19,7 +19,7 @@ from app.notifications.morning_checkin import assemble_morning_checkin
 logger = logging.getLogger(__name__)
 
 
-async def run_morning_trigger():
+async def run_morning_trigger(force: bool = False):
     """Check all users and trigger morning check-ins where due."""
     async with async_session_factory() as db:
         try:
@@ -27,7 +27,7 @@ async def run_morning_trigger():
             current_hour = now.hour
             current_minute = now.minute
 
-            # Find active users whose check-in time matches current hour
+            # Find active users
             result = await db.execute(
                 select(User).where(User.account_status == "active")
             )
@@ -35,13 +35,13 @@ async def run_morning_trigger():
 
             triggered = 0
             for user in users:
-                checkin_time = user.checkin_time or time(9, 0)
-
-                # Skip if not the right time (within 5 min window)
-                if checkin_time.hour != current_hour:
-                    continue
-                if abs(checkin_time.minute - current_minute) > 5:
-                    continue
+                # Skip if not the right time (unless forced)
+                if not force:
+                    checkin_time = user.checkin_time or time(9, 0)
+                    if checkin_time.hour != current_hour:
+                        continue
+                    if abs(checkin_time.minute - current_minute) > 5:
+                        continue
 
                 # Skip if in away mode
                 if user.away_mode:
