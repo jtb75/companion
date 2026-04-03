@@ -1,7 +1,7 @@
 """Execute Gemini function calls against the service layer."""
 
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import select
@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.appointment import Appointment
 from app.models.bill import Bill
-from app.models.enums import PaymentStatus
+from app.models.enums import PaymentStatus, ReviewStatus
 from app.models.medication import (
     Medication,
     MedicationConfirmation,
