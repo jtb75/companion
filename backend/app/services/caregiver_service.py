@@ -136,26 +136,32 @@ async def get_alerts(db: AsyncSession, user_id: UUID) -> list[dict]:
     )
     for conf in missed_result.scalars().all():
         alerts.append({
-            "type": "missed_dose",
-            "medication_id": str(conf.medication_id),
-            "scheduled_at": conf.scheduled_at.isoformat(),
+            "id": str(conf.id),
+            "type": "medication",
+            "message": "Missed medication dose",
+            "timestamp": conf.scheduled_at.isoformat(),
         })
 
     # Overdue bills
     overdue_result = await db.execute(
         select(Bill).where(
             Bill.user_id == user_id,
-            Bill.payment_status.in_([PaymentStatus.PENDING, PaymentStatus.OVERDUE]),
+            Bill.payment_status.in_(
+                [PaymentStatus.PENDING, PaymentStatus.OVERDUE]
+            ),
             Bill.due_date < today,
         )
     )
     for bill in overdue_result.scalars().all():
         alerts.append({
-            "type": "overdue_bill",
-            "bill_id": str(bill.id),
-            "sender": bill.sender,
-            "due_date": bill.due_date.isoformat(),
-            "amount": str(bill.amount),
+            "id": str(bill.id),
+            "type": "bill",
+            "message": (
+                f"Overdue bill from {bill.sender}: "
+                f"${bill.amount} was due "
+                f"{bill.due_date.strftime('%B %d, %Y')}"
+            ),
+            "timestamp": bill.due_date.isoformat(),
         })
 
     return alerts
@@ -287,7 +293,13 @@ async def get_dashboard_summary(db: AsyncSession, user_id: UUID) -> dict:
             "created_record_type": r.created_record_type,
         })
 
+    # Compute status based on alerts
+    status = "managing_well"
+    if overdue_bills > 0 or len(alerts) > 0:
+        status = "needs_attention"
+
     return {
+        "status": status,
         "active_medications": active_medications,
         "upcoming_appointments": upcoming_appointments,
         "overdue_bills": overdue_bills,
