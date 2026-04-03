@@ -555,6 +555,38 @@ async def _confirm_document_action(
 
         sender = fields.get("sender", "Unknown")
         amount = fields.get("amount_due", "?")
+
+        # Escalation: If bill is overdue, add To-do and trigger alert
+        if bill and bill.due_date < date.today():
+            from app.models.enums import TodoCategory, TodoSource
+            from app.models.todo import Todo
+            from app.services.push_notification_service import (
+                notify_overdue_bill,
+            )
+
+            # 1. Add immediate To-do
+            todo = Todo(
+                user_id=user_id,
+                title=f"Pay {sender} bill (${amount})",
+                description=f"This bill was due on {bill.due_date}.",
+                category=TodoCategory.GENERAL,
+                source=TodoSource.DOCUMENT,
+            )
+            db.add(todo)
+            
+            # 2. Update bill status to OVERDUE
+            from app.models.enums import PaymentStatus
+            bill.payment_status = PaymentStatus.OVERDUE
+            await db.flush()
+
+            # 3. Notify member & caregivers
+            await notify_overdue_bill(db, user_id, sender, str(amount))
+            
+            logger.info(
+                "ESCALATION: Overdue bill from %s triggered To-do and alert",
+                sender
+            )
+
         return {
             "success": True,
             "action": "mark_paid" if action == "mark_paid" else "confirmed",
