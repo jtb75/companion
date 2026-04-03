@@ -3,6 +3,7 @@ import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native'
+import auth from '@react-native-firebase/auth'
 import { useAuth } from './AuthProvider'
 import { colors, brand } from '../theme/colors'
 
@@ -110,6 +111,34 @@ export function LoginScreen() {
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
+        {mode === 'login' && (
+          <TouchableOpacity
+            style={styles.forgotButton}
+            onPress={async () => {
+              if (!email.trim()) {
+                setError('Enter your email first, then tap Forgot Password')
+                return
+              }
+              try {
+                await auth().sendPasswordResetEmail(email.trim())
+                setError('')
+                setPassword('')
+                setBusy(false)
+                // Use error style for success message too (simple)
+                setError('Password reset email sent! Check your inbox.')
+              } catch (e: any) {
+                setError(
+                  e.code === 'auth/user-not-found'
+                    ? 'No account found with this email'
+                    : 'Could not send reset email. Try again.'
+                )
+              }
+            }}
+          >
+            <Text style={styles.forgotText}>Forgot password?</Text>
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity
           style={styles.toggleButton}
           onPress={() => { setMode(mode === 'login' ? 'register' : 'login'); setError('') }}
@@ -195,6 +224,8 @@ const styles = StyleSheet.create({
   },
   buttonText: { color: colors.white, fontSize: 16, fontWeight: '600' },
   error: { color: colors.rose, fontSize: 13, marginTop: 12, textAlign: 'center' },
+  forgotButton: { marginTop: 8 },
+  forgotText: { fontSize: 13, color: colors.blue, fontWeight: '500' },
   toggleButton: { marginTop: 16 },
   toggleText: { fontSize: 13, color: colors.gray500 },
   toggleLink: { color: colors.blue, fontWeight: '600' },
