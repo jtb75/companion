@@ -148,11 +148,15 @@ async def notify_overdue_bill(
 ) -> int:
     """Notify member and caregivers about an overdue bill."""
     # Notify member
+    body = (
+        f"Your {sender} bill for ${amount} is past due. "
+        "I've added a task to help you get it paid."
+    )
     count = await send_push(
         db,
         user_id,
         title="Bill Alert",
-        body=f"Your {sender} bill for ${amount} is past due. I've added a task to help you get it paid.",
+        body=body,
         data={"type": "bill_alert", "sender": sender},
     )
 
