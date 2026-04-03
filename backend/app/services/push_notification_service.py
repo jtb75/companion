@@ -53,10 +53,7 @@ async def send_push(
             # Unregistered or invalid tokens should be deactivated
             if isinstance(
                 exc,
-                (
-                    messaging.UnregisteredError,
-                    messaging.SenderIdMismatchError,
-                ),
+                messaging.UnregisteredError | messaging.SenderIdMismatchError,
             ):
                 failed_tokens.append(tokens[i])
             else:

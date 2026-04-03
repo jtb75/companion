@@ -30,7 +30,7 @@ def upgrade() -> None:
         postgresql_using="proposed_record_data::text",
     )
     op.alter_column(
-        "functional_memories", "value",
+        "functional_memory", "value",
         type_=sa.Text,
         existing_type=sa.dialects.postgresql.JSONB,
         postgresql_using="value::text",
@@ -51,7 +51,7 @@ def downgrade() -> None:
         postgresql_using="proposed_record_data::jsonb",
     )
     op.alter_column(
-        "functional_memories", "value",
+        "functional_memory", "value",
         type_=sa.dialects.postgresql.JSONB,
         existing_type=sa.Text,
         postgresql_using="value::jsonb",
