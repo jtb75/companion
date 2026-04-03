@@ -19,7 +19,7 @@ from app.pipeline.schemas import (
     ClassificationResult,
     ExtractionResult,
     LegalExtraction,
-    MedicalAppointmentExtraction,
+    MedicalDocumentExtraction,
     NormalizedDocument,
 )
 
@@ -48,9 +48,11 @@ Return ONLY valid JSON with these exact keys:
 
 {
   "provider": "The doctor or healthcare provider's full name and title",
-  "date_time": "Appointment date/time in YYYY-MM-DD format (e.g. 2026-04-10)",
+  "date_time": "Appointment date/time in YYYY-MM-DD format if applicable",
   "location": "Office or facility name and address if available",
-  "preparation_instructions": "Any preparation instructions for the patient"
+  "nature_of_notice": "Briefly why they are writing (e.g. Retirement, Practice change, Result)",
+  "required_action": "One clear thing the patient needs to do (e.g. Find new primary doctor)",
+  "preparation_instructions": "Any preparation instructions for the patient if applicable"
 }
 
 If a field cannot be found, set its value to null.
@@ -64,8 +66,9 @@ Return ONLY valid JSON with these exact keys:
 
 {
   "sender": "The organization, law firm, or agency that sent the document",
+  "nature_of_notice": "What kind of legal notice this is (e.g. Collections, Eviction)",
   "response_deadline": "Any deadline to respond in MM/DD/YYYY format",
-  "action_required": "Brief description of what action is required"
+  "required_action": "Briefly what the recipient needs to do"
 }
 
 If a field cannot be found, set its value to null.
@@ -319,7 +322,7 @@ async def _regex_medical(text: str) -> tuple[dict, list[str]]:
     if not date_time:
         missing.append("date_time")
 
-    fields = MedicalAppointmentExtraction(
+    fields = MedicalDocumentExtraction(
         provider=provider,
         date_time=date_time,
     ).model_dump(exclude_none=False)

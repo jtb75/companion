@@ -46,12 +46,14 @@ class BillExtraction(BaseModel):
     late_fee: Decimal | None = None
     payment_methods: list[str] = Field(default_factory=list)
 
-class MedicalAppointmentExtraction(BaseModel):
+class MedicalDocumentExtraction(BaseModel):
     provider: str | None = None
     date_time: str | None = None
     location: str | None = None
     preparation_instructions: str | None = None
     contact_number: str | None = None
+    nature_of_notice: str | None = None  # e.g., Retirement, Clinic Move, Result
+    required_action: str | None = None  # e.g., Find new doctor, Call office
 
 class LegalExtraction(BaseModel):
     sender: str | None = None
@@ -84,7 +86,7 @@ class InsuranceExtraction(BaseModel):
 
 EXTRACTION_SCHEMAS: dict[str, type[BaseModel]] = {
     "bill": BillExtraction,
-    "medical": MedicalAppointmentExtraction,
+    "medical": MedicalDocumentExtraction,
     "legal": LegalExtraction,
     "form": FormExtraction,
     "government": GovernmentExtraction,
