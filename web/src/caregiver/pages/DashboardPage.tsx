@@ -92,6 +92,22 @@ export function DashboardPage({ userId }: Props) {
         </Card>
       </div>
 
+      {/* Overdue Bills */}
+      {(raw as any).overdue_bills_list?.length > 0 && (
+        <Card title="Overdue Bills">
+          <ul className="space-y-2">
+            {(raw as any).overdue_bills_list.map((bill: any, i: number) => (
+              <li key={i} className="flex justify-between text-sm">
+                <span className="font-medium text-red-700">{bill.description}</span>
+                <span className="text-red-600 font-medium">
+                  {bill.amount} &middot; due {new Date(bill.due_date + 'Z').toLocaleDateString()}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Upcoming Bills */}
         <Card title="Upcoming Bills">

@@ -228,17 +228,46 @@ async def get_dashboard_summary(db: AsyncSession, user_id: UUID) -> dict:
         for b in upcoming_bills_rows
     ]
 
-    # Active todos
-    todo_result = await db.execute(
+    # Active todos (total and completed)
+    todo_total_result = await db.execute(
         select(func.count())
         .select_from(Todo)
         .where(
             Todo.user_id == user_id,
             Todo.is_active.is_(True),
-            Todo.completed_at.is_(None),
         )
     )
-    active_todos = todo_result.scalar_one()
+    todo_total = todo_total_result.scalar_one()
+
+    todo_completed_result = await db.execute(
+        select(func.count())
+        .select_from(Todo)
+        .where(
+            Todo.user_id == user_id,
+            Todo.is_active.is_(True),
+            Todo.completed_at.is_not(None),
+        )
+    )
+    todo_completed = todo_completed_result.scalar_one()
+    active_todos = todo_total - todo_completed
+
+    # Overdue bills list for display
+    overdue_bills_list = []
+    overdue_bills_result2 = await db.execute(
+        select(Bill).where(
+            Bill.user_id == user_id,
+            Bill.payment_status.in_(
+                [PaymentStatus.PENDING, PaymentStatus.OVERDUE]
+            ),
+            Bill.due_date < today,
+        ).order_by(Bill.due_date).limit(5)
+    )
+    for b in overdue_bills_result2.scalars().all():
+        overdue_bills_list.append({
+            "description": b.sender,
+            "due_date": b.due_date.isoformat(),
+            "amount": f"${b.amount}",
+        })
 
     # Active contacts
     contact_result = await db.execute(
@@ -303,7 +332,12 @@ async def get_dashboard_summary(db: AsyncSession, user_id: UUID) -> dict:
         "active_medications": active_medications,
         "upcoming_appointments": upcoming_appointments,
         "overdue_bills": overdue_bills,
+        "overdue_bills_list": overdue_bills_list,
         "upcoming_bills": upcoming_bills,
+        "tasks": {
+            "total": todo_total,
+            "completed": todo_completed,
+        },
         "active_todos": active_todos,
         "active_contacts": active_contacts,
         "alert_count": len(alerts),
