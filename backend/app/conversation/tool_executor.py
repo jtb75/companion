@@ -252,33 +252,54 @@ async def _add_appointment(
         preparation_notes=args.get("preparation_notes"),
     )
     db.add(appt)
-    await db.flush()
+    await db.commit()
+    
     return {
         "success": True,
         "id": str(appt.id),
         "provider": appt.provider_name,
         "at": appt.appointment_at.isoformat(),
+        "requires_confirmation": True,
+        "confirmation_message": (
+            f"Add appointment with {appt.provider_name} "
+            f"on {appt.appointment_at.strftime('%B %d')}?"
+        ),
     }
 
 
 async def _add_todo(
     db: AsyncSession, user_id: UUID, args: dict
 ) -> dict:
+    from app.models.enums import TodoCategory, TodoSource
+    
     due = None
     if args.get("due_date"):
-        due = date.fromisoformat(args["due_date"])
+        try:
+            due = date.fromisoformat(args["due_date"])
+        except ValueError:
+            pass
+
     todo = Todo(
         user_id=user_id,
         title=args["title"],
         due_date=due,
-        category=args.get("category", "general"),
+        category=args.get("category", TodoCategory.GENERAL),
+        source=TodoSource.ARLO_SUGGESTION,
     )
     db.add(todo)
-    await db.flush()
+    await db.commit()
+    
+    logger.info(
+        "TOOL_CALL: add_todo successful for user %s: %s",
+        user_id, todo.title
+    )
+    
     return {
         "success": True,
         "id": str(todo.id),
         "title": todo.title,
+        "requires_confirmation": True,
+        "confirmation_message": f"Add '{todo.title}' to your list?",
     }
 
 
@@ -305,6 +326,8 @@ async def _complete_todo(
         "success": True,
         "id": str(todo.id),
         "title": todo.title,
+        "requires_confirmation": True,
+        "confirmation_message": f"Add '{todo.title}' to your list?",
     }
 
 

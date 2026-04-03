@@ -116,6 +116,9 @@ async def summarize(
             classification.document_id, grade, spoken
         )
 
+    # Apply confidence-based hedging (Trust Layer)
+    spoken = _apply_confidence_hedging(spoken, classification.confidence_score)
+
     return SummarizationResult(
         document_id=classification.document_id,
         spoken_summary=spoken,
@@ -124,6 +127,42 @@ async def summarize(
         reasoning=reasoning,
         reading_grade=grade,
     )
+
+
+def _apply_confidence_hedging(text: str, confidence: float) -> str:
+    """Adjust the tone of the summary based on AI confidence."""
+    # High confidence (>90%) -> Direct and factual
+    if confidence >= 0.90:
+        return text
+
+    # Medium confidence (70-90%) -> Soften with "looks like"
+    if confidence >= 0.70:
+        prefixes = [
+            "It looks like",
+            "I think this is",
+            "This seems to be",
+        ]
+        import random
+        prefix = random.choice(prefixes)
+        
+        # Strip common starting phrases to avoid duplication
+        clean_text = text
+        for p in ["This is", "I found", "You have"]:
+            if text.startswith(p):
+                clean_text = text[len(p):].strip()
+                break
+        
+        # Lowercase first letter if we added a prefix
+        if clean_text[0].isupper() and not clean_text[0:2].isupper():
+            clean_text = clean_text[0].lower() + clean_text[1:]
+            
+        return f"{prefix} {clean_text}"
+
+    # Low confidence (<70%) -> Explicitly ask for review
+    suffix = " I'm not 100% sure about this one — can we look at it together?"
+    if text.endswith(".") or text.endswith("!"):
+        return text[:-1] + suffix
+    return text + suffix
 
 
 async def _llm_summarize(

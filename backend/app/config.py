@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     gcp_project_id: str = "companion-dev"
     pubsub_emulator_host: str | None = None
     gcs_bucket_documents: str = "companion-docs-dev"
+    kms_key_id: str = ""
 
     # Firebase
     firebase_project_id: str = "companion-dev"

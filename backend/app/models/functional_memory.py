@@ -1,9 +1,10 @@
 import uuid
 
 from sqlalchemy import ForeignKey, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.db.encrypted_type import EncryptedJSON
 from app.models.base import Base, TimestampMixin
 from app.models.enums import MemoryCategory, MemorySource
 
@@ -25,7 +26,7 @@ class FunctionalMemory(TimestampMixin, Base):
     )
     category: Mapped[MemoryCategory] = mapped_column(nullable=False)
     key: Mapped[str] = mapped_column(Text, nullable=False)
-    value: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    value: Mapped[dict] = mapped_column(EncryptedJSON, nullable=False)
     source: Mapped[MemorySource] = mapped_column(nullable=False)
 
     # Relationships

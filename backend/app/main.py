@@ -16,6 +16,10 @@ from app.api.v1.profile import router as profile_router
 from app.branding import BRAND_LONG, BRAND_MID
 from app.config import settings
 from app.db.session import engine
+from app.logging_config import setup_logging
+
+# Initialize PII-masked logging
+setup_logging()
 
 logger = logging.getLogger(__name__)
 

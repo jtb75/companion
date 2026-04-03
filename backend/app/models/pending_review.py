@@ -3,9 +3,10 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Numeric, Text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.db.encrypted_type import EncryptedJSON
 from app.models.base import Base, TimestampMixin
 from app.models.enums import RecommendedAction, ReviewStatus
 
@@ -36,7 +37,7 @@ class PendingReview(TimestampMixin, Base):
         nullable=False,
     )
     proposed_record_data: Mapped[dict] = mapped_column(
-        JSONB, nullable=False
+        EncryptedJSON, nullable=False
     )
     confidence_score: Mapped[Decimal | None] = mapped_column(
         Numeric(4, 3), nullable=True
