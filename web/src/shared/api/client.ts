@@ -18,6 +18,7 @@ export async function api<T>(
 
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { ...headers, ...options?.headers },
+    signal: options?.signal,
     ...options,
   })
 

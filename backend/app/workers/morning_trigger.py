@@ -35,9 +35,10 @@ async def run_morning_trigger(force: bool = False):
 
             triggered = 0
             for user in users:
+                checkin_time = user.checkin_time or time(9, 0)
+
                 # Skip if not the right time (unless forced)
                 if not force:
-                    checkin_time = user.checkin_time or time(9, 0)
                     if checkin_time.hour != current_hour:
                         continue
                     if abs(checkin_time.minute - current_minute) > 5:

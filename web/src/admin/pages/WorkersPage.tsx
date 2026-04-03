@@ -16,13 +16,30 @@ export function WorkersPage() {
 
   const mutation = useMutation({
     mutationFn: async (path: string) => {
-      return await api<WorkerResult>(`/admin/workers${path}`, { method: 'POST' })
+      // Background workers (like LLM briefings) can take a long time.
+      // We set a 60s timeout to prevent 'Failed to fetch' browser errors.
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 60000)
+
+      try {
+        const res = await api<WorkerResult>(`/admin/workers${path}`, { 
+          method: 'POST',
+          signal: controller.signal
+        })
+        return res
+      } finally {
+        clearTimeout(timeoutId)
+      }
     },
     onSuccess: (data) => {
       setLastResult(JSON.stringify(data, null, 2))
     },
     onError: (err: any) => {
-      setLastResult(`Error: ${err.message || 'Worker trigger failed'}`)
+      if (err.name === 'AbortError') {
+        setLastResult('Error: Request timed out after 60 seconds. The worker is likely still running in the background.')
+      } else {
+        setLastResult(`Error: ${err.message || 'Worker trigger failed'}`)
+      }
     },
   })
 
