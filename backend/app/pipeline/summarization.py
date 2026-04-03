@@ -215,13 +215,19 @@ async def _template_bill(
 async def _template_medical(
     fields: dict, classification: ClassificationResult
 ) -> tuple[str, str]:
-    provider = fields.get("provider", "your doctor")
+    provider = fields.get("provider") or "your doctor"
+    notice = fields.get("nature_of_notice")
+    action = fields.get("required_action")
     date_time = fields.get("date_time")
 
-    if date_time:
-        spoken = (
-            f"You have an appointment with {provider} on {date_time}."
-        )
+    if notice and action:
+        spoken = f"This is a {notice} notice from {provider}. It says you should {action}."
+        card = f"{provider} — {notice}"
+    elif notice:
+        spoken = f"This is a {notice} notice from {provider}."
+        card = f"{provider} — {notice}"
+    elif date_time:
+        spoken = f"You have an appointment with {provider} on {date_time}."
         card = f"{provider} — {date_time}"
     else:
         spoken = f"This is a medical document from {provider}."
@@ -233,20 +239,19 @@ async def _template_medical(
 async def _template_legal(
     fields: dict, classification: ClassificationResult
 ) -> tuple[str, str]:
-    sender = fields.get("sender", "Unknown")
+    sender = fields.get("sender") or "someone"
+    notice = fields.get("nature_of_notice") or "legal"
+    action = fields.get("required_action")
     deadline = fields.get("response_deadline")
 
-    spoken = f"This is a serious letter from {sender}."
+    spoken = f"This is a {notice} notice from {sender}."
+    if action:
+        spoken += f" It says you need to {action}."
     if deadline:
-        spoken += f" It has a deadline of {deadline}."
-    spoken += (
-        " You should not handle this alone — "
-        "want me to let your trusted contact know?"
-    )
-
-    card = f"Legal notice from {sender}"
-    if deadline:
-        card += f" — respond by {deadline}"
+        spoken += f" There is a deadline of {deadline}."
+    
+    spoken += " You should look at this with a trusted contact."
+    card = f"{notice.capitalize()} from {sender}"
 
     return spoken, card
 
@@ -255,7 +260,7 @@ async def _template_junk(
     fields: dict, classification: ClassificationResult
 ) -> tuple[str, str]:
     return (
-        "This is junk mail. I'll set it aside.",
+        "This looks like junk mail. I'll set it aside for you.",
         "Junk mail — no action needed",
     )
 
@@ -263,19 +268,19 @@ async def _template_junk(
 async def _template_generic(
     fields: dict, classification: ClassificationResult
 ) -> tuple[str, str]:
-    preview = fields.get("raw_text_preview", "")[:100]
-    if classification.confidence_score < 0.6:
-        spoken = (
-            "I'm not completely sure what this is. "
-            "It could be important. "
-            "Want to look at it together?"
-        )
-        card = "Unknown document — needs review"
+    sender = fields.get("sender") or "someone"
+    notice = fields.get("nature_of_notice") or "document"
+    action = fields.get("required_action")
+
+    if action:
+        spoken = f"I found a {notice} from {sender}. It says you should {action}."
     else:
         spoken = (
-            f"I received a document. Here's what it says: {preview}"
+            f"I found a {notice} from {sender}. "
+            "I'm not sure if you need to do anything yet."
         )
-        card = "Document received"
+    
+    card = f"{notice.capitalize()} from {sender}"
 
     return spoken, card
 
