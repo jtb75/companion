@@ -503,11 +503,27 @@ async def _confirm_document_action(
     if review is None:
         return {"error": True, "message": "Review not found."}
 
+    async def _get_remaining_count() -> int:
+        from sqlalchemy import func
+        count_res = await db.execute(
+            select(func.count()).select_from(PendingReview).where(
+                PendingReview.user_id == user_id,
+                PendingReview.review_status.in_(
+                    [ReviewStatus.PENDING, ReviewStatus.PRESENTED]
+                ),
+            )
+        )
+        return int(count_res.scalar() or 0)
+
     if action == "skip":
         review.review_status = ReviewStatus.SKIPPED
         review.resolved_at = datetime.utcnow()
         await db.flush()
-        return {"success": True, "action": "skipped"}
+        return {
+            "success": True,
+            "action": "skipped",
+            "remaining_count": await _get_remaining_count(),
+        }
 
     fields = review.proposed_record_data or {}
     rec_action = review.recommended_action
@@ -545,6 +561,7 @@ async def _confirm_document_action(
             "record_type": "bill",
             "sender": sender,
             "amount": str(amount),
+            "remaining_count": await _get_remaining_count(),
         }
 
     elif rec_action == RecommendedAction.ADD_APPOINTMENT:
@@ -565,6 +582,7 @@ async def _confirm_document_action(
             "action": "confirmed",
             "record_type": "appointment",
             "provider": provider,
+            "remaining_count": await _get_remaining_count(),
         }
 
     else:
@@ -575,6 +593,7 @@ async def _confirm_document_action(
         return {
             "success": True,
             "action": "acknowledged",
+            "remaining_count": await _get_remaining_count(),
         }
 
 
