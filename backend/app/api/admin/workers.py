@@ -50,7 +50,6 @@ async def trigger_morning_checkin(admin: AdminUser = Depends(_admin)):
 
 
 @router.post("/reprocess-documents")
-...
 async def reprocess_stuck_documents(
     admin: AdminUser = Depends(_admin),
     db: AsyncSession = Depends(get_db),
