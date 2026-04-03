@@ -271,11 +271,13 @@ async def _add_todo(
     db: AsyncSession, user_id: UUID, args: dict
 ) -> dict:
     from app.models.enums import TodoCategory, TodoSource
+    from app.models.pending_review import PendingReview
     
     due = None
-    if args.get("due_date"):
+    due_str = args.get("due_date")
+    if due_str:
         try:
-            due = date.fromisoformat(args["due_date"])
+            due = date.fromisoformat(due_str)
         except ValueError:
             pass
 
@@ -287,19 +289,39 @@ async def _add_todo(
         source=TodoSource.ARLO_SUGGESTION,
     )
     db.add(todo)
+    
+    # If this todo was created from a pending review, mark the review handled
+    raw_review_id = args.get("review_id")
+    if raw_review_id:
+        review_id = await _resolve_review_id(db, user_id, raw_review_id)
+        if review_id:
+            res = await db.execute(
+                select(PendingReview).where(PendingReview.id == review_id)
+            )
+            review = res.scalar_one_or_none()
+            if review:
+                review.review_status = ReviewStatus.HANDLED
+                review.resolved_at = datetime.utcnow()
+
     await db.commit()
     
-    logger.info(
-        "TOOL_CALL: add_todo successful for user %s: %s",
-        user_id, todo.title
-    )
-    
+    # Determine confirmation message with relative date if possible
+    conf_msg = f"Add '{todo.title}' to your list?"
+    if due:
+        today = date.today()
+        if due == today:
+            conf_msg = f"Add '{todo.title}' to your list for today?"
+        elif due == today + timedelta(days=1):
+            conf_msg = f"Add '{todo.title}' to your list for tomorrow?"
+        else:
+            conf_msg = f"Add '{todo.title}' to your list for {due.strftime('%A')}?"
+
     return {
         "success": True,
         "id": str(todo.id),
         "title": todo.title,
         "requires_confirmation": True,
-        "confirmation_message": f"Add '{todo.title}' to your list?",
+        "confirmation_message": conf_msg,
     }
 
 

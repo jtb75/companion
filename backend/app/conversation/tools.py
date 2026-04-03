@@ -183,6 +183,13 @@ def get_dd_tools():
                         "general",
                     ],
                 },
+                "review_id": {
+                    "type": "string",
+                    "description": (
+                        "Optional ID of the document review "
+                        "this todo is related to."
+                    ),
+                },
             },
             "required": ["title"],
         },
