@@ -6,16 +6,27 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+_firestore_available: bool | None = None
+
 
 def _get_firestore():
     """Get Firestore client, initializing Firebase if needed."""
+    global _firestore_available
+    if _firestore_available is False:
+        return None
+
     try:
         from app.auth.firebase import _ensure_initialized
+
         _ensure_initialized()
         from firebase_admin import firestore
-        return firestore.client()
+
+        client = firestore.client()
+        _firestore_available = True
+        return client
     except Exception:
-        logger.warning("Firestore client unavailable", exc_info=True)
+        logger.warning("Firestore client unavailable")
+        _firestore_available = False
         return None
 
 
@@ -28,9 +39,7 @@ async def publish_pipeline_event(
 ) -> None:
     """Write pipeline stage status to Firestore.
 
-    Updates a single document at pipeline_events/{document_id}
-    with the current state of all stages. The frontend listens
-    via onSnapshot for real-time updates.
+    Fails fast (2s timeout) to avoid blocking the pipeline.
     """
     doc_id = str(document_id)
 
@@ -48,18 +57,24 @@ async def publish_pipeline_event(
         if metadata:
             update[f"{stage}_metadata"] = metadata
 
-        # Run synchronous Firestore write in thread
-        await asyncio.to_thread(
-            db.collection("pipeline_events")
-            .document(doc_id)
-            .set,
-            update,
-            merge=True,
+        await asyncio.wait_for(
+            asyncio.to_thread(
+                db.collection("pipeline_events")
+                .document(doc_id)
+                .set,
+                update,
+                merge=True,
+            ),
+            timeout=2.0,
+        )
+    except TimeoutError:
+        logger.warning(
+            "Firestore write timed out for doc %s",
+            document_id,
         )
     except Exception:
         logger.warning(
             "Failed to write pipeline event to Firestore"
             " for doc %s",
             document_id,
-            exc_info=True,
         )
