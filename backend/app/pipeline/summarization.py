@@ -8,7 +8,6 @@ Falls back to templates if LLM is unavailable.
 import json
 import logging
 
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
