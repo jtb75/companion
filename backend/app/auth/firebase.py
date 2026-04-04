@@ -19,20 +19,21 @@ def _ensure_initialized():
         return True
 
     try:
-        # In GCP (Cloud Run), uses Application Default Credentials
-        # Locally, uses GOOGLE_APPLICATION_CREDENTIALS env var
-        from google.auth import default as google_auth_default
+        import os
 
         from app.config import settings
 
-        credentials, project = google_auth_default()
-        project_id = settings.firebase_project_id or project
+        project_id = (
+            settings.firebase_project_id
+            or os.environ.get("GOOGLE_CLOUD_PROJECT")
+            or os.environ.get("GCLOUD_PROJECT")
+        )
         logger.info(
-            "Initializing Firebase with project=%s", project_id
+            "Initializing Firebase with project=%s",
+            project_id,
         )
         firebase_admin.initialize_app(
-            credential=firebase_admin.credentials.ApplicationDefault(),
-            options={"projectId": project_id},
+            options={"projectId": project_id} if project_id else None
         )
         _initialized = True
         logger.info("Firebase Admin SDK initialized")

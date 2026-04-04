@@ -58,9 +58,12 @@ async def send_push(
                 failed_tokens.append(tokens[i])
             else:
                 logger.warning(
-                    "FCM send failed for token %s: %s",
+                    "FCM send failed for token %s: %s "
+                    "(type=%s, http=%s)",
                     tokens[i][:20],
                     exc,
+                    type(exc).__name__,
+                    getattr(exc, "http_response", None),
                 )
 
     for bad_token in failed_tokens:
