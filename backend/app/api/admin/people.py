@@ -470,11 +470,25 @@ async def send_alert_to_member(
     if not message:
         raise HTTPException(400, "Message is required")
 
+    from app.services import device_token_service
+
+    tokens = await device_token_service.get_active_tokens(
+        db, user_id
+    )
+    if not tokens:
+        return {
+            "sent": 0,
+            "error": "no_devices",
+            "user_name": user.preferred_name,
+        }
+
     sent = await send_push(
         db, user_id, title=title, body=message,
         data={"type": "admin_alert"},
     )
     return {
         "sent": sent,
+        "error": "send_failed" if sent == 0 else None,
+        "device_count": len(tokens),
         "user_name": user.preferred_name,
     }

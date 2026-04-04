@@ -334,13 +334,18 @@ function PersonDetail({
   })
   const sendAlertMutation = useMutation({
     mutationFn: (data: { title: string; message: string }) =>
-      api<{ sent: number; user_name: string }>(`/admin/people/${person.id}/send-alert`, {
+      api<{ sent: number; error?: string; device_count?: number; user_name: string }>(`/admin/people/${person.id}/send-alert`, {
         method: 'POST',
         body: JSON.stringify(data),
       }),
     onSuccess: (res) => {
-      setAlertResult(res.sent > 0 ? `Sent to ${res.sent} device(s)` : 'No devices registered')
-      setTimeout(() => { setAlertResult(null); setShowAlertForm(false); setAlertMessage('') }, 3000)
+      const msg = res.sent > 0
+        ? `Sent to ${res.sent} device(s)`
+        : res.error === 'no_devices'
+          ? 'No devices registered'
+          : `Send failed (${res.device_count} device(s) found but FCM error)`
+      setAlertResult(msg)
+      setTimeout(() => { setAlertResult(null); if (res.sent > 0) { setShowAlertForm(false); setAlertMessage('') } }, 4000)
     },
     onError: () => {
       setAlertResult('Failed to send')
