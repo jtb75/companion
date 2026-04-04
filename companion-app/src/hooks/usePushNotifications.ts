@@ -19,11 +19,22 @@ export function usePushNotifications(isAuthenticated: boolean) {
         authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
         authStatus === messaging.AuthorizationStatus.PROVISIONAL
       setPermissionGranted(granted)
+      console.log('[usePushNotifications] permission:', authStatus, 'granted:', granted)
 
-      if (!granted) return
+      if (!granted) {
+        console.log('[usePushNotifications] permission not granted, skipping')
+        return
+      }
+
+      // Register for remote messages (required on iOS before getToken)
+      if (!messaging().isDeviceRegisteredForRemoteMessages) {
+        await messaging().registerDeviceForRemoteMessages()
+      }
 
       // Get and register FCM token
+      console.log('[usePushNotifications] getting FCM token...')
       const token = await messaging().getToken()
+      console.log('[usePushNotifications] FCM token:', token ? `${token.substring(0, 20)}...` : 'null')
       await registerToken(token)
 
       // Listen for token refresh

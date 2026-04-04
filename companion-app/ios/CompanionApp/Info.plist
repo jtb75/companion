@@ -29,7 +29,7 @@
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.googleusercontent.apps.381910341082-pno0cjokscg81piotb3c3l2g6u7v4hpm</string>
+				<string>com.googleusercontent.apps.381910341082-qsibpjm2chltt1998dpubc52eop27bub</string>
 			</array>
 		</dict>
 	</array>
@@ -52,6 +52,10 @@
 	<string>D.D. Companion needs photo library access to select documents</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIRequiredDeviceCapabilities</key>
