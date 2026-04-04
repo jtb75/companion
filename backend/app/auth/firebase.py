@@ -28,12 +28,25 @@ def _ensure_initialized():
             or os.environ.get("GOOGLE_CLOUD_PROJECT")
             or os.environ.get("GCLOUD_PROJECT")
         )
-        logger.info(
-            "Initializing Firebase with project=%s",
-            project_id,
-        )
+
+        cred_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+        if cred_path and os.path.exists(cred_path):
+            cred = firebase_admin.credentials.Certificate(cred_path)
+            logger.info(
+                "Initializing Firebase with SA key file, "
+                "project=%s",
+                project_id,
+            )
+        else:
+            cred = firebase_admin.credentials.ApplicationDefault()
+            logger.info(
+                "Initializing Firebase with ADC, project=%s",
+                project_id,
+            )
+
         firebase_admin.initialize_app(
-            options={"projectId": project_id} if project_id else None
+            credential=cred,
+            options={"projectId": project_id} if project_id else None,
         )
         _initialized = True
         logger.info("Firebase Admin SDK initialized")
