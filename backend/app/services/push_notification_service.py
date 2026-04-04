@@ -104,7 +104,11 @@ async def send_push(
                     "FCM send failed for %s...: %d %s",
                     token_str[:20],
                     resp.status_code,
-                    resp.text[:200],
+                    resp.text[:500],
+                )
+                logger.warning(
+                    "FCM auth token prefix: %s...",
+                    access_token[:30] if access_token else "none",
                 )
 
     for bad_token in failed_tokens:
