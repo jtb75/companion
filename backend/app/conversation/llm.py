@@ -75,6 +75,8 @@ class GeminiClient(LLMClient):
         system_prompt: str,
         messages: list[dict],
         max_tokens: int = 500,
+        temperature: float = 0.7,
+        response_json: bool = False,
     ) -> str:
         model = self._get_model(system_prompt)
         if model is None:
@@ -101,12 +103,16 @@ class GeminiClient(LLMClient):
                     )
                 )
 
+            gen_config = {
+                "max_output_tokens": max_tokens,
+                "temperature": temperature,
+            }
+            if response_json:
+                gen_config["response_mime_type"] = "application/json"
+
             response = await model.generate_content_async(
                 contents,
-                generation_config=GenerationConfig(
-                    max_output_tokens=max_tokens,
-                    temperature=0.7,
-                ),
+                generation_config=GenerationConfig(**gen_config),
             )
             return response.text
         except Exception:

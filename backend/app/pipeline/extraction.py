@@ -186,6 +186,8 @@ async def _llm_extract(
                 {"role": "user", "content": prompt + text_snippet}
             ],
             max_tokens=500,
+            temperature=0.2,
+            response_json=True,
         )
 
         # Strip markdown code fences if present
@@ -203,7 +205,7 @@ async def _llm_extract(
         logger.warning("LLM extraction returned non-dict: %s", type(parsed))
         return None
     except json.JSONDecodeError as e:
-        logger.warning("LLM extraction JSON parse failed: %s", e)
+        logger.warning("LLM extraction JSON parse failed: %s — raw: %s", e, response[:500] if response else "empty")
         return None
     except Exception:
         logger.exception("LLM extraction failed")

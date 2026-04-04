@@ -193,6 +193,8 @@ async def _llm_summarize(
             ),
             messages=[{"role": "user", "content": prompt}],
             max_tokens=400,
+            temperature=0.3,
+            response_json=True,
         )
 
         cleaned = response.strip()
@@ -215,7 +217,7 @@ async def _llm_summarize(
         logger.warning("LLM summarization returned empty fields")
         return None
     except json.JSONDecodeError as e:
-        logger.warning("LLM summarization JSON parse failed: %s", e)
+        logger.warning("LLM summarization JSON parse failed: %s — raw: %s", e, response[:500] if response else "empty")
         return None
     except Exception:
         logger.exception("LLM summarization failed")

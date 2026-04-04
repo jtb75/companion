@@ -138,10 +138,20 @@ async def _tier2_classify(doc: NormalizedDocument) -> ClassificationResult:
         response = await llm.generate(
             system_prompt="You are a document classifier. Respond with valid JSON only.",
             messages=[{"role": "user", "content": _CLASSIFY_PROMPT + text_snippet}],
-            max_tokens=100,
+            max_tokens=200,
+            temperature=0.2,
+            response_json=True,
         )
 
-        parsed = json.loads(response.strip())
+        cleaned = response.strip()
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+            cleaned = re.sub(r"\s*```$", "", cleaned)
+        try:
+            parsed = json.loads(cleaned)
+        except json.JSONDecodeError:
+            logger.warning("Classification raw LLM response: %s", cleaned[:500])
+            raise
         classification = parsed.get("classification", "unknown")
         urgency = parsed.get("urgency", "needs_attention")
         confidence = min(max(float(parsed.get("confidence", 0.7)), 0.0), 1.0)
