@@ -205,7 +205,10 @@ async def _llm_extract(
         logger.warning("LLM extraction returned non-dict: %s", type(parsed))
         return None
     except json.JSONDecodeError as e:
-        logger.warning("LLM extraction JSON parse failed: %s — raw: %s", e, response[:500] if response else "empty")
+        raw = response[:500] if response else "empty"
+        logger.warning(
+            "LLM extraction JSON parse failed: %s — raw: %s", e, raw
+        )
         return None
     except Exception:
         logger.exception("LLM extraction failed")

@@ -217,7 +217,10 @@ async def _llm_summarize(
         logger.warning("LLM summarization returned empty fields")
         return None
     except json.JSONDecodeError as e:
-        logger.warning("LLM summarization JSON parse failed: %s — raw: %s", e, response[:500] if response else "empty")
+        raw = response[:500] if response else "empty"
+        logger.warning(
+            "LLM summarization JSON parse failed: %s — raw: %s", e, raw
+        )
         return None
     except Exception:
         logger.exception("LLM summarization failed")
