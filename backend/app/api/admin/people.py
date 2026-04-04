@@ -449,3 +449,32 @@ async def remove_caregiver_assignment(
     await db.delete(request)
     await db.flush()
     return {"deleted": True}
+
+
+@router.post("/admin/people/{user_id}/send-alert")
+async def send_alert_to_member(
+    user_id: uuid.UUID,
+    body: dict,
+    admin: AdminUser = Depends(_editor),
+    db: AsyncSession = Depends(get_db),
+):
+    """Send a push notification to a member."""
+    from app.services.push_notification_service import send_push
+
+    user = await db.get(User, user_id)
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    title = body.get("title", "D.D. Companion")
+    message = body.get("message", "")
+    if not message:
+        raise HTTPException(400, "Message is required")
+
+    sent = await send_push(
+        db, user_id, title=title, body=message,
+        data={"type": "admin_alert"},
+    )
+    return {
+        "sent": sent,
+        "user_name": user.preferred_name,
+    }

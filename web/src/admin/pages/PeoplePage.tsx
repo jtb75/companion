@@ -310,6 +310,10 @@ function PersonDetail({
   const [showModal, setShowModal] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   const [showAssignForm, setShowAssignForm] = useState(false)
+  const [showAlertForm, setShowAlertForm] = useState(false)
+  const [alertTitle, setAlertTitle] = useState('D.D. Companion')
+  const [alertMessage, setAlertMessage] = useState('')
+  const [alertResult, setAlertResult] = useState<string | null>(null)
   const [newAssignment, setNewAssignment] = useState({ user_id: '', contact_name: person.display_name || person.first_name || person.email, relationship: 'family', tier: 'tier_1' })
 
   const addCaregiverMutation = useMutation({
@@ -327,6 +331,21 @@ function PersonDetail({
   const removeAdminMutation = useMutation({
     mutationFn: (adminId: string) => api(`/admin/admin-users/${adminId}`, { method: 'DELETE' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-people'] }),
+  })
+  const sendAlertMutation = useMutation({
+    mutationFn: (data: { title: string; message: string }) =>
+      api<{ sent: number; user_name: string }>(`/admin/people/${person.id}/send-alert`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: (res) => {
+      setAlertResult(res.sent > 0 ? `Sent to ${res.sent} device(s)` : 'No devices registered')
+      setTimeout(() => { setAlertResult(null); setShowAlertForm(false); setAlertMessage('') }, 3000)
+    },
+    onError: () => {
+      setAlertResult('Failed to send')
+      setTimeout(() => setAlertResult(null), 3000)
+    },
   })
 
   const name = person.first_name || person.display_name || 'This person'
@@ -359,6 +378,12 @@ function PersonDetail({
                   <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" /></svg>
                   Edit Profile
                 </button>
+                {person.is_user && person.id && (
+                  <button onClick={() => { setShowAlertForm(true); setShowMenu(false) }} className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                    <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" /></svg>
+                    Send Alert
+                  </button>
+                )}
                 {person.is_user && person.id && !person.is_admin && (
                   <button onClick={() => { setShowModal(true); setShowMenu(false) }} className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
                     <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" /></svg>
@@ -448,6 +473,48 @@ function PersonDetail({
             <button onClick={() => setShowAssignForm(false)} className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700">Cancel</button>
           </div>
           {addCaregiverMutation.isError && <p className="text-xs text-companion-rose">Failed to assign caregiver.</p>}
+        </div>
+      )}
+
+      {/* Alert Form */}
+      {showAlertForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setShowAlertForm(false)}>
+          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl space-y-3" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold text-gray-900">Send Alert to {name}</h3>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">Title</label>
+              <input
+                value={alertTitle}
+                onChange={(e) => setAlertTitle(e.target.value)}
+                className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-600">Message</label>
+              <textarea
+                value={alertMessage}
+                onChange={(e) => setAlertMessage(e.target.value)}
+                rows={3}
+                className="block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+                placeholder="Enter notification message..."
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => sendAlertMutation.mutate({ title: alertTitle, message: alertMessage })}
+                disabled={sendAlertMutation.isPending || !alertMessage.trim()}
+                className="rounded-md bg-companion-blue px-4 py-1.5 text-sm font-medium text-white hover:bg-companion-blue-mid disabled:opacity-50"
+              >
+                {sendAlertMutation.isPending ? 'Sending...' : 'Send'}
+              </button>
+              <button onClick={() => { setShowAlertForm(false); setAlertMessage('') }} className="px-3 py-1.5 text-sm text-gray-500">Cancel</button>
+              {alertResult && (
+                <span className={`text-xs ${alertResult.includes('Failed') || alertResult.includes('No devices') ? 'text-amber-600' : 'text-emerald-600'}`}>
+                  {alertResult}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
