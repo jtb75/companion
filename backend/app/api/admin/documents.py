@@ -136,6 +136,63 @@ async def list_documents(
     }
 
 
+@router.get("/{document_id}")
+async def get_document_detail(
+    document_id: uuid.UUID,
+    admin: AdminUser = Depends(_editor),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get full document details including OCR text, extracted fields, and pipeline stages."""
+    doc = await db.get(Document, document_id)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # Get user info
+    user = await db.get(User, doc.user_id)
+
+    # Get pipeline metrics
+    metrics_q = await db.execute(
+        select(PipelineMetric)
+        .where(PipelineMetric.document_id == document_id)
+        .order_by(PipelineMetric.recorded_at)
+    )
+    stages = [
+        {
+            "stage": m.stage.capitalize(),
+            "status": m.status,
+            "duration_ms": m.duration_ms,
+            "error_message": m.error_message,
+            "metadata": m.stage_metadata,
+            "recorded_at": m.recorded_at.isoformat() if m.recorded_at else None,
+        }
+        for m in metrics_q.scalars().all()
+    ]
+
+    return {
+        "id": str(doc.id),
+        "user_name": user.preferred_name if user else None,
+        "user_email": user.email if user else None,
+        "source_channel": doc.source_channel.value if doc.source_channel else None,
+        "status": doc.status.value if doc.status else None,
+        "classification": doc.classification.value if doc.classification else None,
+        "urgency_level": doc.urgency_level.value if doc.urgency_level else None,
+        "confidence_score": float(doc.confidence_score) if doc.confidence_score else None,
+        "card_summary": doc.card_summary,
+        "spoken_summary": doc.spoken_summary,
+        "extracted_fields": doc.extracted_fields,
+        "routing_destination": doc.routing_destination.value if doc.routing_destination else None,
+        "page_count": doc.page_count,
+        "ocr_text": (doc.source_metadata or {}).get("ocr_text"),
+        "source_metadata": {
+            k: v for k, v in (doc.source_metadata or {}).items()
+            if k != "ocr_text"
+        },
+        "created_at": doc.received_at.isoformat() if doc.received_at else None,
+        "processed_at": doc.processed_at.isoformat() if doc.processed_at else None,
+        "pipeline_stages": stages,
+    }
+
+
 @router.post("/{document_id}/cancel")
 async def cancel_document(
     document_id: uuid.UUID,

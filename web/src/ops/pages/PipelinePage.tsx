@@ -150,6 +150,186 @@ function PipelineStepper({ stages }: { stages: PipelineStage[] }) {
 }
 
 // ---------------------------------------------------------------------------
+// Document Detail Panel
+// ---------------------------------------------------------------------------
+
+interface DocumentDetail {
+  id: string
+  user_name: string | null
+  user_email: string | null
+  source_channel: string | null
+  status: string | null
+  classification: string | null
+  urgency_level: string | null
+  confidence_score: number | null
+  card_summary: string | null
+  spoken_summary: string | null
+  extracted_fields: Record<string, unknown> | null
+  routing_destination: string | null
+  page_count: number | null
+  ocr_text: string | null
+  source_metadata: Record<string, unknown> | null
+  created_at: string | null
+  processed_at: string | null
+  pipeline_stages: {
+    stage: string
+    status: string
+    duration_ms: number | null
+    error_message: string | null
+    metadata: Record<string, unknown> | null
+    recorded_at: string | null
+  }[]
+}
+
+function DetailPanel({ documentId, onClose }: { documentId: string; onClose: () => void }) {
+  const { data: detail, isLoading } = useQuery({
+    queryKey: ['pipeline-document-detail', documentId],
+    queryFn: () => api<DocumentDetail>(`/admin/documents/${documentId}`),
+  })
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 pt-12" onClick={onClose}>
+      <div
+        className="relative w-full max-w-2xl max-h-[80vh] overflow-y-auto rounded-xl bg-white shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-white px-5 py-3 rounded-t-xl">
+          <h2 className="text-sm font-semibold text-gray-900">Document Details</h2>
+          <button onClick={onClose} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {isLoading ? (
+          <div className="p-8 text-center text-sm text-gray-500">Loading...</div>
+        ) : !detail ? (
+          <div className="p-8 text-center text-sm text-gray-500">Not found</div>
+        ) : (
+          <div className="space-y-4 p-5">
+            {/* Overview */}
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <span className="text-gray-400">User</span>
+                <p className="font-medium text-gray-900">{detail.user_name} ({detail.user_email})</p>
+              </div>
+              <div>
+                <span className="text-gray-400">Source</span>
+                <p className="font-medium text-gray-900">{detail.source_channel} &middot; {detail.page_count ?? 1} page(s)</p>
+              </div>
+              <div>
+                <span className="text-gray-400">Classification</span>
+                <p className="font-medium text-gray-900">
+                  {detail.classification || 'none'}
+                  {detail.confidence_score != null && (
+                    <span className="ml-1 text-gray-400">({Math.round(detail.confidence_score * 100)}%)</span>
+                  )}
+                </p>
+              </div>
+              <div>
+                <span className="text-gray-400">Urgency</span>
+                <p className="font-medium text-gray-900">{detail.urgency_level || 'none'}</p>
+              </div>
+              <div>
+                <span className="text-gray-400">Routing</span>
+                <p className="font-medium text-gray-900">{detail.routing_destination || 'none'}</p>
+              </div>
+              <div>
+                <span className="text-gray-400">Status</span>
+                <p className="font-medium text-gray-900">{detail.status}</p>
+              </div>
+            </div>
+
+            {/* Summaries */}
+            {(detail.card_summary || detail.spoken_summary) && (
+              <div>
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Summaries</h3>
+                {detail.card_summary && (
+                  <div className="mb-2">
+                    <span className="text-[10px] text-gray-400">Card</span>
+                    <p className="text-xs text-gray-700">{detail.card_summary}</p>
+                  </div>
+                )}
+                {detail.spoken_summary && (
+                  <div>
+                    <span className="text-[10px] text-gray-400">Spoken</span>
+                    <p className="text-xs text-gray-700">{detail.spoken_summary}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Extracted Fields */}
+            {detail.extracted_fields && Object.keys(detail.extracted_fields).length > 0 && (
+              <div>
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Extracted Fields</h3>
+                <div className="rounded-lg bg-gray-50 p-3">
+                  <pre className="text-[11px] text-gray-700 whitespace-pre-wrap break-words">
+                    {JSON.stringify(detail.extracted_fields, null, 2)}
+                  </pre>
+                </div>
+              </div>
+            )}
+
+            {/* Pipeline Stages */}
+            <div>
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Pipeline Stages</h3>
+              <div className="space-y-1.5">
+                {detail.pipeline_stages.map((s, i) => (
+                  <div
+                    key={i}
+                    className={`rounded-lg border px-3 py-2 text-xs ${
+                      s.status === 'error' ? 'border-rose-200 bg-rose-50' : 'border-gray-100 bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={`font-medium ${s.status === 'error' ? 'text-rose-700' : 'text-gray-700'}`}>
+                        {s.stage}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {s.duration_ms != null && (
+                          <span className="text-gray-400">{s.duration_ms}ms</span>
+                        )}
+                        <span className={`font-medium ${s.status === 'error' ? 'text-rose-600' : 'text-emerald-600'}`}>
+                          {s.status}
+                        </span>
+                      </div>
+                    </div>
+                    {s.error_message && (
+                      <p className="mt-1 text-rose-600">{s.error_message}</p>
+                    )}
+                    {s.metadata && Object.keys(s.metadata).length > 0 && (
+                      <p className="mt-1 text-gray-500">
+                        {Object.entries(s.metadata).map(([k, v]) => `${k}: ${v}`).join(' · ')}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* OCR Text */}
+            {detail.ocr_text && (
+              <div>
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">OCR Text</h3>
+                <div className="rounded-lg bg-gray-50 p-3 max-h-48 overflow-y-auto">
+                  <pre className="text-[11px] text-gray-600 whitespace-pre-wrap break-words">{detail.ocr_text}</pre>
+                </div>
+              </div>
+            )}
+
+            {/* ID */}
+            <p className="text-[10px] text-gray-300 select-all">{detail.id}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Document Card
 // ---------------------------------------------------------------------------
 
@@ -157,10 +337,12 @@ function DocumentCard({
   doc,
   onCancel,
   onResubmit,
+  onShowDetails,
 }: {
   doc: PipelineDocument
   onCancel: (id: string) => void
   onResubmit: (id: string) => void
+  onShowDetails: (id: string) => void
 }) {
   const sourceLabel = doc.source_channel === 'camera_scan' ? 'Camera Scan' : doc.source_channel === 'email' ? 'Email' : doc.source_channel || 'Unknown'
   const uploadTime = new Date(doc.created_at).toLocaleString()
@@ -212,6 +394,12 @@ function DocumentCard({
             )}
           </div>
           <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => onShowDetails(doc.id)}
+              className="rounded border border-gray-300 px-2 py-0.5 text-[10px] font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              Details
+            </button>
             <button
               onClick={() => onCancel(doc.id)}
               className="rounded border border-rose-300 px-2 py-0.5 text-[10px] font-medium text-rose-600 hover:bg-rose-50 transition-colors"
@@ -346,6 +534,7 @@ export function PipelinePage() {
   const queryClient = useQueryClient()
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [documents, setDocuments] = useState<PipelineDocument[]>([])
+  const [detailDocId, setDetailDocId] = useState<string | null>(null)
 
   // --- Fetch ALL documents (unfiltered for counts) ---
   const { data: docsData, isLoading: docsLoading } = useQuery({
@@ -512,6 +701,7 @@ export function PipelinePage() {
               doc={doc}
               onCancel={handleCancel}
               onResubmit={handleResubmit}
+              onShowDetails={setDetailDocId}
             />
           ))}
         </div>
@@ -566,6 +756,11 @@ export function PipelinePage() {
             ))}
           </div>
         </Card>
+      )}
+
+      {/* Detail modal */}
+      {detailDocId && (
+        <DetailPanel documentId={detailDocId} onClose={() => setDetailDocId(null)} />
       )}
     </div>
   )
