@@ -30,40 +30,82 @@ async def send_push(
         )
         return 0
 
-    from firebase_admin import messaging  # noqa: E402
+    # Use google-auth + httpx to call FCM v1 API directly
+    # (firebase_admin SDK has auth issues on Cloud Run)
+    import json as _json
+    import os
 
-    notification = messaging.Notification(
-        title=title, body=body
-    )
-    message = messaging.MulticastMessage(
-        notification=notification,
-        data=data or {},
-        tokens=tokens,
+    import httpx
+    from google.auth.transport.requests import Request
+    from google.oauth2 import service_account
+
+    cred_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+    project_id = os.environ.get(
+        "COMPANION_FIREBASE_PROJECT_ID", "companion-staging-491606"
     )
 
-    response = await asyncio.to_thread(
-        messaging.send_each_for_multicast, message
-    )
+    if cred_path and os.path.exists(cred_path):
+        credentials = service_account.Credentials.from_service_account_file(
+            cred_path,
+            scopes=["https://www.googleapis.com/auth/firebase.messaging"],
+        )
+    else:
+        from google.auth import default
 
-    # Deactivate tokens that are no longer valid
+        credentials, _ = default(
+            scopes=["https://www.googleapis.com/auth/firebase.messaging"]
+        )
+
+    credentials.refresh(Request())
+    access_token = credentials.token
+
+    url = (
+        f"https://fcm.googleapis.com/v1/projects/{project_id}"
+        f"/messages:send"
+    )
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+    }
+
+    sent = 0
     failed_tokens: list[str] = []
-    for i, send_response in enumerate(response.responses):
-        if send_response.exception is not None:
-            exc = send_response.exception
-            # Unregistered or invalid tokens should be deactivated
-            if isinstance(
-                exc,
-                messaging.UnregisteredError | messaging.SenderIdMismatchError,
-            ):
-                failed_tokens.append(tokens[i])
+
+    async with httpx.AsyncClient() as client:
+        for token_str in tokens:
+            payload = {
+                "message": {
+                    "token": token_str,
+                    "notification": {
+                        "title": title,
+                        "body": body,
+                    },
+                    "data": data or {},
+                }
+            }
+            resp = await client.post(
+                url,
+                headers=headers,
+                content=_json.dumps(payload),
+            )
+            if resp.status_code == 200:
+                sent += 1
+                logger.info(
+                    "FCM sent to %s...", token_str[:20]
+                )
+            elif resp.status_code == 404:
+                # Token not registered
+                failed_tokens.append(token_str)
+                logger.warning(
+                    "FCM token invalid: %s...",
+                    token_str[:20],
+                )
             else:
                 logger.warning(
-                    "FCM send failed for token %s: %s "
-                    "(type=%s, http=%s)",
-                    tokens[i][:20],
-                    exc,
-                    type(exc).__name__,
-                    getattr(exc, "http_response", None),
+                    "FCM send failed for %s...: %d %s",
+                    token_str[:20],
+                    resp.status_code,
+                    resp.text[:200],
                 )
 
     for bad_token in failed_tokens:
