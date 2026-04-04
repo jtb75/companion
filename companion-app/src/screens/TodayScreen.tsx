@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native'
-import { useNavigation } from '@react-navigation/native'
+import { useNavigation, useFocusEffect } from '@react-navigation/native'
 import { api } from '../api/client'
 import { colors, brand } from '../theme/colors'
 import { useAuth } from '../auth/AuthProvider'
@@ -58,9 +58,14 @@ export function TodayScreen() {
     if (hour < 12) setGreeting('Good morning')
     else if (hour < 17) setGreeting('Good afternoon')
     else setGreeting('Good evening')
-
-    loadData()
   }, [])
+
+  // Refresh data every time the screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadData()
+    }, [])
+  )
 
   const loadData = async () => {
     try {
