@@ -22,6 +22,7 @@ def _ensure_initialized():
         # In GCP (Cloud Run), uses Application Default Credentials
         # Locally, uses GOOGLE_APPLICATION_CREDENTIALS env var
         from google.auth import default as google_auth_default
+
         from app.config import settings
 
         credentials, project = google_auth_default()
