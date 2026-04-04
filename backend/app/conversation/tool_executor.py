@@ -266,7 +266,7 @@ async def _add_appointment(
             review.review_status = ReviewStatus.CONFIRMED
             review.resolved_at = datetime.utcnow()
 
-    await db.commit()
+    await db.flush()
     
     return {
         "success": True,
@@ -318,7 +318,7 @@ async def _add_todo(
             review.review_status = ReviewStatus.CONFIRMED
             review.resolved_at = datetime.utcnow()
 
-    await db.commit()
+    await db.flush()
     
     # Determine confirmation message with relative date if possible
     conf_msg = f"Add '{todo.title}' to your list?"
@@ -405,14 +405,16 @@ async def _resolve_review_id(
     except (ValueError, AttributeError):
         pass
 
-    # Fallback: most recent pending review
+    # Fallback: most recent pending or presented review
+    # Prioritize items that were just presented to the user
     result = await db.execute(
         select(PendingReview).where(
             PendingReview.user_id == user_id,
             PendingReview.review_status.in_(
-                ["pending", "presented"]
+                [ReviewStatus.PENDING, ReviewStatus.PRESENTED]
             ),
         ).order_by(
+            PendingReview.presented_at.desc().nulls_last(),
             PendingReview.is_urgent.desc(),
             PendingReview.created_at.desc(),
         ).limit(1)
