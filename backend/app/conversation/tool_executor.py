@@ -252,6 +252,20 @@ async def _add_appointment(
         preparation_notes=args.get("preparation_notes"),
     )
     db.add(appt)
+
+    # If this appointment was created from a pending review, mark it confirmed
+    from app.models.pending_review import PendingReview
+    raw_review_id = str(args.get("review_id", "")).strip()
+    review_id = await _resolve_review_id(db, user_id, raw_review_id)
+    if review_id:
+        res = await db.execute(
+            select(PendingReview).where(PendingReview.id == review_id)
+        )
+        review = res.scalar_one_or_none()
+        if review:
+            review.review_status = ReviewStatus.CONFIRMED
+            review.resolved_at = datetime.utcnow()
+
     await db.commit()
     
     return {
@@ -290,18 +304,19 @@ async def _add_todo(
     )
     db.add(todo)
     
-    # If this todo was created from a pending review, mark the review handled
-    raw_review_id = args.get("review_id")
-    if raw_review_id:
-        review_id = await _resolve_review_id(db, user_id, raw_review_id)
-        if review_id:
-            res = await db.execute(
-                select(PendingReview).where(PendingReview.id == review_id)
-            )
-            review = res.scalar_one_or_none()
-            if review:
-                review.review_status = ReviewStatus.HANDLED
-                review.resolved_at = datetime.utcnow()
+    # If this todo was created from a pending review, mark it confirmed
+    # We always attempt to resolve — _resolve_review_id will fall back to
+    # the most recent item if the LLM didn't provide an ID.
+    raw_review_id = str(args.get("review_id", "")).strip()
+    review_id = await _resolve_review_id(db, user_id, raw_review_id)
+    if review_id:
+        res = await db.execute(
+            select(PendingReview).where(PendingReview.id == review_id)
+        )
+        review = res.scalar_one_or_none()
+        if review:
+            review.review_status = ReviewStatus.CONFIRMED
+            review.resolved_at = datetime.utcnow()
 
     await db.commit()
     

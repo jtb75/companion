@@ -145,6 +145,13 @@ def get_dd_tools():
                         "Optional notes on how to prepare."
                     ),
                 },
+                "review_id": {
+                    "type": "string",
+                    "description": (
+                        "Optional ID of the document review "
+                        "this appointment is related to."
+                    ),
+                },
             },
             "required": [
                 "provider_name",

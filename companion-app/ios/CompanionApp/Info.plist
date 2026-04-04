@@ -44,8 +44,12 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>D.D. Companion needs camera access to scan documents and mail</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string></string>
+	<string>D.D. Companion uses your location to help caregivers find nearby services</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>D.D. Companion needs photo library access to select documents</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
@@ -67,9 +71,5 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
-	<key>NSCameraUsageDescription</key>
-	<string>D.D. Companion needs camera access to scan documents and mail</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>D.D. Companion needs photo library access to select documents</string>
 </dict>
 </plist>
