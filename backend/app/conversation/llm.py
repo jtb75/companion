@@ -1,10 +1,37 @@
+import json
 import logging
+import re
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def extract_json(text: str) -> dict:
+    """Extract a JSON object from LLM output that may contain
+    preamble text, markdown fences, or thinking blocks."""
+    cleaned = text.strip()
+    # Strip markdown code fences
+    if "```" in cleaned:
+        cleaned = re.sub(
+            r"^```(?:json)?\s*", "", cleaned
+        )
+        cleaned = re.sub(r"\s*```$", "", cleaned)
+    # Find the first { ... } block
+    start = cleaned.find("{")
+    if start >= 0:
+        depth = 0
+        for i in range(start, len(cleaned)):
+            if cleaned[i] == "{":
+                depth += 1
+            elif cleaned[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return json.loads(cleaned[start : i + 1])
+    # Fallback: try parsing the whole thing
+    return json.loads(cleaned)
 
 
 class LLMClient(ABC):

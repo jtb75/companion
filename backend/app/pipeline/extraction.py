@@ -190,24 +190,22 @@ async def _llm_extract(
             response_json=True,
         )
 
-        # Strip markdown code fences if present
-        cleaned = response.strip()
-        if cleaned.startswith("```"):
-            cleaned = re.sub(
-                r"^```(?:json)?\s*", "", cleaned
-            )
-            cleaned = re.sub(r"\s*```$", "", cleaned)
+        from app.conversation.llm import extract_json
 
-        parsed = json.loads(cleaned)
+        parsed = extract_json(response)
         if isinstance(parsed, dict):
             return parsed
 
-        logger.warning("LLM extraction returned non-dict: %s", type(parsed))
+        logger.warning(
+            "LLM extraction returned non-dict: %s",
+            type(parsed),
+        )
         return None
-    except json.JSONDecodeError as e:
+    except (json.JSONDecodeError, ValueError) as e:
         raw = response[:500] if response else "empty"
         logger.warning(
-            "LLM extraction JSON parse failed: %s — raw: %s", e, raw
+            "LLM extraction JSON parse failed: %s — raw: %s",
+            e, raw,
         )
         return None
     except Exception:

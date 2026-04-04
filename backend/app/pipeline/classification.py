@@ -143,14 +143,15 @@ async def _tier2_classify(doc: NormalizedDocument) -> ClassificationResult:
             response_json=True,
         )
 
-        cleaned = response.strip()
-        if cleaned.startswith("```"):
-            cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
-            cleaned = re.sub(r"\s*```$", "", cleaned)
+        from app.conversation.llm import extract_json
+
         try:
-            parsed = json.loads(cleaned)
-        except json.JSONDecodeError:
-            logger.warning("Classification raw LLM response: %s", cleaned[:500])
+            parsed = extract_json(response)
+        except (json.JSONDecodeError, ValueError):
+            logger.warning(
+                "Classification raw LLM response: %s",
+                response[:500],
+            )
             raise
         classification = parsed.get("classification", "unknown")
         urgency = parsed.get("urgency", "needs_attention")

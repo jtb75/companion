@@ -197,12 +197,9 @@ async def _llm_summarize(
             response_json=True,
         )
 
-        cleaned = response.strip()
-        if cleaned.startswith("```"):
-            cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
-            cleaned = re.sub(r"\s*```$", "", cleaned)
+        from app.conversation.llm import extract_json
 
-        parsed = json.loads(cleaned)
+        parsed = extract_json(response)
         reasoning = parsed.get("reasoning", "").strip()
         spoken = parsed.get("spoken", "").strip()
         card = parsed.get("card", "").strip()
@@ -210,16 +207,17 @@ async def _llm_summarize(
         if spoken and card:
             logger.info(
                 "LLM_SUMMARIZE_REASONING: doc=%s reasoning=%s",
-                classification.document_id, reasoning
+                classification.document_id, reasoning,
             )
             return spoken, card, reasoning
 
         logger.warning("LLM summarization returned empty fields")
         return None
-    except json.JSONDecodeError as e:
+    except (json.JSONDecodeError, ValueError) as e:
         raw = response[:500] if response else "empty"
         logger.warning(
-            "LLM summarization JSON parse failed: %s — raw: %s", e, raw
+            "LLM summarization JSON parse failed: %s — raw: %s",
+            e, raw,
         )
         return None
     except Exception:
