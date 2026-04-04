@@ -185,10 +185,10 @@ async def _llm_extract(
             messages=[
                 {"role": "user", "content": prompt + text_snippet}
             ],
-            max_tokens=500,
+            max_tokens=1000,
             temperature=0.2,
             response_json=True,
-            disable_thinking=True,
+            disable_thinking=False,
         )
 
         from app.conversation.llm import extract_json

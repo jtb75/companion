@@ -131,20 +131,22 @@ class GeminiClient(LLMClient):
                     )
                 )
 
-            gen_config = {
+            gen_kwargs = {
                 "max_output_tokens": max_tokens,
                 "temperature": temperature,
             }
             if response_json:
-                gen_config["response_mime_type"] = "application/json"
+                gen_kwargs["response_mime_type"] = "application/json"
+            
             if disable_thinking:
-                gen_config["thinking_config"] = {
-                    "thinking_budget": 0,
-                }
+                from vertexai.generative_models import ThinkingConfig
+                gen_kwargs["thinking_config"] = ThinkingConfig(
+                    thinking_budget=0
+                )
 
             response = await model.generate_content_async(
                 contents,
-                generation_config=GenerationConfig(**gen_config),
+                generation_config=GenerationConfig(**gen_kwargs),
             )
             return response.text
         except Exception:
@@ -156,6 +158,8 @@ class GeminiClient(LLMClient):
         system_prompt: str,
         messages: list[dict],
         max_tokens: int = 500,
+        temperature: float = 0.7,
+        disable_thinking: bool = False,
     ) -> AsyncIterator[str]:
         model = self._get_model(system_prompt)
         if model is None:
@@ -181,13 +185,20 @@ class GeminiClient(LLMClient):
                     )
                 )
 
+            gen_kwargs = {
+                "max_output_tokens": max_tokens,
+                "temperature": temperature,
+            }
+            if disable_thinking:
+                from vertexai.generative_models import ThinkingConfig
+                gen_kwargs["thinking_config"] = ThinkingConfig(
+                    thinking_budget=0
+                )
+
             response = await model.generate_content_async(
                 contents,
                 stream=True,
-                generation_config=GenerationConfig(
-                    max_output_tokens=max_tokens,
-                    temperature=0.7,
-                ),
+                generation_config=GenerationConfig(**gen_kwargs),
             )
             async for chunk in response:
                 if chunk.text:
@@ -202,6 +213,8 @@ class GeminiClient(LLMClient):
         contents: list,
         tools=None,
         max_tokens: int = 1024,
+        temperature: float = 0.7,
+        disable_thinking: bool = False,
     ):
         """Generate with tool support.
 
@@ -217,12 +230,19 @@ class GeminiClient(LLMClient):
                 GenerationConfig,
             )
 
+            gen_kwargs = {
+                "max_output_tokens": max_tokens,
+                "temperature": temperature,
+            }
+            if disable_thinking:
+                from vertexai.generative_models import ThinkingConfig
+                gen_kwargs["thinking_config"] = ThinkingConfig(
+                    thinking_budget=0
+                )
+
             response = await model.generate_content_async(
                 contents,
-                generation_config=GenerationConfig(
-                    max_output_tokens=max_tokens,
-                    temperature=0.7,
-                ),
+                generation_config=GenerationConfig(**gen_kwargs),
             )
             return response
         except Exception:

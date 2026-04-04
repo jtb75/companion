@@ -191,10 +191,10 @@ async def _llm_summarize(
                 "Return ONLY valid JSON, no other text."
             ),
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=400,
+            max_tokens=2000,
             temperature=0.3,
             response_json=True,
-            disable_thinking=True,
+            disable_thinking=False,
         )
 
         from app.conversation.llm import extract_json

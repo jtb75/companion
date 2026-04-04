@@ -5,6 +5,7 @@ import { api } from '../api/client'
 import { colors, brand } from '../theme/colors'
 import { useAuth } from '../auth/AuthProvider'
 import { ScanButton } from '../components/ScanButton'
+import { TodoCheckbox } from '../components/TodoCheckbox'
 
 interface PendingReview {
   id: string
@@ -32,6 +33,25 @@ export function TodayScreen() {
   const [data, setData] = useState<TodayData | null>(null)
   const [loading, setLoading] = useState(true)
   const [greeting, setGreeting] = useState('')
+
+  const handleToggleTodo = async (todoId: string) => {
+    try {
+      // Optimistic update
+      setData((prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          todos: prev.todos.map((t) =>
+            t.id === todoId ? { ...t, completed_at: new Date().toISOString() } : t
+          ),
+        }
+      })
+      await api(`/api/v1/todos/${todoId}/complete`, { method: 'POST' })
+    } catch (err) {
+      // Revert on failure
+      loadData()
+    }
+  }
 
   useEffect(() => {
     const hour = new Date().getHours()
@@ -168,8 +188,14 @@ export function TodayScreen() {
           <Text style={styles.cardTitle}>To Do</Text>
           {pendingTodos.map((todo: any) => (
             <View key={todo.id} style={styles.row}>
-              <View style={[styles.checkbox]} />
-              <Text style={styles.rowTitle}>{todo.title}</Text>
+              <TodoCheckbox
+                completed={!!todo.completed_at}
+                onPress={() => handleToggleTodo(todo.id)}
+                size={20}
+              />
+              <Text style={[styles.rowTitle, !!todo.completed_at && styles.completedText]}>
+                {todo.title}
+              </Text>
             </View>
           ))}
         </View>
@@ -228,6 +254,7 @@ const styles = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.blue },
   checkbox: { width: 18, height: 18, borderRadius: 4, borderWidth: 2, borderColor: colors.gray300 },
   rowTitle: { fontSize: 15, fontWeight: '500', color: colors.gray800 },
+  completedText: { textDecorationLine: 'line-through', color: colors.gray400 },
   rowSub: { fontSize: 13, color: colors.gray500, marginTop: 1 },
   emptyText: { fontSize: 15, color: colors.gray400, textAlign: 'center', paddingVertical: 20 },
   mailHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },

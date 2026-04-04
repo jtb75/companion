@@ -3,6 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator
 import { api } from '../api/client'
 import { colors } from '../theme/colors'
 import { ScanButton } from '../components/ScanButton'
+import { TodoCheckbox } from '../components/TodoCheckbox'
 
 type Tab = 'meds' | 'appointments' | 'bills' | 'todos'
 
@@ -35,6 +36,25 @@ export function MyStuffScreen() {
     }
   }
 
+  const handleToggleTodo = async (todoId: string) => {
+    try {
+      // Optimistic update
+      setData((prev: any) => {
+        if (!prev || !prev.todos) return prev
+        return {
+          ...prev,
+          todos: prev.todos.map((t: any) =>
+            t.id === todoId ? { ...t, completed_at: new Date().toISOString() } : t
+          ),
+        }
+      })
+      await api(`/api/v1/todos/${todoId}/complete`, { method: 'POST' })
+    } catch (err) {
+      // Revert on failure
+      loadTab('todos')
+    }
+  }
+
   const renderContent = () => {
     if (loading) return <ActivityIndicator size="large" color={colors.blue} style={{ marginTop: 40 }} />
     if (!data) return <Text style={styles.empty}>Unable to load data</Text>
@@ -44,18 +64,29 @@ export function MyStuffScreen() {
 
     return items.map((item: any, i: number) => (
       <View key={item.id || i} style={styles.card}>
-        <Text style={styles.itemTitle}>
-          {item.name || item.provider_name || item.sender || item.title}
-        </Text>
-        {item.dosage && <Text style={styles.itemSub}>{item.dosage} - {item.frequency}</Text>}
-        {item.appointment_at && (
-          <Text style={styles.itemSub}>
-            {new Date(item.appointment_at).toLocaleDateString()} at{' '}
-            {new Date(item.appointment_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </Text>
-        )}
-        {item.amount && <Text style={styles.itemSub}>${item.amount} due {new Date(item.due_date).toLocaleDateString()}</Text>}
-        {item.description && !item.amount && <Text style={styles.itemSub}>{item.description}</Text>}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          {tab === 'todos' && (
+            <TodoCheckbox
+              completed={!!item.completed_at}
+              onPress={() => handleToggleTodo(item.id)}
+              size={20}
+            />
+          )}
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.itemTitle, tab === 'todos' && !!item.completed_at && styles.completedText]}>
+              {item.name || item.provider_name || item.sender || item.title}
+            </Text>
+            {item.dosage && <Text style={styles.itemSub}>{item.dosage} - {item.frequency}</Text>}
+            {item.appointment_at && (
+              <Text style={styles.itemSub}>
+                {new Date(item.appointment_at).toLocaleDateString()} at{' '}
+                {new Date(item.appointment_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </Text>
+            )}
+            {item.amount && <Text style={styles.itemSub}>${item.amount} due {new Date(item.due_date).toLocaleDateString()}</Text>}
+            {item.description && !item.amount && <Text style={styles.itemSub}>{item.description}</Text>}
+          </View>
+        </View>
       </View>
     ))
   }
@@ -103,6 +134,7 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   itemTitle: { fontSize: 15, fontWeight: '600', color: colors.gray800 },
+  completedText: { textDecorationLine: 'line-through', color: colors.gray400 },
   itemSub: { fontSize: 13, color: colors.gray500, marginTop: 3 },
   empty: { fontSize: 15, color: colors.gray400, textAlign: 'center', marginTop: 40 },
 })

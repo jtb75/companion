@@ -138,7 +138,7 @@ async def _tier2_classify(doc: NormalizedDocument) -> ClassificationResult:
         response = await llm.generate(
             system_prompt="You are a document classifier. Respond with valid JSON only.",
             messages=[{"role": "user", "content": _CLASSIFY_PROMPT + text_snippet}],
-            max_tokens=200,
+            max_tokens=1000,
             temperature=0.2,
             response_json=True,
             disable_thinking=True,

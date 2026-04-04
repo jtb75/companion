@@ -89,7 +89,7 @@ async def _generate_with_tools(
             system_prompt,
             contents,
             tools=tools,
-            max_tokens=1024,
+            max_tokens=2048,
         )
         if response is None:
             return llm._fallback_response(llm_messages)
