@@ -42,6 +42,20 @@ async def send_push(
     project_id = os.environ.get(
         "COMPANION_FIREBASE_PROJECT_ID", "companion-staging-491606"
     )
+    logger.info(
+        "FCM cred_path=%s exists=%s",
+        cred_path,
+        os.path.exists(cred_path) if cred_path else "no_path",
+    )
+    if cred_path and not os.path.exists(cred_path):
+        # List what's in /secrets
+        secrets_dir = os.path.dirname(cred_path)
+        if os.path.exists(secrets_dir):
+            logger.info(
+                "Files in %s: %s",
+                secrets_dir,
+                os.listdir(secrets_dir),
+            )
 
     if cred_path and os.path.exists(cred_path):
         credentials = service_account.Credentials.from_service_account_file(
