@@ -54,6 +54,7 @@ class Document(Base):
     )
     processed_at: Mapped[datetime | None] = mapped_column(nullable=True)
     acknowledged_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    page_count: Mapped[int | None] = mapped_column(nullable=True, server_default="1")
     retention_phase: Mapped[RetentionPhase] = mapped_column(
         nullable=False, default=RetentionPhase.FULL
     )

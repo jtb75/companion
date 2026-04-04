@@ -64,44 +64,63 @@ async def analyze_scan_quality(
 
 @router.post("/scan", status_code=status.HTTP_201_CREATED)
 async def scan_document(
-    file: UploadFile = File(...),
+    files: list[UploadFile] = File(default=[]),
+    file: UploadFile | None = File(None),
     user: User = Depends(require_complete_profile),
     db: AsyncSession = Depends(get_db),
 ):
-    """Upload a camera-scanned document for processing."""
-    # Validate content type
-    content_type = file.content_type or ""
-    if content_type not in ALLOWED_SCAN_TYPES:
+    """Upload one or more camera-scanned document pages for processing."""
+    # Backward compatibility: single file -> list
+    upload_files = files if files else []
+    if file is not None and not upload_files:
+        upload_files = [file]
+
+    if not upload_files:
         raise HTTPException(
-            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail=(
-                "Unsupported file type. "
-                "Accepted: JPEG, PNG, HEIC, PDF."
-            ),
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="No files provided.",
         )
 
-    # Read and validate size
-    data = await file.read()
-    if len(data) > MAX_SCAN_SIZE:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="File exceeds 10 MB limit.",
-        )
+    # Validate all files before uploading
+    pages_data: list[tuple[bytes, str]] = []
+    for f in upload_files:
+        content_type = f.content_type or ""
+        if content_type not in ALLOWED_SCAN_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                detail=(
+                    "Unsupported file type. "
+                    "Accepted: JPEG, PNG, HEIC, PDF."
+                ),
+            )
+        data = await f.read()
+        if len(data) > MAX_SCAN_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="File exceeds 10 MB limit.",
+            )
+        pages_data.append((data, content_type))
 
-    # Upload to GCS
-    ext = ALLOWED_SCAN_TYPES[content_type]
-    file_id = uuid.uuid4()
-    blob_path = f"scans/{user.id}/{file_id}.{ext}"
+    # Upload all pages to GCS
+    doc_id = uuid.uuid4()
+    page_refs: list[str] = []
+    first_gcs_uri = ""
     try:
-        gcs_uri = await _upload_to_gcs(
-            blob_path, data, content_type
-        )
+        for i, (data, content_type) in enumerate(pages_data):
+            ext = ALLOWED_SCAN_TYPES[content_type]
+            blob_path = f"scans/{user.id}/{doc_id}/page_{i:03d}.{ext}"
+            gcs_uri = await _upload_to_gcs(blob_path, data, content_type)
+            page_refs.append(gcs_uri)
+            if i == 0:
+                first_gcs_uri = gcs_uri
     except Exception:
         logger.exception("GCS upload failed for user %s", user.id)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Failed to upload file to storage.",
         ) from None
+
+    page_count = len(pages_data)
 
     # Create document record (publishes document.received event)
     doc = await document_service.create_document(
@@ -110,11 +129,13 @@ async def scan_document(
         {
             "source_channel": SourceChannel.CAMERA_SCAN,
             "status": DocumentStatus.RECEIVED,
-            "raw_text_ref": gcs_uri,
+            "raw_text_ref": first_gcs_uri,
+            "page_count": page_count,
             "source_metadata": {
-                "original_filename": file.filename,
-                "content_type": content_type,
-                "size_bytes": len(data),
+                "original_filename": upload_files[0].filename,
+                "content_type": pages_data[0][1],
+                "size_bytes": sum(len(d) for d, _ in pages_data),
+                "page_refs": page_refs,
             },
         },
     )
@@ -125,6 +146,7 @@ async def scan_document(
     return {
         "document_id": doc.id,
         "status": "processing",
+        "page_count": page_count,
     }
 
 

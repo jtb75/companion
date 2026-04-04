@@ -38,6 +38,7 @@ class DocumentResponse(BaseModel):
     spoken_summary: str | None = None
     card_summary: str | None = None
     routing_destination: RoutingDestination | None = None
+    page_count: int | None = None
     status: DocumentStatus
     received_at: datetime
     processed_at: datetime | None = None

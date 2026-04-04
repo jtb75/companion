@@ -79,32 +79,39 @@ async def process_camera_scan(
         raw_text = doc.source_metadata.get("raw_text", "")
 
     if not raw_text and doc.raw_text_ref:
-        # Download image from GCS and run OCR
+        # Check for multi-page scan
+        page_refs = (doc.source_metadata or {}).get("page_refs", [])
+
         try:
-            logger.info(
-                "Downloading from GCS: %s", doc.raw_text_ref
-            )
-            data = await asyncio.to_thread(
-                _download_from_gcs, doc.raw_text_ref
-            )
-            logger.info(
-                "Running OCR on %d bytes (%s)",
-                len(data),
-                mime_type,
-            )
-            raw_text = await asyncio.to_thread(
-                _ocr_with_document_ai, data, mime_type
-            )
-            logger.info(
-                "OCR extracted %d characters", len(raw_text)
-            )
+            if len(page_refs) > 1:
+                # Multi-page: OCR each page and concatenate
+                page_texts = []
+                for i, ref in enumerate(page_refs):
+                    logger.info("Downloading page %d from GCS: %s", i, ref)
+                    data = await asyncio.to_thread(_download_from_gcs, ref)
+                    logger.info("Running OCR on page %d (%d bytes)", i, len(data))
+                    text = await asyncio.to_thread(_ocr_with_document_ai, data, mime_type)
+                    page_texts.append(text)
+                raw_text = "\n\n".join(
+                    f"--- Page {i + 1} ---\n\n{text}"
+                    for i, text in enumerate(page_texts)
+                )
+                logger.info(
+                    "OCR extracted %d characters from %d pages",
+                    len(raw_text), len(page_refs),
+                )
+            else:
+                # Single page (or legacy): download and OCR
+                logger.info("Downloading from GCS: %s", doc.raw_text_ref)
+                data = await asyncio.to_thread(_download_from_gcs, doc.raw_text_ref)
+                logger.info("Running OCR on %d bytes (%s)", len(data), mime_type)
+                raw_text = await asyncio.to_thread(_ocr_with_document_ai, data, mime_type)
+                logger.info("OCR extracted %d characters", len(raw_text))
 
             # Store extracted text (keep original GCS path)
             if not doc.source_metadata:
                 doc.source_metadata = {}
-            doc.source_metadata["ocr_text"] = raw_text[
-                :5000
-            ]
+            doc.source_metadata["ocr_text"] = raw_text[:5000]
             doc.source_metadata["ocr_complete"] = True
             await db.flush()
         except Exception:

@@ -250,15 +250,15 @@ async def send_invitation_accepted_notification(
     text_body = (
         f"Hi {to_name},\n\n"
         f"{caregiver_name} has accepted your invitation and is now your caregiver on {BRAND_MID}.\n\n"
-        f"They can now view your dashboard and receive alerts.\n\n"
+        f"They'll receive updates and alerts on your behalf.\n\n"
         f"— The {BRAND_SHORT} Team"
     )
 
     html_body = _email_wrapper(
         f"<p>Hi {to_name},</p>"
         f"<p><strong>{caregiver_name}</strong> has accepted your invitation and is now your caregiver on {BRAND_MID}.</p>"
-        f"<p>They can now view your dashboard and receive important alerts on your behalf.</p>"
-        + _cta_button(APP_URL, "View Dashboard")
+        f"<p>They'll receive updates and important alerts on your behalf.</p>"
+        + _cta_button(APP_URL, f"Open {BRAND_SHORT}")
     )
 
     return await send_email(to_email, to_name, subject, text_body, html_body)
@@ -275,7 +275,7 @@ async def send_account_deactivated(to_email: str, to_name: str) -> bool:
         f"Hi {to_name},\n\n"
         f"Your {BRAND_MID} account has been deactivated. "
         f"Your data is safe and your account can be reactivated at any time.\n\n"
-        f"While deactivated, caregivers will not be able to view your dashboard "
+        f"While deactivated, caregivers will not receive updates or alerts "
         f"and you will not receive check-ins or reminders.\n\n"
         f"To reactivate, sign in at {APP_URL}.\n\n"
         f"— The {BRAND_SHORT} Team"
@@ -284,7 +284,7 @@ async def send_account_deactivated(to_email: str, to_name: str) -> bool:
         f"<p>Hi {to_name},</p>"
         f"<p>Your {BRAND_MID} account has been <strong>deactivated</strong>.</p>"
         f"<p>Your data is safe and your account can be reactivated at any time. While deactivated:</p>"
-        f"<ul><li>Caregivers cannot view your dashboard</li><li>You will not receive check-ins or reminders</li></ul>"
+        f"<ul><li>Caregivers will not receive updates or alerts</li><li>You will not receive check-ins or reminders</li></ul>"
         + _cta_button(APP_URL, "Reactivate Account")
     )
     return await send_email(to_email, to_name, subject, text_body, html_body)
