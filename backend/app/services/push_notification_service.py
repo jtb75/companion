@@ -46,13 +46,13 @@ async def send_push(
     if cred_path and os.path.exists(cred_path):
         credentials = service_account.Credentials.from_service_account_file(
             cred_path,
-            scopes=["https://www.googleapis.com/auth/firebase.messaging"],
+            scopes=["https://www.googleapis.com/auth/cloud-platform"],
         )
     else:
         from google.auth import default
 
         credentials, _ = default(
-            scopes=["https://www.googleapis.com/auth/firebase.messaging"]
+            scopes=["https://www.googleapis.com/auth/cloud-platform"]
         )
 
     credentials.refresh(Request())
