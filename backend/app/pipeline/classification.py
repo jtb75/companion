@@ -141,6 +141,7 @@ async def _tier2_classify(doc: NormalizedDocument) -> ClassificationResult:
             max_tokens=200,
             temperature=0.2,
             response_json=True,
+            disable_thinking=True,
         )
 
         from app.conversation.llm import extract_json

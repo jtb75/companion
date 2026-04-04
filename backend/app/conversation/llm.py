@@ -104,6 +104,7 @@ class GeminiClient(LLMClient):
         max_tokens: int = 500,
         temperature: float = 0.7,
         response_json: bool = False,
+        disable_thinking: bool = False,
     ) -> str:
         model = self._get_model(system_prompt)
         if model is None:
@@ -136,6 +137,10 @@ class GeminiClient(LLMClient):
             }
             if response_json:
                 gen_config["response_mime_type"] = "application/json"
+            if disable_thinking:
+                gen_config["thinking_config"] = {
+                    "thinking_budget": 0,
+                }
 
             response = await model.generate_content_async(
                 contents,

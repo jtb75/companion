@@ -188,6 +188,7 @@ async def _llm_extract(
             max_tokens=500,
             temperature=0.2,
             response_json=True,
+            disable_thinking=True,
         )
 
         from app.conversation.llm import extract_json

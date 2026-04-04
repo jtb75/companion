@@ -195,6 +195,7 @@ async def _llm_summarize(
             max_tokens=400,
             temperature=0.3,
             response_json=True,
+            disable_thinking=True,
         )
 
         from app.conversation.llm import extract_json
