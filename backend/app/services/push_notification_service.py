@@ -1,6 +1,5 @@
 """Service layer for sending FCM push notifications."""
 
-import asyncio
 import logging
 from uuid import UUID
 
@@ -121,7 +120,7 @@ async def send_push(
             user_id,
         )
 
-    return response.success_count
+    return sent
 
 
 async def notify_caregiver_status_change(
