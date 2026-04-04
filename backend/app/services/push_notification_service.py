@@ -57,6 +57,12 @@ async def send_push(
 
     credentials.refresh(Request())
     access_token = credentials.token
+    logger.info(
+        "FCM credential: type=%s, sa=%s, scopes=%s",
+        type(credentials).__name__,
+        getattr(credentials, "service_account_email", "?"),
+        getattr(credentials, "scopes", "?"),
+    )
 
     url = (
         f"https://fcm.googleapis.com/v1/projects/{project_id}"
