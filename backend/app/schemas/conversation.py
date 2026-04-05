@@ -21,7 +21,7 @@ class ConversationMessageRequest(BaseModel):
 class ConversationResponse(BaseModel):
     session_id: str
     response_text: str
-    audio_url: str | None = None
+    audio_data: str | None = None
 
 
 class ConversationStateResponse(BaseModel):

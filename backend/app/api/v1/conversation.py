@@ -1,5 +1,6 @@
 """App API — Conversation (D.D.) routes."""
 
+import base64
 import json
 import logging
 
@@ -12,8 +13,10 @@ from app.auth.dependencies import User, require_complete_profile
 from app.conversation.llm import GeminiClient, get_llm_client
 from app.conversation.prompt_builder import build_system_prompt
 from app.conversation.state_manager import state_manager
+from app.conversation.stt import transcribe_audio
 from app.conversation.tool_executor import execute_tool
 from app.conversation.tools import get_dd_tools
+from app.conversation.tts import synthesize_speech
 from app.db import get_db
 from app.models.system_config import SystemConfig
 from app.schemas.conversation import (
@@ -241,9 +244,20 @@ async def start_conversation(
         logger.error("CHAT_PERSIST_FAIL: %s", str(e), exc_info=True)
         await db.rollback()
 
+    # Synthesize TTS audio for greeting (optional)
+    audio_b64 = None
+    try:
+        voice_id = getattr(user, "voice_id", None) or "warm"
+        audio_bytes = await synthesize_speech(greeting, voice_id)
+        if audio_bytes:
+            audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
+    except Exception:
+        logger.warning("TTS failed for greeting, returning text only")
+
     return {
         "session_id": session.session_id,
         "greeting": greeting,
+        "audio_data": audio_b64,
         "status": "active",
         "started_at": session.started_at,
     }
@@ -264,8 +278,30 @@ async def send_message(
             detail="No active conversation. Start one first.",
         )
 
+    # STT: if audio provided but no text, transcribe
+    user_text = data.text
+    if data.audio_data and not user_text.strip():
+        try:
+            audio_bytes = base64.b64decode(data.audio_data)
+            transcript = await transcribe_audio(audio_bytes)
+            if transcript:
+                user_text = transcript
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Could not transcribe audio. Please try again.",
+                )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.exception("STT decoding failed")
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid audio data.",
+            ) from exc
+
     # Add user message
-    session.add_message("user", data.text)
+    session.add_message("user", user_text)
 
     # Check conversation integrity
     from app.conversation.safety import (
@@ -273,7 +309,7 @@ async def send_message(
     )
 
     integrity = check_conversation_integrity(
-        data.text, str(user.id), session.session_id
+        user_text, str(user.id), session.session_id
     )
     if integrity["alerts"]:
         logger.info(
@@ -284,7 +320,7 @@ async def send_message(
 
     # Build prompt with full context
     system_prompt = await build_system_prompt(
-        db, user, user_query=data.text
+        db, user, user_query=user_text
     )
 
     # Check for exploitation indicators in user message
@@ -293,7 +329,7 @@ async def send_message(
     )
 
     system_prompt = await handle_exploitation_detection(
-        data.text, user.id, system_prompt, db
+        user_text, user.id, system_prompt, db
     )
 
     # Apply sliding window to limit context
@@ -333,7 +369,7 @@ async def send_message(
             db.add(ChatMessage(
                 chat_session_id=db_session.id,
                 role="user",
-                content=data.text,
+                content=user_text,
             ))
             db.add(ChatMessage(
                 chat_session_id=db_session.id,
@@ -355,9 +391,20 @@ async def send_message(
         logger.error("Failed to persist chat: %s", str(e), exc_info=True)
         await db.rollback()
 
+    # Synthesize TTS audio for response (optional)
+    audio_b64 = None
+    try:
+        voice_id = getattr(user, "voice_id", None) or "warm"
+        audio_bytes = await synthesize_speech(response_text, voice_id)
+        if audio_bytes:
+            audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
+    except Exception:
+        logger.warning("TTS failed for response, returning text only")
+
     return {
         "session_id": session.session_id,
         "response": response_text,
+        "audio_data": audio_b64,
         "message_count": len(session.messages),
     }
 
