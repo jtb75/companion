@@ -394,6 +394,7 @@ async def _add_appointment(
         if review:
             review.review_status = ReviewStatus.CONFIRMED
             review.resolved_at = datetime.utcnow()
+            await _mark_document_reviewed(db, review.document_id)
 
     await db.flush()
     
@@ -474,6 +475,7 @@ async def _add_todo(
         if review:
             review.review_status = ReviewStatus.CONFIRMED
             review.resolved_at = datetime.utcnow()
+            await _mark_document_reviewed(db, review.document_id)
 
     await db.flush()
     
@@ -526,6 +528,21 @@ async def _complete_todo(
 
 
 # ── Document review tools ──
+
+
+async def _mark_document_reviewed(
+    db: AsyncSession, document_id: UUID | None
+) -> None:
+    """Update document status when its review is confirmed."""
+    if not document_id:
+        return
+    from app.models.document import Document
+    from app.models.enums import DocumentStatus
+
+    doc = await db.get(Document, document_id)
+    if doc and doc.status == DocumentStatus.PENDING_REVIEW:
+        doc.status = DocumentStatus.ACKNOWLEDGED
+        doc.acknowledged_at = datetime.utcnow()
 
 
 async def _resolve_review_id(
@@ -735,6 +752,7 @@ async def _confirm_document_action(
     if action == "skip":
         review.review_status = ReviewStatus.SKIPPED
         review.resolved_at = datetime.utcnow()
+        await _mark_document_reviewed(db, review.document_id)
         await db.flush()
         return {
             "success": True,
@@ -768,6 +786,7 @@ async def _confirm_document_action(
 
         review.review_status = ReviewStatus.CONFIRMED
         review.resolved_at = datetime.utcnow()
+        await _mark_document_reviewed(db, review.document_id)
         await db.flush()
 
         sender = fields.get("sender", "Unknown")
@@ -824,6 +843,7 @@ async def _confirm_document_action(
             review.created_record_id = appt.id
         review.review_status = ReviewStatus.CONFIRMED
         review.resolved_at = datetime.utcnow()
+        await _mark_document_reviewed(db, review.document_id)
         await db.flush()
 
         provider = fields.get("provider", "your doctor")
@@ -839,6 +859,7 @@ async def _confirm_document_action(
         # file_only, review_with_contact, discard
         review.review_status = ReviewStatus.CONFIRMED
         review.resolved_at = datetime.utcnow()
+        await _mark_document_reviewed(db, review.document_id)
         await db.flush()
         return {
             "success": True,
