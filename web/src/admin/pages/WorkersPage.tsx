@@ -19,6 +19,7 @@ interface Person {
 export function WorkersPage() {
   const [lastResult, setLastResult] = useState<string | null>(null)
   const [selectedUser, setSelectedUser] = useState<string>('')
+  const [runningPath, setRunningPath] = useState<string | null>(null)
 
   // Fetch users for the picker
   const { data: people } = useQuery({
@@ -29,29 +30,29 @@ export function WorkersPage() {
     },
   })
 
-  const mutation = useMutation({
-    mutationFn: async (path: string) => {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 60000)
-      try {
-        const url = selectedUser ? `${path}?user_id=${selectedUser}` : path
-        return await api<WorkerResult>(`/admin/workers${url}`, {
-          method: 'POST',
-          signal: controller.signal,
-        })
-      } finally {
-        clearTimeout(timeoutId)
-      }
-    },
-    onSuccess: (data) => setLastResult(JSON.stringify(data, null, 2)),
-    onError: (err: Error & { name?: string }) => {
+  const runWorker = async (path: string) => {
+    setRunningPath(path)
+    setLastResult(null)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 60000)
+    try {
+      const url = selectedUser ? `${path}?user_id=${selectedUser}` : path
+      const data = await api<WorkerResult>(`/admin/workers${url}`, {
+        method: 'POST',
+        signal: controller.signal,
+      })
+      setLastResult(JSON.stringify(data, null, 2))
+    } catch (err: any) {
       if (err.name === 'AbortError') {
         setLastResult('Error: Request timed out after 60s. Worker may still be running.')
       } else {
         setLastResult(`Error: ${err.message || 'Worker trigger failed'}`)
       }
-    },
-  })
+    } finally {
+      clearTimeout(timeoutId)
+      setRunningPath(null)
+    }
+  }
 
   const WorkerButton = ({
     label,
@@ -78,15 +79,15 @@ export function WorkersPage() {
           </span>
         )}
         <button
-          onClick={() => mutation.mutate(path)}
-          disabled={mutation.isPending}
+          onClick={() => runWorker(path)}
+          disabled={runningPath !== null}
           className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
             danger
               ? 'bg-red-600 text-white hover:bg-red-700'
               : 'bg-companion-blue text-white hover:bg-companion-blue-mid'
           } disabled:opacity-50`}
         >
-          {mutation.isPending ? 'Running...' : 'Run'}
+          {runningPath === path ? 'Running...' : 'Run'}
         </button>
       </div>
     </div>
