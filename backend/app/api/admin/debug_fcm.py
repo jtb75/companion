@@ -4,9 +4,13 @@ import json
 import os
 
 import httpx
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.dependencies import AdminUser, require_admin_role
+from app.auth.dependencies import require_admin_role
+from app.db import get_db
+from app.models.device_token import DeviceToken
 
 router = APIRouter(
     prefix="/admin/debug",
@@ -18,10 +22,38 @@ _editor = require_admin_role("editor")
 
 @router.get("/test-fcm")
 async def test_fcm(
-    admin: AdminUser = Depends(_editor),
+    device_token: str = "fake_test_token_for_debug",
+    user_email: str = Query(None),
+    db: AsyncSession = Depends(get_db),
 ):
     """Test FCM connectivity from inside the container."""
     results = {}
+
+    # If user_email provided, look up their device token
+    if user_email and device_token == "fake_test_token_for_debug":
+        from app.models.user import User
+
+        user_result = await db.execute(
+            select(User).where(User.email == user_email)
+        )
+        user = user_result.scalar_one_or_none()
+        if user:
+            token_result = await db.execute(
+                select(DeviceToken).where(
+                    DeviceToken.user_id == user.id,
+                    DeviceToken.is_active.is_(True),
+                )
+            )
+            dt = token_result.scalar_one_or_none()
+            if dt:
+                device_token = dt.fcm_token
+                results["db_token_len"] = len(device_token)
+                results["db_token_prefix"] = device_token[:30]
+                results["db_user_id"] = str(user.id)
+            else:
+                results["db_error"] = "no active token"
+        else:
+            results["db_error"] = "user not found"
 
     # 1. Check env vars
     cred_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
@@ -81,7 +113,7 @@ async def test_fcm(
     }
     payload = {
         "message": {
-            "token": "fake_test_token_for_debug",
+            "token": device_token,
             "notification": {
                 "title": "Debug Test",
                 "body": "This is a test",
