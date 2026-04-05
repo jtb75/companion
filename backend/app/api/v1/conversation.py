@@ -272,6 +272,15 @@ async def send_message(
         db, user, user_query=data.text
     )
 
+    # Check for exploitation indicators in user message
+    from app.conversation.safety import (
+        handle_exploitation_detection,
+    )
+
+    system_prompt = await handle_exploitation_detection(
+        data.text, user.id, system_prompt, db
+    )
+
     # Apply sliding window to limit context
     window = await _get_context_window(db)
     recent = session.messages[-window:]

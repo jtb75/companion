@@ -214,6 +214,14 @@ Every LLM response passes through `conversation/safety.py` before reaching the m
 
 **Not a security boundary:** The canary check is a detection mechanism. The real security is backend-enforced (tool access scoped by user_id, action authorization). See [D.D. Assistant Guidelines Section 11](dd-assistant-guidelines.md) for the full security model.
 
+**Exploitation indicator detection:** User messages are scanned for patterns suggesting financial exploitation (someone new managing money, pressure to act quickly, sharing account info, signing unknown documents, etc.). When detected:
+- The system prompt is augmented with the exploitation response protocol (pause, express concern, suggest verification, delay financial actions)
+- A `WARNING`-level log fires with the matched indicators
+- Caregivers are notified immediately (safety-tier — no member opt-out)
+- D.D. does not accuse anyone, but slows down and encourages verification
+
+See [D.D. Assistant Guidelines Section 7](dd-assistant-guidelines.md) for the full exploitation playbook.
+
 ### 5.6 Voice
 
 - **TTS**: four curated voice profiles (Warm, Calm, Bright, Clear) with user-adjustable pace and warmth. SSML markup for emphasis on amounts, dates, names, and wider pauses between sentences.
