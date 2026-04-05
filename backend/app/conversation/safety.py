@@ -3,10 +3,14 @@
 1. Canary token detection: flags responses that leak system prompt content.
 2. Exploitation indicator detection: flags user messages that suggest
    financial exploitation and injects response guidance.
+3. Conversation integrity monitoring: detects override attempts,
+   unusual patterns, and session anomalies.
 """
 
 import logging
 import re
+import time
+from collections import defaultdict
 from uuid import UUID
 
 logger = logging.getLogger(__name__)
@@ -251,3 +255,131 @@ async def handle_exploitation_detection(
     return system_prompt + _EXPLOITATION_PROMPT_INJECTION.format(
         indicators=indicator_str
     )
+
+
+# ── Conversation Integrity Monitoring ──────────────────────────────
+
+# Override attempt patterns — messages that try to manipulate D.D.
+_OVERRIDE_PATTERNS = [
+    re.compile(p, re.IGNORECASE)
+    for p in [
+        r"ignore (?:your|previous|all|the) (?:instructions|rules|prompts?)",
+        r"pretend (?:you are|to be|you're) (?:a |an )",
+        r"act as (?:a |an |if )",
+        r"you are now (?:a |an )",
+        r"forget (?:your|all|everything|the) (?:rules|instructions|training)",
+        r"(?:what|show|tell|reveal|repeat) (?:me )?(?:your|the) "
+        r"(?:system |initial )?(?:prompt|instructions|rules)",
+        r"(?:override|bypass|disable|turn off) "
+        r"(?:your |the )?(?:safety|rules|filters|restrictions)",
+        r"jailbreak",
+        r"DAN mode",
+        r"developer mode",
+        r"do anything now",
+    ]
+]
+
+# Per-user session tracking (in-process, resets on deploy)
+_session_tracker: dict[str, dict] = defaultdict(
+    lambda: {
+        "message_count": 0,
+        "override_attempts": 0,
+        "first_message_at": 0.0,
+        "last_message_at": 0.0,
+        "rapid_messages": 0,
+    }
+)
+
+# Thresholds
+_RAPID_MESSAGE_WINDOW = 2.0  # seconds
+_MAX_OVERRIDE_ATTEMPTS = 3
+_MAX_MESSAGES_PER_SESSION = 100
+
+
+def check_conversation_integrity(
+    user_message: str,
+    user_id: str,
+    session_id: str | None = None,
+) -> dict:
+    """Monitor conversation for integrity violations.
+
+    Returns a dict with:
+    - alerts: list of triggered alert types
+    - block: True if the message should be blocked
+    - log_level: "info", "warning", or "critical"
+    """
+    key = f"{user_id}:{session_id or 'default'}"
+    tracker = _session_tracker[key]
+    now = time.time()
+    alerts = []
+
+    # Initialize timing
+    if tracker["first_message_at"] == 0:
+        tracker["first_message_at"] = now
+
+    # Track message rate
+    elapsed = now - tracker["last_message_at"]
+    tracker["last_message_at"] = now
+    tracker["message_count"] += 1
+
+    if elapsed < _RAPID_MESSAGE_WINDOW and elapsed > 0:
+        tracker["rapid_messages"] += 1
+        if tracker["rapid_messages"] >= 5:
+            alerts.append("rapid_messaging")
+
+    # Check for override attempts
+    for pattern in _OVERRIDE_PATTERNS:
+        if pattern.search(user_message):
+            tracker["override_attempts"] += 1
+            alerts.append("override_attempt")
+            break
+
+    # Check accumulated override attempts
+    if tracker["override_attempts"] >= _MAX_OVERRIDE_ATTEMPTS:
+        alerts.append("repeated_override_attempts")
+
+    # Check excessive session length
+    if tracker["message_count"] > _MAX_MESSAGES_PER_SESSION:
+        alerts.append("excessive_session_length")
+
+    # Determine severity
+    block = False
+    log_level = "info"
+
+    if "repeated_override_attempts" in alerts:
+        log_level = "critical"
+    elif "override_attempt" in alerts:
+        log_level = "warning"
+    elif "rapid_messaging" in alerts:
+        log_level = "warning"
+
+    # Log alerts
+    if alerts:
+        log_fn = getattr(logger, log_level)
+        log_fn(
+            "INTEGRITY_ALERT: user=%s session=%s alerts=%s "
+            "msg_count=%d override_count=%d "
+            "message_preview=%s",
+            user_id,
+            session_id,
+            alerts,
+            tracker["message_count"],
+            tracker["override_attempts"],
+            user_message[:80],
+        )
+
+    return {
+        "alerts": alerts,
+        "block": block,
+        "log_level": log_level,
+        "override_count": tracker["override_attempts"],
+        "message_count": tracker["message_count"],
+    }
+
+
+def reset_session_tracker(
+    user_id: str, session_id: str | None = None
+) -> None:
+    """Reset tracking for a session (called on session end)."""
+    key = f"{user_id}:{session_id or 'default'}"
+    _session_tracker.pop(key, None)

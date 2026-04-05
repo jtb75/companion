@@ -222,6 +222,8 @@ Every LLM response passes through `conversation/safety.py` before reaching the m
 
 See [D.D. Assistant Guidelines Section 7](dd-assistant-guidelines.md) for the full exploitation playbook.
 
+**Conversation integrity monitoring:** Every user message is checked for override attempt patterns (prompt injection phrases, jailbreak attempts, role override requests). Per-session tracking counts override attempts, message rate, and session length. At 3+ override attempts, a `CRITICAL` alert fires. Rapid messaging and excessive session length are also flagged. Session trackers reset when the conversation ends.
+
 **Backend risk-tier enforcement:** Every tool call is classified by risk tier (low/medium/high). High-risk actions (mark bill paid, confirm medication, add appointment, confirm document action) require backend-enforced confirmation — the first call returns a confirmation prompt, the second call with `confirmed=true` executes. This ensures the LLM cannot skip the confirmation step even if prompt injection succeeds. See [D.D. Assistant Guidelines Section 9](dd-assistant-guidelines.md) for tier definitions.
 
 ### 5.6 Voice

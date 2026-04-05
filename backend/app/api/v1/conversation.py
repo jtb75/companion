@@ -267,6 +267,21 @@ async def send_message(
     # Add user message
     session.add_message("user", data.text)
 
+    # Check conversation integrity
+    from app.conversation.safety import (
+        check_conversation_integrity,
+    )
+
+    integrity = check_conversation_integrity(
+        data.text, str(user.id), session.session_id
+    )
+    if integrity["alerts"]:
+        logger.info(
+            "INTEGRITY: user=%s alerts=%s",
+            user.id,
+            integrity["alerts"],
+        )
+
     # Build prompt with full context
     system_prompt = await build_system_prompt(
         db, user, user_query=data.text
@@ -492,6 +507,11 @@ async def end_conversation(
         return {"status": "no_active_session"}
 
     await state_manager.end_session(str(user.id), session.session_id)
+
+    # Clean up integrity tracker
+    from app.conversation.safety import reset_session_tracker
+
+    reset_session_tracker(str(user.id), session.session_id)
 
     # Mark ended in DB
     from datetime import datetime as dt
