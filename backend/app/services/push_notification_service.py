@@ -1,9 +1,11 @@
 """Service layer for sending FCM push notifications."""
 
+import json
 import logging
 import os
 from uuid import UUID
 
+import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services import device_token_service
@@ -11,38 +13,33 @@ from app.services import device_token_service
 logger = logging.getLogger(__name__)
 
 
-def _ensure_fcm_app():
-    """Ensure a dedicated Firebase app for FCM exists."""
-    import firebase_admin
-    from firebase_admin import credentials
-
-    try:
-        return firebase_admin.get_app("fcm")
-    except ValueError:
-        pass
+def _get_fcm_token_and_project() -> tuple[str, str] | None:
+    """Get an OAuth2 access token for FCM using the SA key file."""
+    from google.auth.transport.requests import Request
+    from google.oauth2 import service_account
 
     cred_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
     project_id = os.environ.get(
-        "COMPANION_FIREBASE_PROJECT_ID"
+        "COMPANION_FIREBASE_PROJECT_ID", ""
     )
 
-    if cred_path and os.path.exists(cred_path):
-        cred = credentials.Certificate(cred_path)
-        logger.info(
-            "FCM app init with SA key file, project=%s",
-            project_id,
-        )
-    else:
-        cred = credentials.ApplicationDefault()
-        logger.info(
-            "FCM app init with ADC, project=%s", project_id
-        )
+    if not cred_path or not os.path.exists(cred_path):
+        logger.error("No SA key file at %s", cred_path)
+        return None
 
-    return firebase_admin.initialize_app(
-        credential=cred,
-        options={"projectId": project_id} if project_id else None,
-        name="fcm",
+    with open(cred_path) as f:
+        sa_info = json.load(f)
+
+    credentials = service_account.Credentials.from_service_account_info(
+        sa_info,
+        scopes=[
+            "https://www.googleapis.com/auth/firebase.messaging",
+        ],
     )
+    credentials.refresh(Request())
+
+    project = project_id or sa_info.get("project_id", "")
+    return credentials.token, project
 
 
 async def send_push(
@@ -52,77 +49,79 @@ async def send_push(
     body: str,
     data: dict[str, str] | None = None,
 ) -> int:
-    """Send a push notification to all active devices for a user.
-
-    Returns the number of successfully sent messages.
-    """
-    import asyncio
-
-    tokens = await device_token_service.get_active_tokens(db, user_id)
+    """Send a push notification to all active devices for a user."""
+    tokens = await device_token_service.get_active_tokens(
+        db, user_id
+    )
     if not tokens:
         logger.debug(
-            "No active FCM tokens for user %s — skipping push",
-            user_id,
+            "No active FCM tokens for user %s", user_id
         )
         return 0
 
-    from firebase_admin import messaging
+    result = _get_fcm_token_and_project()
+    if not result:
+        return 0
+    access_token, project_id = result
 
-    app = _ensure_fcm_app()
-
-    notification = messaging.Notification(
-        title=title, body=body
+    url = (
+        f"https://fcm.googleapis.com/v1/projects/{project_id}"
+        f"/messages:send"
     )
-    message = messaging.MulticastMessage(
-        notification=notification,
-        data=data or {},
-        tokens=tokens,
-    )
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+    }
 
-    response = await asyncio.to_thread(
-        messaging.send_each_for_multicast, message, app=app
-    )
-
-    # Deactivate tokens that are no longer valid
+    sent = 0
     failed_tokens: list[str] = []
-    for i, send_response in enumerate(response.responses):
-        if send_response.exception is not None:
-            exc = send_response.exception
-            if isinstance(
-                exc,
-                (
-                    messaging.UnregisteredError,
-                    messaging.SenderIdMismatchError,
-                ),
-            ):
-                failed_tokens.append(tokens[i])
+
+    async with httpx.AsyncClient() as client:
+        for token_str in tokens:
+            payload = {
+                "message": {
+                    "token": token_str,
+                    "notification": {
+                        "title": title,
+                        "body": body,
+                    },
+                    "data": data or {},
+                }
+            }
+            resp = await client.post(
+                url,
+                headers=headers,
+                content=json.dumps(payload),
+            )
+            if resp.status_code == 200:
+                sent += 1
+                logger.info(
+                    "FCM sent to %s...", token_str[:20]
+                )
+            elif resp.status_code in (400, 404):
+                failed_tokens.append(token_str)
                 logger.warning(
-                    "FCM token invalid %s...: %s",
-                    tokens[i][:20],
-                    type(exc).__name__,
+                    "FCM token invalid %s...: %d %s",
+                    token_str[:20],
+                    resp.status_code,
+                    resp.text[:200],
                 )
             else:
                 logger.warning(
-                    "FCM send failed for %s...: %s (%s)",
-                    tokens[i][:20],
-                    exc,
-                    type(exc).__name__,
+                    "FCM send failed for %s...: %d %s",
+                    token_str[:20],
+                    resp.status_code,
+                    resp.text[:300],
                 )
 
     for bad_token in failed_tokens:
         await device_token_service.deactivate_token(
             db, user_id, bad_token
         )
-
     if failed_tokens:
         await db.flush()
-        logger.info(
-            "Deactivated %d invalid FCM tokens for user %s",
-            len(failed_tokens),
-            user_id,
-        )
 
-    return response.success_count
+    return sent
 
 
 async def notify_caregiver_status_change(
@@ -131,7 +130,6 @@ async def notify_caregiver_status_change(
     caregiver_name: str,
     new_status: str,
 ) -> int:
-    """Notify a member when their caregiver accepts or declines."""
     action = "accepted" if new_status == "accepted" else "declined"
     return await send_push(
         db,
@@ -147,7 +145,6 @@ async def notify_medication_reminder(
     user_id: UUID,
     medication_name: str,
 ) -> int:
-    """Remind a user to take their medication."""
     return await send_push(
         db,
         user_id,
@@ -161,7 +158,6 @@ async def notify_checkin_prompt(
     db: AsyncSession,
     user_id: UUID,
 ) -> int:
-    """Prompt a user for their daily check-in."""
     return await send_push(
         db,
         user_id,
@@ -176,7 +172,6 @@ async def notify_morning_briefing(
     user_id: UUID,
     briefing: str,
 ) -> int:
-    """Send the personalized morning briefing push notification."""
     return await send_push(
         db,
         user_id,
@@ -191,7 +186,6 @@ async def notify_document_processed(
     user_id: UUID,
     document_summary: str,
 ) -> int:
-    """Notify a user that a document has been processed."""
     return await send_push(
         db,
         user_id,
@@ -207,7 +201,6 @@ async def notify_overdue_bill(
     sender: str,
     amount: str,
 ) -> int:
-    """Notify member and caregivers about an overdue bill."""
     body = (
         f"Your {sender} bill for ${amount} is past due. "
         "I've added a task to help you get it paid."
