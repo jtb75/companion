@@ -106,6 +106,15 @@ module "compute" {
   backend_memory                 = var.backend_memory
 }
 
+module "scheduler" {
+  source                     = "./modules/scheduler"
+  project_id                 = var.project_id
+  region                     = var.region
+  environment                = var.environment
+  backend_url                = module.compute.backend_url
+  pipeline_api_key_secret_id = module.secrets.pipeline_api_key_secret_id
+}
+
 # Reference the existing CI/CD service account (created by bootstrap script)
 data "google_service_account" "cicd" {
   account_id = "companion-cicd"

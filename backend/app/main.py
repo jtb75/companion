@@ -8,6 +8,7 @@ import app.events  # noqa: F401
 from app.api.admin import router as admin_router
 from app.api.admin.seed_admin import router as seed_admin_router
 from app.api.caregiver import router as caregiver_router
+from app.api.internal import router as internal_router
 from app.api.pipeline import router as pipeline_router
 from app.api.v1 import router as v1_router
 from app.api.v1.auth_check import router as auth_router
@@ -80,6 +81,7 @@ app.include_router(v1_router)
 app.include_router(caregiver_router)
 app.include_router(pipeline_router)
 app.include_router(admin_router)
+app.include_router(internal_router)
 app.include_router(auth_router)
 app.include_router(seed_admin_router)
 if settings.dev_auth_bypass:

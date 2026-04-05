@@ -49,6 +49,19 @@ async def trigger_morning_checkin(admin: AdminUser = Depends(_admin)):
     return {"triggered": True, **result}
 
 
+@router.post("/medication-reminders")
+async def trigger_medication_reminders(
+    admin: AdminUser = Depends(_admin),
+):
+    """Manually trigger the medication reminder check."""
+    from app.workers.medication_reminder import (
+        run_medication_reminder,
+    )
+
+    result = await run_medication_reminder()
+    return {"triggered": True, **result}
+
+
 @router.post("/reprocess-documents")
 async def reprocess_stuck_documents(
     admin: AdminUser = Depends(_admin),
