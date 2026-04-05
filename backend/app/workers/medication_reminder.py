@@ -23,6 +23,81 @@ from app.services.push_notification_service import (
 logger = logging.getLogger(__name__)
 
 
+async def run_medication_reminder_for_user(user_id):
+    """Send medication reminders for a specific user (ignoring time)."""
+    async with async_session_factory() as db:
+        try:
+            result = await db.execute(
+                select(Medication)
+                .where(
+                    Medication.user_id == user_id,
+                    Medication.is_active.is_(True),
+                )
+            )
+            medications = result.scalars().all()
+
+            now = datetime.utcnow()
+            triggered = 0
+
+            for med in medications:
+                schedule_times = med.schedule
+                if not isinstance(schedule_times, list):
+                    continue
+
+                # Use the first scheduled time for testing
+                for sched_time_str in schedule_times:
+                    try:
+                        parts = sched_time_str.split(":")
+                        sched_hour = int(parts[0])
+                        sched_min = int(parts[1])
+                    except (ValueError, IndexError):
+                        continue
+
+                    scheduled_dt = now.replace(
+                        hour=sched_hour,
+                        minute=sched_min,
+                        second=0,
+                        microsecond=0,
+                    )
+
+                    # Check if already exists
+                    existing = await db.execute(
+                        select(MedicationConfirmation).where(
+                            MedicationConfirmation.medication_id
+                            == med.id,
+                            MedicationConfirmation.scheduled_at
+                            == scheduled_dt,
+                        )
+                    )
+                    if existing.scalar_one_or_none():
+                        continue
+
+                    confirmation = MedicationConfirmation(
+                        medication_id=med.id,
+                        scheduled_at=scheduled_dt,
+                    )
+                    db.add(confirmation)
+                    await db.flush()
+
+                    await notify_medication_reminder(
+                        db, user_id, med.name
+                    )
+                    triggered += 1
+
+            await db.commit()
+            return {
+                "total_medications": len(medications),
+                "reminders_sent": triggered,
+            }
+        except Exception:
+            await db.rollback()
+            logger.exception(
+                "Medication reminder failed for user %s",
+                user_id,
+            )
+            raise
+
+
 async def run_medication_reminder():
     """Check all medications and send reminders where due."""
     async with async_session_factory() as db:

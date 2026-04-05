@@ -1,75 +1,94 @@
 import { useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { api } from '../../shared/api/client'
 import { Card } from '../../shared/components/Card'
 
 interface WorkerResult {
   triggered: boolean
-  triggered_count?: number
-  total_users?: number
-  reprocessed?: number
-  results?: any[]
+  [key: string]: unknown
+}
+
+interface Person {
+  id: string
+  first_name: string
+  email: string
+  is_user: boolean
+  account_status: string
 }
 
 export function WorkersPage() {
   const [lastResult, setLastResult] = useState<string | null>(null)
+  const [selectedUser, setSelectedUser] = useState<string>('')
+
+  // Fetch users for the picker
+  const { data: people } = useQuery({
+    queryKey: ['admin-people-workers'],
+    queryFn: async () => {
+      const res = await api<{ people: Person[] }>('/admin/people')
+      return res.people.filter((p) => p.is_user && p.account_status === 'active')
+    },
+  })
 
   const mutation = useMutation({
     mutationFn: async (path: string) => {
-      // Background workers (like LLM briefings) can take a long time.
-      // We set a 60s timeout to prevent 'Failed to fetch' browser errors.
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 60000)
-
       try {
-        const res = await api<WorkerResult>(`/admin/workers${path}`, { 
+        const url = selectedUser ? `${path}?user_id=${selectedUser}` : path
+        return await api<WorkerResult>(`/admin/workers${url}`, {
           method: 'POST',
-          signal: controller.signal
+          signal: controller.signal,
         })
-        return res
       } finally {
         clearTimeout(timeoutId)
       }
     },
-    onSuccess: (data) => {
-      setLastResult(JSON.stringify(data, null, 2))
-    },
-    onError: (err: any) => {
+    onSuccess: (data) => setLastResult(JSON.stringify(data, null, 2)),
+    onError: (err: Error & { name?: string }) => {
       if (err.name === 'AbortError') {
-        setLastResult('Error: Request timed out after 60 seconds. The worker is likely still running in the background.')
+        setLastResult('Error: Request timed out after 60s. Worker may still be running.')
       } else {
         setLastResult(`Error: ${err.message || 'Worker trigger failed'}`)
       }
     },
   })
 
-  const WorkerButton = ({ 
-    label, 
-    path, 
-    description, 
-    danger = false 
-  }: { 
-    label: string; 
-    path: string; 
-    description: string;
+  const WorkerButton = ({
+    label,
+    path,
+    description,
+    danger = false,
+    supportsUser = false,
+  }: {
+    label: string
+    path: string
+    description: string
     danger?: boolean
+    supportsUser?: boolean
   }) => (
-    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-      <div className="space-y-1">
+    <div className="flex items-center justify-between gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+      <div className="space-y-0.5 flex-1 min-w-0">
         <h3 className="text-sm font-medium text-gray-900">{label}</h3>
-        <p className="text-xs text-gray-500">{description}</p>
+        <p className="text-[11px] text-gray-500">{description}</p>
       </div>
-      <button
-        onClick={() => mutation.mutate(path)}
-        disabled={mutation.isPending}
-        className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-          danger 
-            ? 'bg-red-600 text-white hover:bg-red-700' 
-            : 'bg-companion-blue text-white hover:bg-companion-blue-mid'
-        } disabled:opacity-50`}
-      >
-        {mutation.isPending ? 'Running...' : 'Trigger'}
-      </button>
+      <div className="flex items-center gap-2 shrink-0">
+        {supportsUser && selectedUser && (
+          <span className="text-[10px] text-companion-blue bg-companion-blue/10 px-2 py-0.5 rounded-full">
+            1 user
+          </span>
+        )}
+        <button
+          onClick={() => mutation.mutate(path)}
+          disabled={mutation.isPending}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+            danger
+              ? 'bg-red-600 text-white hover:bg-red-700'
+              : 'bg-companion-blue text-white hover:bg-companion-blue-mid'
+          } disabled:opacity-50`}
+        >
+          {mutation.isPending ? 'Running...' : 'Run'}
+        </button>
+      </div>
     </div>
   )
 
@@ -79,49 +98,81 @@ export function WorkersPage() {
         <h1 className="text-xl font-semibold text-gray-900">Background Workers</h1>
       </div>
 
+      {/* User scope picker */}
+      <div className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3">
+        <label className="text-xs font-medium text-gray-500 whitespace-nowrap">Target:</label>
+        <select
+          value={selectedUser}
+          onChange={(e) => setSelectedUser(e.target.value)}
+          className="flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm"
+        >
+          <option value="">All users (batch)</option>
+          {people?.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.first_name} — {p.email}
+            </option>
+          ))}
+        </select>
+        {selectedUser && (
+          <button
+            onClick={() => setSelectedUser('')}
+            className="text-xs text-gray-400 hover:text-gray-600"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-6">
-          <Card title="Scheduled Tasks" subtitle="Manually fire daily or periodic workers">
-            <div className="space-y-4">
-              <WorkerButton 
-                label="Morning Check-in" 
-                path="/morning-checkin" 
-                description="Trigger daily greetings and LLM briefings for all users immediately."
+          <Card title="Notifications" subtitle="Trigger push notifications and check-ins">
+            <div className="space-y-3">
+              <WorkerButton
+                label="Morning Check-in"
+                path="/morning-checkin"
+                description="Send personalized LLM briefing with today's appointments, meds, and bills."
+                supportsUser
               />
-              <WorkerButton 
-                label="Escalation Check" 
-                path="/escalation" 
+              <WorkerButton
+                label="Medication Reminders"
+                path="/medication-reminders"
+                description="Check medication schedules and send reminders for due doses."
+                supportsUser
+              />
+              <WorkerButton
+                label="Escalation Check"
+                path="/escalation"
                 description="Scan for unanswered questions that need caregiver attention."
-              />
-              <WorkerButton 
-                label="Data Retention" 
-                path="/retention" 
-                description="Process document retention phases (Full -> Metadata Only)."
               />
             </div>
           </Card>
 
-          <Card title="Maintenance" subtitle="Clean up or retry system processes">
-            <div className="space-y-4">
-              <WorkerButton 
-                label="Reprocess Documents" 
-                path="/reprocess-documents" 
-                description="Find documents stuck in processing and retry the full pipeline."
+          <Card title="Maintenance" subtitle="System cleanup and recovery">
+            <div className="space-y-3">
+              <WorkerButton
+                label="Reprocess Documents"
+                path="/reprocess-documents"
+                description="Retry documents stuck in RECEIVED or PROCESSING status."
               />
-              <WorkerButton 
-                label="Hard Deletion" 
-                path="/deletion" 
-                description="Permanently wipe records marked for deletion from the database."
+              <WorkerButton
+                label="Data Retention"
+                path="/retention"
+                description="Process document retention phases (Full → Metadata Only)."
+              />
+              <WorkerButton
+                label="Hard Deletion"
+                path="/deletion"
+                description="Permanently delete accounts scheduled for removal."
                 danger
               />
             </div>
           </Card>
         </div>
 
-        <div className="space-y-6">
-          <Card title="Worker Console" subtitle="Results from the last triggered worker">
+        <div>
+          <Card title="Worker Console" subtitle="Output from last triggered worker">
             {lastResult ? (
-              <pre className="p-4 bg-gray-900 text-green-400 font-mono text-xs rounded-lg overflow-auto max-h-[400px]">
+              <pre className="p-4 bg-gray-900 text-green-400 font-mono text-[11px] rounded-lg overflow-auto max-h-[500px] whitespace-pre-wrap">
                 {lastResult}
               </pre>
             ) : (

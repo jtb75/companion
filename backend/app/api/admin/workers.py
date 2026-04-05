@@ -1,8 +1,9 @@
 """Admin API — Manual worker triggers."""
 
 import logging
+import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,46 +20,71 @@ _admin = require_admin_role("admin")
 
 
 @router.post("/deletion")
-async def trigger_deletion_worker(admin: AdminUser = Depends(_admin)):
+async def trigger_deletion_worker(
+    admin: AdminUser = Depends(_admin),
+):
     """Manually trigger the deletion worker."""
     from app.workers.deletion_worker import run_deletion_worker
+
     result = await run_deletion_worker()
     return {"triggered": True, **result}
 
 
 @router.post("/retention")
-async def trigger_retention_worker(admin: AdminUser = Depends(_admin)):
+async def trigger_retention_worker(
+    admin: AdminUser = Depends(_admin),
+):
     """Manually trigger the retention worker."""
     from app.workers.retention import run_retention_worker
+
     result = await run_retention_worker()
     return {"triggered": True, **(result or {})}
 
+
 @router.post("/escalation")
-async def trigger_escalation_check(admin: AdminUser = Depends(_admin)):
+async def trigger_escalation_check(
+    admin: AdminUser = Depends(_admin),
+):
     """Manually trigger the escalation check."""
     from app.workers.escalation_check import run_escalation_check
+
     result = await run_escalation_check()
     return {"triggered": True, **result}
 
 
 @router.post("/morning-checkin")
-async def trigger_morning_checkin(admin: AdminUser = Depends(_admin)):
-    """Manually trigger the morning check-in for all users (ignoring time)."""
-    from app.workers.morning_trigger import run_morning_trigger
-    result = await run_morning_trigger(force=True)
+async def trigger_morning_checkin(
+    user_id: uuid.UUID | None = Query(None),
+    admin: AdminUser = Depends(_admin),
+):
+    """Manually trigger morning check-in. Optionally target a single user."""
+    from app.workers.morning_trigger import (
+        run_morning_trigger,
+        run_morning_trigger_for_user,
+    )
+
+    if user_id:
+        result = await run_morning_trigger_for_user(user_id)
+    else:
+        result = await run_morning_trigger(force=True)
     return {"triggered": True, **result}
 
 
 @router.post("/medication-reminders")
 async def trigger_medication_reminders(
+    user_id: uuid.UUID | None = Query(None),
     admin: AdminUser = Depends(_admin),
 ):
-    """Manually trigger the medication reminder check."""
+    """Manually trigger medication reminders. Optionally target a single user."""
     from app.workers.medication_reminder import (
         run_medication_reminder,
+        run_medication_reminder_for_user,
     )
 
-    result = await run_medication_reminder()
+    if user_id:
+        result = await run_medication_reminder_for_user(user_id)
+    else:
+        result = await run_medication_reminder()
     return {"triggered": True, **result}
 
 

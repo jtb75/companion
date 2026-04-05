@@ -19,6 +19,56 @@ from app.notifications.morning_checkin import assemble_morning_checkin
 logger = logging.getLogger(__name__)
 
 
+async def run_morning_trigger_for_user(user_id):
+    """Trigger morning check-in for a specific user."""
+    async with async_session_factory() as db:
+        try:
+            user = await db.get(User, user_id)
+            if not user:
+                return {"error": "User not found"}
+
+            name = user.nickname or user.preferred_name
+            checkin_data = await assemble_morning_checkin(
+                db, user.id, name
+            )
+            briefing = await generate_morning_briefing(
+                db, user.id, checkin_data
+            )
+
+            await event_publisher.publish(
+                "checkin.morning.triggered",
+                user_id=user.id,
+                payload=CheckinMorningTriggeredPayload(
+                    user_id=user.id,
+                    checkin_time=str(
+                        user.checkin_time or time(9, 0)
+                    ),
+                    items_count=checkin_data.get(
+                        "total_items", 0
+                    ),
+                    briefing=briefing,
+                ),
+            )
+            await db.commit()
+            logger.info(
+                "Morning trigger for user %s: %s",
+                name,
+                briefing[:100],
+            )
+            return {
+                "user": name,
+                "briefing": briefing,
+                "items": checkin_data.get("total_items", 0),
+            }
+        except Exception:
+            await db.rollback()
+            logger.exception(
+                "Morning trigger failed for user %s",
+                user_id,
+            )
+            raise
+
+
 async def run_morning_trigger(force: bool = False):
     """Check all users and trigger morning check-ins where due."""
     async with async_session_factory() as db:
