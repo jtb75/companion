@@ -10,11 +10,12 @@ from datetime import datetime, time
 from sqlalchemy import select
 
 from app.db.session import async_session_factory
-from app.events.publisher import event_publisher
-from app.events.schemas import CheckinMorningTriggeredPayload
 from app.models.user import User
 from app.notifications.briefing import generate_morning_briefing
 from app.notifications.morning_checkin import assemble_morning_checkin
+from app.services.push_notification_service import (
+    notify_morning_briefing,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,19 +36,9 @@ async def run_morning_trigger_for_user(user_id):
                 db, user.id, checkin_data
             )
 
-            await event_publisher.publish(
-                "checkin.morning.triggered",
-                user_id=user.id,
-                payload=CheckinMorningTriggeredPayload(
-                    user_id=user.id,
-                    checkin_time=str(
-                        user.checkin_time or time(9, 0)
-                    ),
-                    items_count=checkin_data.get(
-                        "total_items", 0
-                    ),
-                    briefing=briefing,
-                ),
+            # Send push notification directly
+            await notify_morning_briefing(
+                db, user.id, briefing
             )
             await db.commit()
             logger.info(
@@ -109,15 +100,9 @@ async def run_morning_trigger(force: bool = False):
                     db, user.id, checkin_data
                 )
 
-                await event_publisher.publish(
-                    "checkin.morning.triggered",
-                    user_id=user.id,
-                    payload=CheckinMorningTriggeredPayload(
-                        user_id=user.id,
-                        checkin_time=str(checkin_time),
-                        items_count=checkin_data.get("total_items", 0),
-                        briefing=briefing,
-                    ),
+                # Send push notification directly
+                await notify_morning_briefing(
+                    db, user.id, briefing
                 )
                 triggered += 1
 
