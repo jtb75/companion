@@ -1970,6 +1970,8 @@ PODS:
     - ReactNativeDependencies
   - ReactNativeDependencies (0.84.1)
   - RecaptchaInterop (101.0.0)
+  - RNAudioRecorderPlayer (3.6.14):
+    - React-Core
   - RNCAsyncStorage (2.2.0):
     - hermes-engine
     - RCTRequired
@@ -2064,6 +2066,8 @@ PODS:
     - ReactNativeDependencies
     - RNFBApp
     - Yoga
+  - RNFS (2.20.0):
+    - React-Core
   - RNGoogleSignin (16.1.2):
     - GoogleSignIn (~> 9.0)
     - hermes-engine
@@ -2212,10 +2216,12 @@ DEPENDENCIES:
   - ReactCodegen (from `build/generated/ios/ReactCodegen`)
   - ReactCommon/turbomodule/core (from `../node_modules/react-native/ReactCommon`)
   - ReactNativeDependencies (from `../node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec`)
+  - RNAudioRecorderPlayer (from `../node_modules/react-native-audio-recorder-player`)
   - "RNCAsyncStorage (from `../node_modules/@react-native-async-storage/async-storage`)"
   - "RNFBApp (from `../node_modules/@react-native-firebase/app`)"
   - "RNFBAuth (from `../node_modules/@react-native-firebase/auth`)"
   - "RNFBMessaging (from `../node_modules/@react-native-firebase/messaging`)"
+  - RNFS (from `../node_modules/react-native-fs`)
   - "RNGoogleSignin (from `../node_modules/@react-native-google-signin/google-signin`)"
   - RNScreens (from `../node_modules/react-native-screens`)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
@@ -2392,6 +2398,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon"
   ReactNativeDependencies:
     :podspec: "../node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec"
+  RNAudioRecorderPlayer:
+    :path: "../node_modules/react-native-audio-recorder-player"
   RNCAsyncStorage:
     :path: "../node_modules/@react-native-async-storage/async-storage"
   RNFBApp:
@@ -2400,6 +2408,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/@react-native-firebase/auth"
   RNFBMessaging:
     :path: "../node_modules/@react-native-firebase/messaging"
+  RNFS:
+    :path: "../node_modules/react-native-fs"
   RNGoogleSignin:
     :path: "../node_modules/@react-native-google-signin/google-signin"
   RNScreens:
@@ -2501,10 +2511,12 @@ SPEC CHECKSUMS:
   ReactCommon: 309419492d417c4cbb87af06f67735afa40ecb9d
   ReactNativeDependencies: 8b8ba6563f38b2e7f65d0bd89fd467c8d7f83293
   RecaptchaInterop: 11e0b637842dfb48308d242afc3f448062325aba
+  RNAudioRecorderPlayer: 76b1d9ea2b22bf5ece274c0ff99c341daca42dc4
   RNCAsyncStorage: 0574155b95b96b89a51717c4dd42fb6057926bbc
   RNFBApp: 4052cfce86c5cfb14097e839868bfe0920d9d2b6
   RNFBAuth: 9c06df9ef48feaa409ab3b807702d546d85deef0
   RNFBMessaging: a56cd7ef521417a3f1dc255114bd453af7c7e38e
+  RNFS: 4ac0f0ea233904cb798630b3c077808c06931688
   RNGoogleSignin: c51c12e511eefc780f7aa498f969a2989798e16f
   RNScreens: 3fdf5b703b1a4c2e270b34c8127edc575114e599
   Yoga: 846fbe6f595136be802ad81d05688ff748839764
