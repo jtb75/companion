@@ -67,41 +67,17 @@ async def complete_todo(
     todo.is_active = False
     await db.flush()
 
-    # If this is a bill payment todo, mark the bill as paid
-    await _sync_bill_payment(db, user_id, todo)
+    # If this todo is linked to a bill, mark it paid
+    if todo.related_bill_id:
+        from app.models.bill import Bill
+        from app.models.enums import PaymentStatus
+
+        bill = await db.get(Bill, todo.related_bill_id)
+        if bill and bill.payment_status in (
+            PaymentStatus.PENDING,
+            PaymentStatus.OVERDUE,
+        ):
+            bill.payment_status = PaymentStatus.PAID
+            await db.flush()
 
     return todo
-
-
-async def _sync_bill_payment(
-    db: AsyncSession, user_id: UUID, todo: Todo
-) -> None:
-    """If a completed todo is a bill payment, mark the bill paid."""
-    import re
-
-    from app.models.bill import Bill
-    from app.models.enums import PaymentStatus
-
-    title = todo.title or ""
-    # Match "Pay {sender} bill" pattern
-    match = re.match(r"Pay (.+?) bill", title)
-    if not match:
-        return
-
-    sender = match.group(1)
-    result = await db.execute(
-        select(Bill).where(
-            Bill.user_id == user_id,
-            Bill.sender == sender,
-            Bill.payment_status.in_([
-                PaymentStatus.PENDING,
-                PaymentStatus.OVERDUE,
-            ]),
-        )
-        .order_by(Bill.due_date.desc())
-        .limit(1)
-    )
-    bill = result.scalar_one_or_none()
-    if bill:
-        bill.payment_status = PaymentStatus.PAID
-        await db.flush()

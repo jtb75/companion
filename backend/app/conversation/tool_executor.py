@@ -603,13 +603,14 @@ async def _confirm_document_action(
                 notify_overdue_bill,
             )
 
-            # 1. Add immediate To-do
+            # 1. Add immediate To-do linked to the bill
             todo = Todo(
                 user_id=user_id,
                 title=f"Pay {sender} bill (${amount})",
                 description=f"This bill was due on {bill.due_date}.",
                 category=TodoCategory.GENERAL,
                 source=TodoSource.DOCUMENT,
+                related_bill_id=bill.id,
             )
             db.add(todo)
             

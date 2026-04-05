@@ -31,6 +31,12 @@ class Todo(TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="true"
     )
+    related_bill_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("bills.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     # Relationships
     user = relationship("User", back_populates="todos")
+    related_bill = relationship("Bill")
