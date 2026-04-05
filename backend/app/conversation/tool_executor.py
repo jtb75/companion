@@ -295,9 +295,37 @@ async def _add_todo(
         except ValueError:
             pass
 
+    # Check for existing similar todo to prevent duplicates
+    title = args["title"]
+    existing_result = await db.execute(
+        select(Todo).where(
+            Todo.user_id == user_id,
+            Todo.is_active.is_(True),
+        )
+    )
+    existing_todos = existing_result.scalars().all()
+    title_lower = title.lower()
+    for existing_todo in existing_todos:
+        existing_lower = existing_todo.title.lower()
+        # Exact match or one contains the other
+        if (
+            existing_lower == title_lower
+            or existing_lower in title_lower
+            or title_lower in existing_lower
+        ):
+            return {
+                "success": True,
+                "already_exists": True,
+                "title": existing_todo.title,
+                "message": (
+                    f"'{existing_todo.title}' is already "
+                    f"on your to-do list."
+                ),
+            }
+
     todo = Todo(
         user_id=user_id,
-        title=args["title"],
+        title=title,
         due_date=due,
         category=args.get("category", TodoCategory.GENERAL),
         source=TodoSource.ARLO_SUGGESTION,
@@ -552,17 +580,28 @@ async def _confirm_document_action(
     if review is None:
         return {"error": True, "message": "Review not found."}
 
-    async def _get_remaining_count() -> int:
+    async def _get_remaining_info() -> dict:
         from sqlalchemy import func
+
         count_res = await db.execute(
-            select(func.count()).select_from(PendingReview).where(
+            select(func.count())
+            .select_from(PendingReview)
+            .where(
                 PendingReview.user_id == user_id,
                 PendingReview.review_status.in_(
                     [ReviewStatus.PENDING, ReviewStatus.PRESENTED]
                 ),
             )
         )
-        return int(count_res.scalar() or 0)
+        count = int(count_res.scalar() or 0)
+        result = {"remaining_count": count}
+        if count == 0:
+            result["note"] = (
+                "No more documents to review. Do NOT say "
+                "'I have one more thing.' Ask if you can "
+                "help with anything else."
+            )
+        return result
 
     if action == "skip":
         review.review_status = ReviewStatus.SKIPPED
@@ -571,7 +610,7 @@ async def _confirm_document_action(
         return {
             "success": True,
             "action": "skipped",
-            "remaining_count": await _get_remaining_count(),
+            **(await _get_remaining_info()),
         }
 
     fields = review.proposed_record_data or {}
@@ -643,7 +682,7 @@ async def _confirm_document_action(
             "record_type": "bill",
             "sender": sender,
             "amount": str(amount),
-            "remaining_count": await _get_remaining_count(),
+            **(await _get_remaining_info()),
         }
 
     elif rec_action == RecommendedAction.ADD_APPOINTMENT:
@@ -664,7 +703,7 @@ async def _confirm_document_action(
             "action": "confirmed",
             "record_type": "appointment",
             "provider": provider,
-            "remaining_count": await _get_remaining_count(),
+            **(await _get_remaining_info()),
         }
 
     else:
@@ -675,7 +714,7 @@ async def _confirm_document_action(
         return {
             "success": True,
             "action": "acknowledged",
-            "remaining_count": await _get_remaining_count(),
+            **(await _get_remaining_info()),
         }
 
 
