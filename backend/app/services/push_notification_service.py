@@ -34,7 +34,6 @@ async def send_push(
     import json as _json
     import os
 
-    import httpx
     from google.auth.transport.requests import Request
     from google.oauth2 import service_account
 
@@ -69,59 +68,51 @@ async def send_push(
         f"https://fcm.googleapis.com/v1/projects/{project_id}"
         f"/messages:send"
     )
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json",
-    }
-    logger.info(
-        "FCM request: url=%s, auth_header_len=%d",
-        url,
-        len(headers["Authorization"]),
-    )
 
     sent = 0
     failed_tokens: list[str] = []
 
-    async with httpx.AsyncClient() as client:
-        for token_str in tokens:
-            payload = {
-                "message": {
-                    "token": token_str,
-                    "notification": {
-                        "title": title,
-                        "body": body,
-                    },
-                    "data": data or {},
-                }
+    # Use AuthorizedSession which handles auth automatically
+    from google.auth.transport.requests import AuthorizedSession
+
+    session = AuthorizedSession(credentials)
+
+    for token_str in tokens:
+        payload = {
+            "message": {
+                "token": token_str,
+                "notification": {
+                    "title": title,
+                    "body": body,
+                },
+                "data": data or {},
             }
-            resp = await client.post(
-                url,
-                headers=headers,
-                content=_json.dumps(payload),
+        }
+
+        import asyncio
+
+        def _send(p=payload):
+            return session.post(url, json=p)
+
+        resp = await asyncio.to_thread(_send)
+
+        if resp.status_code == 200:
+            sent += 1
+            logger.info("FCM sent to %s...", token_str[:20])
+        elif resp.status_code in (400, 404):
+            failed_tokens.append(token_str)
+            logger.warning(
+                "FCM token invalid %s...: %s",
+                token_str[:20],
+                resp.text[:200],
             )
-            if resp.status_code == 200:
-                sent += 1
-                logger.info(
-                    "FCM sent to %s...", token_str[:20]
-                )
-            elif resp.status_code == 404:
-                # Token not registered
-                failed_tokens.append(token_str)
-                logger.warning(
-                    "FCM token invalid: %s...",
-                    token_str[:20],
-                )
-            else:
-                logger.warning(
-                    "FCM send failed for %s...: %d %s",
-                    token_str[:20],
-                    resp.status_code,
-                    resp.text[:500],
-                )
-                logger.warning(
-                    "FCM auth token prefix: %s...",
-                    access_token[:30] if access_token else "none",
-                )
+        else:
+            logger.warning(
+                "FCM send failed for %s...: %d %s",
+                token_str[:20],
+                resp.status_code,
+                resp.text[:500],
+            )
 
     for bad_token in failed_tokens:
         await device_token_service.deactivate_token(
