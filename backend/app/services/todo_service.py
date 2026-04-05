@@ -68,10 +68,22 @@ async def complete_todo(
     await db.flush()
 
     # If this todo is linked to a bill, mark it paid
-    if todo.related_bill_id:
-        from app.models.bill import Bill
-        from app.models.enums import PaymentStatus
+    await _sync_bill_on_complete(db, user_id, todo)
 
+    return todo
+
+
+async def _sync_bill_on_complete(
+    db: AsyncSession, user_id: UUID, todo: Todo
+) -> None:
+    """Mark the associated bill as paid when a bill todo completes."""
+    import re
+
+    from app.models.bill import Bill
+    from app.models.enums import PaymentStatus
+
+    # Prefer explicit FK link
+    if todo.related_bill_id:
         bill = await db.get(Bill, todo.related_bill_id)
         if bill and bill.payment_status in (
             PaymentStatus.PENDING,
@@ -79,5 +91,30 @@ async def complete_todo(
         ):
             bill.payment_status = PaymentStatus.PAID
             await db.flush()
+        return
 
-    return todo
+    # Fallback: match "Pay {sender} bill" title pattern
+    # for legacy todos created before related_bill_id existed
+    title = todo.title or ""
+    match = re.match(r"Pay (.+?) bill", title, re.IGNORECASE)
+    if not match:
+        return
+
+    sender = match.group(1).strip()
+    result = await db.execute(
+        select(Bill)
+        .where(
+            Bill.user_id == user_id,
+            Bill.sender.ilike(f"%{sender}%"),
+            Bill.payment_status.in_([
+                PaymentStatus.PENDING,
+                PaymentStatus.OVERDUE,
+            ]),
+        )
+        .order_by(Bill.due_date.desc())
+        .limit(1)
+    )
+    bill = result.scalar_one_or_none()
+    if bill:
+        bill.payment_status = PaymentStatus.PAID
+        await db.flush()
