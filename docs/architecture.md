@@ -204,7 +204,17 @@ Session state is Redis-backed with the following lifecycle:
 - **Guided flows**: Forms Assistant, Travel Assistant, Medication Setup -- support interruption via a task stack (max depth 3)
 - **Inactivity**: 5 min warning, 15 min graceful end with state serialization
 
-### 5.5 Voice
+### 5.5 Response Safety Layer
+
+Every LLM response passes through `conversation/safety.py` before reaching the member. This provides defense-in-depth against prompt injection and system prompt leakage.
+
+**Canary token detection:** A set of 20+ unique phrases from the constitution, persona, and internal tool names are checked against every response. If any appear, the response is blocked, a `CRITICAL` log alert fires, and the member sees a safe fallback ("I got confused, could you say that again?").
+
+**Wired into:** All response paths in `api/v1/conversation.py` — greeting generation, tool loop results, and exhausted-iteration fallbacks.
+
+**Not a security boundary:** The canary check is a detection mechanism. The real security is backend-enforced (tool access scoped by user_id, action authorization). See [D.D. Assistant Guidelines Section 11](dd-assistant-guidelines.md) for the full security model.
+
+### 5.6 Voice
 
 - **TTS**: four curated voice profiles (Warm, Calm, Bright, Clear) with user-adjustable pace and warmth. SSML markup for emphasis on amounts, dates, names, and wider pauses between sentences.
 - **STT**: Google Cloud Speech-to-Text v2, streaming mode. Per-user phrase hints for medication names, providers, contacts. Confidence < 0.60 triggers re-prompt ("I didn't quite catch that").
