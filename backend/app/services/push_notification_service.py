@@ -1,67 +1,48 @@
 """Service layer for sending FCM push notifications."""
 
-import json
 import logging
 import os
 from uuid import UUID
 
-import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services import device_token_service
 
 logger = logging.getLogger(__name__)
 
-# Cache the access token across calls
-_fcm_token_cache: dict[str, str] = {}
 
+def _ensure_fcm_app():
+    """Ensure a dedicated Firebase app for FCM exists."""
+    import firebase_admin
+    from firebase_admin import credentials
 
-async def _get_access_token() -> str | None:
-    """Get an OAuth2 access token for FCM.
-
-    Uses the Firebase Admin SDK SA key file (preferred), falling
-    back to the Cloud Run metadata server.
-    """
-    # Try SA key file first (Firebase Admin SDK SA)
-    cred_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
-    if cred_path and os.path.exists(cred_path):
-        from google.auth.transport.requests import Request
-        from google.oauth2 import service_account
-
-        with open(cred_path) as f:
-            sa_info = json.load(f)
-        credentials = service_account.Credentials.from_service_account_info(
-            sa_info,
-            scopes=[
-                "https://www.googleapis.com/auth/firebase.messaging",
-            ],
-        )
-        credentials.refresh(Request())
-        logger.info(
-            "FCM: token from SA key (%s)",
-            sa_info.get("client_email", "?")[:40],
-        )
-        return credentials.token
-
-    # Fall back to metadata server
     try:
-        async with httpx.AsyncClient(timeout=5) as client:
-            resp = await client.get(
-                "http://metadata.google.internal/computeMetadata/v1"
-                "/instance/service-accounts/default/token"
-                "?scopes=https://www.googleapis.com/auth"
-                "/firebase.messaging",
-                headers={"Metadata-Flavor": "Google"},
-            )
-            if resp.status_code == 200:
-                token = resp.json()["access_token"]
-                logger.info("FCM: token from metadata server")
-                return token
-    except Exception:
+        return firebase_admin.get_app("fcm")
+    except ValueError:
         pass
 
-    logger.error("FCM: no credentials available")
-    return None
+    cred_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+    project_id = os.environ.get(
+        "COMPANION_FIREBASE_PROJECT_ID"
+    )
+
+    if cred_path and os.path.exists(cred_path):
+        cred = credentials.Certificate(cred_path)
+        logger.info(
+            "FCM app init with SA key file, project=%s",
+            project_id,
+        )
+    else:
+        cred = credentials.ApplicationDefault()
+        logger.info(
+            "FCM app init with ADC, project=%s", project_id
+        )
+
+    return firebase_admin.initialize_app(
+        credential=cred,
+        options={"projectId": project_id} if project_id else None,
+        name="fcm",
+    )
 
 
 async def send_push(
@@ -75,6 +56,8 @@ async def send_push(
 
     Returns the number of successfully sent messages.
     """
+    import asyncio
+
     tokens = await device_token_service.get_active_tokens(db, user_id)
     if not tokens:
         logger.debug(
@@ -83,60 +66,47 @@ async def send_push(
         )
         return 0
 
-    access_token = await _get_access_token()
-    if not access_token:
-        return 0
+    from firebase_admin import messaging
 
-    project_id = os.environ.get(
-        "COMPANION_FIREBASE_PROJECT_ID", "companion-staging-491606"
-    )
-    url = (
-        f"https://fcm.googleapis.com/v1/projects/{project_id}"
-        f"/messages:send"
-    )
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json",
-    }
+    app = _ensure_fcm_app()
 
-    sent = 0
+    notification = messaging.Notification(
+        title=title, body=body
+    )
+    message = messaging.MulticastMessage(
+        notification=notification,
+        data=data or {},
+        tokens=tokens,
+    )
+
+    response = await asyncio.to_thread(
+        messaging.send_each_for_multicast, message, app=app
+    )
+
+    # Deactivate tokens that are no longer valid
     failed_tokens: list[str] = []
-
-    async with httpx.AsyncClient() as client:
-        for token_str in tokens:
-            payload = {
-                "message": {
-                    "token": token_str,
-                    "notification": {
-                        "title": title,
-                        "body": body,
-                    },
-                    "data": data or {},
-                }
-            }
-            resp = await client.post(
-                url,
-                headers=headers,
-                content=json.dumps(payload),
-            )
-            if resp.status_code == 200:
-                sent += 1
-                logger.info(
-                    "FCM sent to %s...", token_str[:20]
-                )
-            elif resp.status_code in (400, 404):
-                failed_tokens.append(token_str)
+    for i, send_response in enumerate(response.responses):
+        if send_response.exception is not None:
+            exc = send_response.exception
+            if isinstance(
+                exc,
+                (
+                    messaging.UnregisteredError,
+                    messaging.SenderIdMismatchError,
+                ),
+            ):
+                failed_tokens.append(tokens[i])
                 logger.warning(
                     "FCM token invalid %s...: %s",
-                    token_str[:20],
-                    resp.text[:200],
+                    tokens[i][:20],
+                    type(exc).__name__,
                 )
             else:
                 logger.warning(
-                    "FCM send failed for %s...: %d %s",
-                    token_str[:20],
-                    resp.status_code,
-                    resp.text[:500],
+                    "FCM send failed for %s...: %s (%s)",
+                    tokens[i][:20],
+                    exc,
+                    type(exc).__name__,
                 )
 
     for bad_token in failed_tokens:
@@ -152,7 +122,7 @@ async def send_push(
             user_id,
         )
 
-    return sent
+    return response.success_count
 
 
 async def notify_caregiver_status_change(
@@ -250,7 +220,6 @@ async def notify_overdue_bill(
         data={"type": "bill_alert", "sender": sender},
     )
 
-    # Notify caregivers
     from app.services.caregiver_service import list_contacts
 
     contacts = await list_contacts(db, user_id)
