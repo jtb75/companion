@@ -105,8 +105,14 @@ async def _generate_with_tools(
                 break
 
         if fn_call is None:
-            # No tool call — return text
-            return response.text
+            # No tool call — return text (with safety check)
+            from app.conversation.safety import (
+                check_response_safety,
+            )
+
+            return check_response_safety(
+                response.text, str(user_id)
+            )
 
         # Execute the tool
         fn_name = fn_call.name
@@ -134,8 +140,10 @@ async def _generate_with_tools(
             )
         )
 
-    # Exhausted iterations — return whatever we have
-    return response.text
+    # Exhausted iterations — return whatever we have (with safety check)
+    from app.conversation.safety import check_response_safety
+
+    return check_response_safety(response.text, str(user_id))
 
 
 @router.post("/start", status_code=status.HTTP_201_CREATED)
@@ -186,8 +194,15 @@ async def start_conversation(
                 "content": f"[Session started by {name}]",
             }
         ]
+        from app.conversation.safety import (
+            check_response_safety,
+        )
+
         greeting = await llm.generate(
             system_prompt, greeting_messages, max_tokens=1024
+        )
+        greeting = check_response_safety(
+            greeting, str(user.id)
         )
         session.add_message("assistant", greeting)
     await state_manager.update_session(session)
