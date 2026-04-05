@@ -18,7 +18,10 @@ def _get_fcm_token_and_project() -> tuple[str, str] | None:
     from google.auth.transport.requests import Request
     from google.oauth2 import service_account
 
-    cred_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+    cred_path = os.environ.get(
+        "FIREBASE_SA_KEY_PATH",
+        os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"),
+    )
     project_id = os.environ.get(
         "COMPANION_FIREBASE_PROJECT_ID", ""
     )

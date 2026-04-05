@@ -28,11 +28,7 @@ def _ensure_initialized():
             or os.environ.get("GOOGLE_CLOUD_PROJECT")
         )
 
-        cred_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
-        if cred_path and os.path.exists(cred_path):
-            cred = firebase_admin.credentials.Certificate(cred_path)
-        else:
-            cred = firebase_admin.credentials.ApplicationDefault()
+        cred = firebase_admin.credentials.ApplicationDefault()
 
         firebase_admin.initialize_app(
             credential=cred,
