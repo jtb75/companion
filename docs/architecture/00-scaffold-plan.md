@@ -13,7 +13,7 @@ This is the definitive reference for the codebase structure, technology decision
 | API Framework | Python / FastAPI |
 | Repo layout | Monorepo |
 | Web dashboard | React / Vite / Tailwind |
-| Mobile | React Native (future, not scaffolded yet) |
+| Mobile | React Native 0.84 (`companion-app/` directory) |
 | Database | PostgreSQL + Redis |
 | Event Bus | Google Cloud Pub/Sub |
 | Auth | Firebase Auth |
@@ -22,7 +22,7 @@ This is the definitive reference for the codebase structure, technology decision
 | TTS | Google Cloud TTS |
 | STT | Google Cloud Speech-to-Text |
 | Wake Word | Picovoice Porcupine |
-| LLM | Decision pending (Claude or GPT-4, evaluate during build) |
+| LLM | Gemini 2.5 Flash (via Vertex AI), with Anthropic Claude and OpenAI as available alternatives |
 
 ---
 
@@ -33,37 +33,57 @@ companion/
 ├── docs/
 │   ├── product/
 │   │   └── Companion Design Document v2.1.docx
-│   └── architecture/
-│       ├── 00-scaffold-plan.md          ← this document
-│       ├── 01-system-overview.md
-│       ├── 02-data-model.md
-│       ├── 03-document-intelligence-pipeline.md
-│       ├── 04-api-design.md
-│       ├── 05-conversation-and-notification.md
-│       ├── 06-caregiver-access-and-privacy.md
-│       └── 07-web-dashboard.md
+│   ├── architecture/
+│   │   ├── 00-scaffold-plan.md          ← this document
+│   │   ├── 01-system-overview.md
+│   │   ├── 02-data-model.md
+│   │   ├── 03-document-intelligence-pipeline.md
+│   │   ├── 04-api-design.md
+│   │   ├── 05-conversation-and-notification.md
+│   │   ├── 06-caregiver-access-and-privacy.md
+│   │   └── 07-web-dashboard.md
+│   ├── dd-assistant-guidelines.md
+│   └── comprehensive-analysis-2026-04.md
+│
+├── GEMINI.md                            ← Gemini system instructions
 │
 ├── mockups/
 │   └── onboarding-prototype/           ← existing React mockup
+│
+├── companion-app/                       ← React Native 0.84 mobile app
+│   ├── package.json
+│   ├── app.json
+│   ├── App.tsx
+│   ├── src/
+│   ├── ios/
+│   ├── android/
+│   └── __tests__/
 │
 ├── backend/
 │   ├── pyproject.toml
 │   ├── alembic.ini
 │   ├── alembic/
 │   │   └── versions/
-│   │       └── 001_initial_schema.py
+│   │       ├── 001_initial_schema.py
+│   │       ├── 002_add_first_last_name.py
+│   │       ├── ...                     ← 19 migrations total (001–019)
+│   │       └── 019_add_related_bill_id_to_todos.py
 │   ├── app/
 │   │   ├── main.py                     ← FastAPI app, middleware, lifespan
 │   │   ├── config.py                   ← pydantic-settings, env-based config
+│   │   ├── branding.py                 ← D.D. persona branding constants
+│   │   ├── logging_config.py           ← PII masking log filter
 │   │   ├── auth/
 │   │   │   ├── firebase.py             ← token verification
 │   │   │   ├── dependencies.py         ← get_current_user, get_caregiver, get_admin
 │   │   │   └── middleware.py           ← tier enforcement, role enforcement
 │   │   ├── models/
 │   │   │   ├── __init__.py
+│   │   │   ├── base.py                ← Base, TimestampMixin
 │   │   │   ├── enums.py               ← all PostgreSQL enum types
 │   │   │   ├── user.py
 │   │   │   ├── document.py
+│   │   │   ├── document_chunk.py      ← pgvector embeddings for RAG
 │   │   │   ├── medication.py
 │   │   │   ├── appointment.py
 │   │   │   ├── bill.py
@@ -73,7 +93,12 @@ companion/
 │   │   │   ├── functional_memory.py
 │   │   │   ├── system_config.py
 │   │   │   ├── pipeline_metrics.py
-│   │   │   └── admin_user.py
+│   │   │   ├── admin_user.py
+│   │   │   ├── pending_review.py      ← document review queue
+│   │   │   ├── device_token.py        ← FCM push token storage
+│   │   │   ├── chat_session.py        ← conversation session persistence
+│   │   │   ├── assignment_request.py  ← caregiver assignment requests
+│   │   │   └── audit.py              ← caregiver activity + deletion audit logs
 │   │   ├── schemas/
 │   │   │   ├── __init__.py
 │   │   │   ├── common.py              ← pagination, error envelope, meta
@@ -92,21 +117,31 @@ companion/
 │   │   │   ├── v1/
 │   │   │   │   ├── __init__.py        ← v1 router aggregation
 │   │   │   │   ├── users.py
+│   │   │   │   ├── profile.py
 │   │   │   │   ├── documents.py
 │   │   │   │   ├── sections.py
 │   │   │   │   ├── medications.py
 │   │   │   │   ├── appointments.py
 │   │   │   │   ├── bills.py
+│   │   │   │   ├── charges.py
 │   │   │   │   ├── todos.py
 │   │   │   │   ├── contacts.py
+│   │   │   │   ├── invitations.py
+│   │   │   │   ├── assignments.py
+│   │   │   │   ├── reviews.py         ← pending review endpoints
 │   │   │   │   ├── conversation.py
+│   │   │   │   ├── device_tokens.py   ← FCM token registration
 │   │   │   │   ├── notifications.py
-│   │   │   │   └── integrations.py
+│   │   │   │   ├── integrations.py
+│   │   │   │   └── auth_check.py
 │   │   │   ├── caregiver/
 │   │   │   │   ├── __init__.py
 │   │   │   │   ├── alerts.py
 │   │   │   │   ├── dashboard.py
 │   │   │   │   └── collaboration.py
+│   │   │   ├── internal/
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── workers.py         ← Cloud Scheduler / Pub/Sub push endpoints
 │   │   │   ├── pipeline/
 │   │   │   │   ├── __init__.py
 │   │   │   │   └── results.py
@@ -116,7 +151,15 @@ companion/
 │   │   │       ├── pipeline_health.py
 │   │   │       ├── escalations.py
 │   │   │       ├── metrics.py
-│   │   │       └── admin_users.py
+│   │   │       ├── admin_users.py
+│   │   │       ├── users_management.py
+│   │   │       ├── contacts.py
+│   │   │       ├── conversations.py
+│   │   │       ├── documents.py
+│   │   │       ├── people.py          ← admin people management
+│   │   │       ├── workers.py         ← admin worker dashboard + manual triggers
+│   │   │       ├── seed_admin.py
+│   │   │       └── test_email.py
 │   │   ├── services/
 │   │   │   ├── document_service.py
 │   │   │   ├── medication_service.py
@@ -132,19 +175,25 @@ companion/
 │   │   │   ├── classification.py
 │   │   │   ├── extraction.py
 │   │   │   ├── summarization.py
+│   │   │   ├── chunking.py            ← document chunking for RAG
+│   │   │   ├── embeddings.py          ← Vertex AI embedding generation
+│   │   │   ├── text_complexity.py     ← Flesch-Kincaid readability scoring
 │   │   │   ├── routing.py
 │   │   │   ├── tracker.py
 │   │   │   ├── orchestrator.py
+│   │   │   ├── events.py
 │   │   │   └── schemas.py
 │   │   ├── conversation/
 │   │   │   ├── __init__.py
 │   │   │   ├── state_manager.py
 │   │   │   ├── prompt_builder.py
 │   │   │   ├── persona.py
-│   │   │   ├── guided_flows.py
+│   │   │   ├── llm.py                 ← GeminiClient (Vertex AI), with Claude/OpenAI fallbacks
+│   │   │   ├── tools.py               ← Gemini function-calling tool declarations
+│   │   │   ├── tool_executor.py       ← executes tool calls against backend services
+│   │   │   ├── retrieval.py           ← RAG vector search over document_chunks
 │   │   │   ├── tts.py
-│   │   │   ├── stt.py
-│   │   │   └── llm.py
+│   │   │   └── stt.py
 │   │   ├── notifications/
 │   │   │   ├── __init__.py
 │   │   │   ├── priority.py
@@ -164,7 +213,9 @@ companion/
 │   │   │   ├── ttl_purge.py
 │   │   │   ├── escalation_check.py
 │   │   │   ├── away_monitor.py
-│   │   │   └── morning_trigger.py
+│   │   │   ├── morning_trigger.py
+│   │   │   ├── medication_reminder.py ← scheduled medication push notifications
+│   │   │   └── deletion_worker.py     ← account deletion enforcement
 │   │   ├── events/
 │   │   │   ├── __init__.py
 │   │   │   ├── publisher.py
@@ -205,29 +256,34 @@ companion/
 │   │   │   ├── pages/
 │   │   │   │   ├── AlertsPage.tsx
 │   │   │   │   ├── DashboardPage.tsx
-│   │   │   │   ├── ActivityPage.tsx
-│   │   │   │   └── CollaboratePage.tsx
+│   │   │   │   └── ActivityPage.tsx
 │   │   │   └── components/
 │   │   ├── ops/
 │   │   │   ├── OpsLayout.tsx
 │   │   │   ├── pages/
 │   │   │   │   ├── PipelinePage.tsx
 │   │   │   │   ├── EscalationsPage.tsx
-│   │   │   │   ├── MetricsPage.tsx
-│   │   │   │   └── SystemPage.tsx
+│   │   │   │   └── MetricsPage.tsx
 │   │   │   └── components/
 │   │   └── admin/
 │   │       ├── AdminLayout.tsx
 │   │       ├── pages/
 │   │       │   ├── PromptsPage.tsx
 │   │       │   ├── ThresholdsPage.tsx
-│   │       │   ├── EscalationRulesPage.tsx
 │   │       │   ├── VoicesPage.tsx
 │   │       │   ├── NotificationsPage.tsx
-│   │       │   ├── EmailRulesPage.tsx
-│   │       │   └── AuditPage.tsx
+│   │       │   ├── SettingsPage.tsx
+│   │       │   ├── AuditPage.tsx
+│   │       │   ├── AdminUsersPage.tsx
+│   │       │   ├── UsersPage.tsx
+│   │       │   ├── PeoplePage.tsx
+│   │       │   ├── ContactsPage.tsx
+│   │       │   ├── ConversationsPage.tsx
+│   │       │   └── WorkersPage.tsx
 │   │       └── components/
 │   └── public/
+│
+├── firestore.rules                      ← Firestore security rules
 │
 ├── infrastructure/
 │   ├── docker-compose.yml             ← local dev: Postgres, Redis, Pub/Sub emulator
@@ -259,7 +315,10 @@ companion/
 | Auth | `firebase-admin` |
 | GCP services | `google-cloud-pubsub`, `google-cloud-storage`, `google-cloud-texttospeech`, `google-cloud-speech`, `google-cloud-documentai` |
 | HTTP client | `httpx` |
-| LLM clients | `anthropic`, `openai` (both included for evaluation period) |
+| LLM (primary) | `google-cloud-aiplatform` (Vertex AI / Gemini) |
+| LLM (alternatives) | `anthropic`, `openai` |
+| Embeddings / RAG | `pgvector` (via `pgvector` Python package) |
+| Encryption | `google-cloud-kms` (field-level KMS encryption) |
 | Testing | `pytest`, `pytest-asyncio`, `httpx` |
 
 ### Web (`web/package.json`)
@@ -270,7 +329,7 @@ companion/
 | Data fetching | `@tanstack/react-query` |
 | Auth | `firebase` |
 | Styling | `tailwindcss`, `@tailwindcss/forms`, `@tailwindcss/typography` |
-| Charts | `recharts` or `@tremor/react` (evaluate during Phase 8) |
+| Charts | `recharts` |
 | Build tooling | `vite`, `@vitejs/plugin-react`, `typescript` |
 
 ---
@@ -347,17 +406,17 @@ companion/
 
 ---
 
-### Phase 6 -- Conversation Skeleton (Arlo's brain)
+### Phase 6 -- Conversation Skeleton (D.D.'s brain)
 
 1. Prompt builder with five-component assembly (persona + context + section data + conversation history + user message).
-2. Arlo persona definition loaded from `system_config`, not hardcoded.
-3. LLM client abstraction supporting both Claude and GPT-4 for evaluation.
+2. D.D. persona definition loaded from `system_config`, not hardcoded.
+3. LLM client: `GeminiClient` (Vertex AI) as primary, with `AnthropicClient` and `OpenAIClient` as available alternatives. Function-calling tools defined in `conversation/tools.py`, executed by `conversation/tool_executor.py`. RAG retrieval via `conversation/retrieval.py` (pgvector cosine similarity over document_chunks).
 4. Conversation state manager backed by Redis (session state, turn history, TTL).
 5. TTS client: Google Cloud TTS with four voice profiles loaded from `system_config`.
 6. STT client: Google Cloud STT with confidence scoring and fallback handling.
 7. Conversation API endpoints wired to real services.
 
-**Milestone:** `POST /conversation/message` with a text prompt returns an Arlo response in character. TTS audio returned as a streaming response. Conversation history persists across turns.
+**Milestone:** `POST /conversation/message` with a text prompt returns a D.D. response in character. TTS audio returned as a streaming response. Conversation history persists across turns.
 
 ---
 
@@ -382,14 +441,14 @@ companion/
 4. Ops dashboard: pipeline health monitor, escalation queue, pilot metrics.
 5. Config admin: prompt editor with preview, threshold sliders, voice profile manager, notification rule editor, escalation rule editor, audit log viewer.
 
-**Milestone:** A caregiver can log in and see Sam's summarized status across all sections. An admin can edit Arlo's persona prompt and see the change take effect in the next conversation turn.
+**Milestone:** A caregiver can log in and see Sam's summarized status across all sections. An admin can edit D.D.'s persona prompt and see the change take effect in the next conversation turn.
 
 ---
 
 ### Phase 9 -- Integration & Polish
 
 1. Gmail OAuth integration for email ingestion.
-2. Background workers: retention enforcement, TTL purge, away mode monitor, escalation checker, morning trigger.
+2. Background workers: retention enforcement, TTL purge, away mode monitor, escalation checker, morning trigger, medication reminder, account deletion. Workers are triggered via FastAPI endpoints called by Cloud Scheduler HTTP targets and Pub/Sub push subscriptions (not Cloud Functions).
 3. Seed script expanded with realistic document processing scenarios (medical bill, prescription label, appointment letter, insurance EOB).
 4. End-to-end test: email arrives with a document attachment, pipeline processes it, section updates, morning check-in mentions it the next day, caregiver sees it in the dashboard.
 
@@ -435,7 +494,7 @@ These items are explicitly deferred. Do not create directories or stubs for them
 
 | Item | Target |
 |---|---|
-| React Native mobile app | Built when mobile work begins, after the API surface is stable |
+| ~~React Native mobile app~~ | ~~Built when mobile work begins~~ — **Done.** `companion-app/` directory, React Native 0.84 |
 | Mail Station hardware integration | V2 |
 | Outlook email integration | V2 |
 | Agency account model (multi-org) | V2 |
@@ -452,6 +511,6 @@ Each architecture document covers a specific subsystem in depth:
 - **02-data-model.md** -- PostgreSQL schema, Redis key design, enum definitions. Source of truth for `001_initial_schema.py`.
 - **03-document-intelligence-pipeline.md** -- Six-stage pipeline detail, LLM prompt templates, error handling, metrics.
 - **04-api-design.md** -- All endpoints, request/response shapes, auth requirements, rate limits.
-- **05-conversation-and-notification.md** -- Arlo persona, prompt assembly, notification priority, morning check-in, escalation rules.
+- **05-conversation-and-notification.md** -- D.D. persona, prompt assembly, notification priority, morning check-in, escalation rules.
 - **06-caregiver-access-and-privacy.md** -- Tier model, data visibility rules, audit logging, collaboration features.
 - **07-web-dashboard.md** -- Page inventory, component hierarchy, real-time update strategy.

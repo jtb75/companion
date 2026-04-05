@@ -754,7 +754,7 @@ Partial update. **Response `200 OK`.**
 
 #### `POST /api/v1/appointments/:id/travel`
 
-Request Arlo to generate a travel plan for this appointment.
+Request D.D. to generate a travel plan for this appointment.
 
 **Request body (optional):**
 ```json
@@ -1091,7 +1091,7 @@ Member rejects a pending assignment request. Returns 403 for managed accounts.
 
 #### `POST /api/v1/conversation/start`
 
-Start a new Arlo conversation session.
+Start a new D.D. conversation session.
 
 **Request body:**
 ```json
@@ -1122,7 +1122,7 @@ Start a new Arlo conversation session.
 
 #### `POST /api/v1/conversation/message`
 
-Send a message to Arlo within an active session.
+Send a message to D.D. within an active session.
 
 **Request (text):** `Content-Type: application/json`
 ```json
@@ -1532,7 +1532,7 @@ the same scope.
 
 All endpoints below require a Google Cloud IAM service account token.
 These endpoints are not exposed to the public internet. They are called by
-Cloud Run Jobs and Cloud Functions during document processing.
+the document processing pipeline running within the Cloud Run backend.
 
 **Path prefix:** `/api/v1/pipeline`
 
@@ -1646,7 +1646,7 @@ On `status: "error"`:
 
 #### `POST /api/v1/pipeline/questions`
 
-Create a tracked question that Arlo will ask Sam about a processed document.
+Create a tracked question that D.D. will ask Sam about a processed document.
 
 **Request body:**
 ```json
@@ -1708,15 +1708,15 @@ GET    /api/v1/admin/config/:id/history               — audit log for specific
 GET    /api/v1/admin/config/audit                     — full config audit log (paginated)
 ```
 
-#### Example: Update Arlo Persona Prompt
+#### Example: Update D.D. Persona Prompt
 
 **Request:**
 ```
-PATCH /api/v1/admin/config/arlo-persona-base
+PATCH /api/v1/admin/config/dd-persona-base
 ```
 ```json
 {
-  "value": { "prompt": "You are Arlo..." },
+  "value": { "prompt": "You are D.D...." },
   "reason": "Adjusted tone per pilot feedback week 3"
 }
 ```
@@ -1726,9 +1726,9 @@ PATCH /api/v1/admin/config/arlo-persona-base
 {
   "data": {
     "id": "uuid",
-    "category": "arlo_persona",
-    "key": "arlo-persona-base",
-    "value": { "prompt": "You are Arlo..." },
+    "category": "dd_persona",
+    "key": "dd-persona-base",
+    "value": { "prompt": "You are D.D...." },
     "version": 4,
     "updated_by": "joe@companion.app",
     "updated_at": "2026-03-28T..."
@@ -1794,6 +1794,79 @@ GET    /api/v1/admin/users                             — list admin users
 POST   /api/v1/admin/users                             — create admin user
 PATCH  /api/v1/admin/users/:id                         — update admin role
 DELETE /api/v1/admin/users/:id                         — deactivate admin user
+```
+
+### Admin Member/People Management (requires: editor or admin)
+
+```
+GET    /api/v1/admin/people                            — list all members (users)
+GET    /api/v1/admin/people/:id                        — member detail
+GET    /api/v1/admin/contacts                          — list all trusted contacts across members
+GET    /api/v1/admin/conversations                     — list conversation sessions across members
+GET    /api/v1/admin/documents                         — list documents across members
+GET    /api/v1/admin/users-management                  — member account management (deactivation, deletion)
+```
+
+### Admin Workers Dashboard (requires: editor or admin)
+
+Worker endpoints power the admin Workers page and allow manual triggering of background jobs.
+
+```
+GET    /api/v1/admin/workers                           — list all workers with status and last run time
+POST   /api/v1/admin/workers/:name/trigger             — manually trigger a specific worker
+```
+
+### Internal Worker Endpoints (API-key auth, not public)
+
+These endpoints are called by Cloud Scheduler HTTP targets and Pub/Sub push subscriptions. They run background jobs within the same Cloud Run backend process.
+
+```
+POST   /api/internal/workers/morning-trigger           — fire morning check-in for eligible users
+POST   /api/internal/workers/medication-reminder       — send medication reminder push notifications
+POST   /api/internal/workers/escalation-check          — check escalation thresholds
+POST   /api/internal/workers/ttl-purge                 — purge expired data
+POST   /api/internal/workers/retention                 — enforce data retention policies
+POST   /api/internal/workers/away-monitor              — check away mode expirations
+POST   /api/internal/workers/deletion                  — process scheduled account deletions
+```
+
+### App API — Additional Endpoint Groups
+
+The following endpoint groups were added post-initial-design:
+
+**Invitations** (`/api/v1/invitations`):
+```
+POST   /api/v1/invitations                            — member invites a caregiver
+GET    /api/v1/invitations/validate?token={token}      — validate invitation token (public, no auth)
+POST   /api/v1/invitations/accept                      — caregiver accepts invitation
+POST   /api/v1/invitations/decline                     — caregiver declines invitation
+```
+
+**Assignments** (`/api/v1/assignments`):
+```
+GET    /api/v1/assignments/pending                     — list pending assignment requests for member
+POST   /api/v1/assignments/:id/approve                 — member approves assignment
+POST   /api/v1/assignments/:id/reject                  — member rejects assignment
+```
+
+**Pending Reviews** (`/api/v1/reviews`):
+```
+GET    /api/v1/reviews                                 — list pending document reviews for user
+GET    /api/v1/reviews/:id                             — get review detail
+POST   /api/v1/reviews/:id/confirm                     — confirm proposed record
+POST   /api/v1/reviews/:id/reject                      — reject proposed record
+```
+
+**Device Tokens** (`/api/v1/device-tokens`):
+```
+POST   /api/v1/device-tokens                           — register FCM push token
+DELETE /api/v1/device-tokens/:id                       — unregister token
+```
+
+**Conversations** (`/api/v1/conversation`):
+Additional endpoints beyond start/message/end:
+```
+GET    /api/v1/conversation/sessions                   — list user's conversation sessions
 ```
 
 ---
@@ -1967,8 +2040,8 @@ Delivery will use HTTPS POST with HMAC-SHA256 signature verification.
 | DELETE | `/contacts/:id`                        | Remove contact                  |
 | POST   | `/contacts/:id/pause`                  | Pause caregiver access          |
 | POST   | `/contacts/:id/resume`                 | Resume caregiver access         |
-| POST   | `/conversation/start`                  | Start Arlo session              |
-| POST   | `/conversation/message`                | Send message to Arlo            |
+| POST   | `/conversation/start`                  | Start D.D. session              |
+| POST   | `/conversation/message`                | Send message to D.D.            |
 | GET    | `/conversation/state`                  | Get conversation state          |
 | POST   | `/conversation/end`                    | End session                     |
 | GET    | `/notifications`                       | List notifications              |

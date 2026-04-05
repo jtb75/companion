@@ -8,14 +8,23 @@
 
 ## 1. Conversation Layer Overview
 
-Five components collaborate to deliver Arlo's conversational interface. Each can be developed, tested, and swapped independently behind stable interfaces.
+Seven components collaborate to deliver D.D.'s conversational interface. Each can be developed, tested, and swapped independently behind stable interfaces.
 
 ```
                           ┌──────────────────────┐
                           │   LLM Prompt Engine   │
-                          │  (System Prompt Assy) │
+                          │ (Gemini via Vertex AI)│
                           └──────────┬───────────┘
                                      │
+                          ┌──────────┼───────────┐
+                          ▼                      ▼
+               ┌──────────────────┐   ┌──────────────────┐
+               │  Tools / Function│   │  RAG Retrieval    │
+               │  Calling         │   │  (pgvector search │
+               │  (tool_executor) │   │   over doc chunks)│
+               └──────────┬──────┘   └──────────┬───────┘
+                          │                      │
+                          └──────────┬───────────┘
                                      ▼
 ┌──────────────┐    ┌──────────────────────────┐    ┌──────────────────┐
 │  Wake Word   │───▶│  Conversation State Mgr   │───▶│  Voice Synthesis │
@@ -34,8 +43,8 @@ Five components collaborate to deliver Arlo's conversational interface. Each can
 
 1. Wake Word Detection transitions state from `IDLE` to `LISTENING`.
 2. STT streams audio to Google Cloud Speech-to-Text; transcript chunks arrive in real time.
-3. Conversation State Manager appends the user turn, resolves memory refs, and assembles the full LLM prompt.
-4. LLM Prompt Engine sends the assembled prompt to the model and streams tokens back.
+3. Conversation State Manager appends the user turn, resolves memory refs, retrieves relevant document chunks via RAG (`conversation/retrieval.py` — pgvector cosine similarity over `document_chunks`), and assembles the full LLM prompt.
+4. LLM Prompt Engine sends the assembled prompt to Gemini 2.5 Flash (via Vertex AI) with function-calling tools enabled (`conversation/tools.py`). Tool calls (e.g., list_medications, add_todo) are executed by `conversation/tool_executor.py` against backend services.
 5. Voice Synthesis converts streamed text to audio via Google Cloud TTS.
 6. State transitions back to `IDLE` (or stays `LISTENING` if follow-up mode is active).
 
@@ -176,7 +185,7 @@ The wider-than-default pauses between sentences are deliberate. They give Sam pr
 
 **Picovoice Porcupine** — on-device wake word engine. All audio processing happens locally. No audio data is transmitted to any server until the wake word fires and the user begins speaking.
 
-**Wake word:** `"Hey Arlo"`
+**Wake word:** `"D.D."`
 
 A custom Porcupine model is trained for this phrase. Sensitivity is set to `0.7` (range 0.0 - 1.0) by default, tunable per-device if false-positive/negative rates require adjustment.
 
@@ -191,7 +200,7 @@ On mobile, enabling wake word requires explicit microphone background permission
 
 ### 3.3 Listening State Indicators
 
-**Hard requirement:** The active listening state must ALWAYS be visible to the user. Sam must never wonder whether Arlo is listening.
+**Hard requirement:** The active listening state must ALWAYS be visible to the user. Sam must never wonder whether D.D. is listening.
 
 | State | Mail Station Indicator | Mobile Indicator |
 |---|---|---|
@@ -222,9 +231,9 @@ IDLE ──────────────────► LISTENING
 
 | Transition | Timeout | Behavior |
 |---|---|---|
-| `LISTENING` with no speech | 8 seconds | Arlo says "I'm still here if you need me." Returns to `IDLE`. |
+| `LISTENING` with no speech | 8 seconds | D.D. says "I'm still here if you need me." Returns to `IDLE`. |
 | `LISTENING` with partial speech then silence | 3 seconds | End-of-utterance detected, transition to `PROCESSING`. |
-| `PROCESSING` exceeds limit | 10 seconds | Arlo says "Give me one more moment." Timer extends 10 seconds. If exceeded again, returns error and `IDLE`. |
+| `PROCESSING` exceeds limit | 10 seconds | D.D. says "Give me one more moment." Timer extends 10 seconds. If exceeded again, returns error and `IDLE`. |
 | `SPEAKING` interrupted by wake word | Immediate | Stop audio playback, transition to `LISTENING`. (Barge-in support.) |
 
 ---
@@ -286,8 +295,8 @@ Boost values are intentionally high because these terms are critical to accurate
 | Confidence Score | Behavior |
 |---|---|
 | >= 0.80 | Accept transcript, proceed normally |
-| 0.60 - 0.79 | Accept transcript but flag internally; if response seems off, Arlo confirms: "I heard [X]. Is that right?" |
-| < 0.60 | Arlo says: "I didn't quite catch that. Could you say that again?" |
+| 0.60 - 0.79 | Accept transcript but flag internally; if response seems off, D.D. confirms: "I heard [X]. Is that right?" |
+| < 0.60 | D.D. says: "I didn't quite catch that. Could you say that again?" |
 
 **Language rule (enforced in all STT-related responses):** Never say "I didn't understand you." Always say "I didn't quite catch that." The phrasing must always frame recognition failures as a limitation of the technology, never of the user.
 
@@ -304,7 +313,7 @@ Text input is always available as an alternative to voice:
 - Mobile: text field visible below the conversation view at all times.
 - Mail Station: on-screen keyboard accessible via a "Type instead" button.
 - Text input bypasses STT entirely and feeds directly into the Conversation State Manager.
-- No functional difference in Arlo's response between voice and text input.
+- No functional difference in D.D.'s response between voice and text input.
 
 ---
 
@@ -320,7 +329,7 @@ interface ConversationState {
   conversation_history: Message[];       // rolling window, token-budget managed
   active_task: GuidedTask | null;        // current guided flow step
   task_stack: GuidedTask[];              // paused tasks (interruption support)
-  pending_questions: Question[];         // unanswered Arlo questions
+  pending_questions: Question[];         // unanswered D.D. questions
   memory_refs: MemoryRef[];             // active functional/contextual memory
   started_at: ISO8601Timestamp;
   last_activity: ISO8601Timestamp;
@@ -350,7 +359,7 @@ interface GuidedTask {
 interface Question {
   question_id: UUID;
   text: string;
-  context: string;                       // why Arlo asked this
+  context: string;                       // why D.D. asked this
   asked_at: ISO8601Timestamp;
   answered: boolean;
 }
@@ -388,7 +397,7 @@ When conversation history reaches 80% of its allocated budget:
 
 - Decisions Sam made ("I'll pay that bill tomorrow")
 - Preferences Sam expressed ("I don't like morning appointments")
-- Active context (what Arlo and Sam are currently discussing)
+- Active context (what D.D. and Sam are currently discussing)
 - Any pending follow-ups or unanswered questions
 
 **What compression discards:**
@@ -407,20 +416,20 @@ Guided flows (Forms Assistant, Travel Assistant, Medication Setup) support full 
 
 ```
 Sam is on step 4 of a 7-step form.
-Sam: "Hey Arlo, what time is my appointment tomorrow?"
+Sam: "D.D., what time is my appointment tomorrow?"
   → active_task (form, step 4) is pushed onto task_stack
-  → Arlo answers the appointment question
-  → Arlo: "Want to keep going with the form?"
+  → D.D. answers the appointment question
+  → D.D.: "Want to keep going with the form?"
     → Sam says yes: pop task_stack, restore form at step 4
-    → Sam says no: task saved to DB, resumable later via "Arlo, let's finish that form"
-    → Sam says nothing (8s timeout): task saved, Arlo says "No worries. We can finish the form whenever you're ready."
+    → Sam says no: task saved to DB, resumable later via "let's finish that form"
+    → Sam says nothing (8s timeout): task saved, D.D. says "No worries. We can finish the form whenever you're ready."
 ```
 
 **Stack rules:**
 
 | Rule | Detail |
 |---|---|
-| Max stack depth | 3 tasks. If a 4th interruption occurs, Arlo says: "We have a few things going. Let's finish [current] first, then come back to the rest." |
+| Max stack depth | 3 tasks. If a 4th interruption occurs, D.D. says: "We have a few things going. Let's finish [current] first, then come back to the rest." |
 | Stack persistence | Tasks remain on the stack for the duration of the session. If the session ends, all stacked tasks are saved to the database with their current step. |
 | Resumption prompt | When a session starts and saved tasks exist: "Last time we were working on [task]. Want to pick up where we left off?" |
 | Task expiration | Saved tasks expire after 7 days. After expiration, data is archived but the flow must restart if resumed. |
@@ -430,7 +439,7 @@ Sam: "Hey Arlo, what time is my appointment tomorrow?"
 | Event | Behavior |
 |---|---|
 | Session start | Generate `session_id`. Load functional memory into `memory_refs`. Load active alerts. Check for saved tasks. |
-| Inactivity (5 min, mid-conversation) | Arlo: "I'm still here if you need anything." |
+| Inactivity (5 min, mid-conversation) | D.D.: "I'm still here if you need anything." |
 | Inactivity (15 min) | Session ends gracefully. State serialized to DB. |
 | App backgrounded (mobile) | Session paused. Resumes on foreground if < 15 min elapsed. |
 | Explicit close | "See you later, Sam." State serialized. |
@@ -439,7 +448,7 @@ Sam: "Hey Arlo, what time is my appointment tomorrow?"
 
 ## 6. LLM Prompt Architecture
 
-This is the most important engineering surface in the product. Arlo's behavior, tone, boundaries, and capabilities are defined entirely by how the system prompt is assembled.
+This is the most important engineering surface in the product. D.D.'s behavior, tone, boundaries, and capabilities are defined entirely by how the system prompt is assembled.
 
 ### 6.1 Component Assembly
 
@@ -447,7 +456,7 @@ The system prompt is dynamically assembled from five components at the start of 
 
 ```
 System Prompt = [
-  1. Arlo Persona Definition        // FIXED  — never changes between deploys
+  1. D.D. Persona Definition        // FIXED  — never changes between deploys
   2. Sam's Functional Memory         // DYNAMIC — loaded from backend at session start
   3. Session Context                 // DYNAMIC — trigger, section, recent docs
   4. Active Alerts & Pending Items   // DYNAMIC — cross-section priority items
@@ -474,10 +483,10 @@ Each component is separated by a clear delimiter in the prompt so that updates t
 [component 5]
 ```
 
-### 6.2 Component 1: Arlo Persona Definition (Fixed)
+### 6.2 Component 1: D.D. Persona Definition (Fixed)
 
 ```
-You are Arlo, Sam's personal assistant in the Companion app. You help Sam manage
+You are D.D., Sam's personal assistant in the Companion app. You help Sam manage
 daily life — bills, medications, appointments, mail, and travel.
 
 YOUR COMMUNICATION STYLE:
@@ -498,7 +507,7 @@ YOUR COMMUNICATION STYLE:
 
 YOUR EMOTIONAL BOUNDARIES:
 - Be warm and present. You care about Sam's day going well.
-- Never pretend to be human. If Sam asks, be honest: "I'm Arlo, your assistant
+- Never pretend to be human. If Sam asks, be honest: "I'm D.D., your assistant
   in the Companion app."
 - Encourage Sam's capability. Frame things as Sam's accomplishments, not yours.
   "You got that done" not "I helped you do that."
@@ -552,7 +561,7 @@ This block is refreshed at session start and when the user modifies any data mid
 
 ### 6.4 Component 3: Session Context (Dynamic)
 
-Describes what triggered the current session so Arlo can open appropriately:
+Describes what triggered the current session so D.D. can open appropriately:
 
 ```
 SESSION CONTEXT:
@@ -562,9 +571,9 @@ SESSION CONTEXT:
 - Recent documents: Electric bill (arrived March 30, processed, $67.20, due April 18)
 ```
 
-**Trigger values and expected Arlo opening behavior:**
+**Trigger values and expected D.D. opening behavior:**
 
-| Trigger | Arlo Opens With |
+| Trigger | D.D. Opens With |
 |---|---|
 | `user_initiated` | "Hey, Sam. What's up?" |
 | `morning_check_in` | Morning check-in flow (see Section 7) |
@@ -581,7 +590,7 @@ ACTIVE ALERTS (mention proactively when relevant):
 - [LEVEL 3] Vitamin D refill — pharmacy shows 5 days remaining.
 ```
 
-Sorted by urgency level. Arlo integrates these naturally into conversation rather than reading them as a list. For example, if Sam asks "What do I need to do today?", Arlo starts with the Level 1 item.
+Sorted by urgency level. D.D. integrates these naturally into conversation rather than reading them as a list. For example, if Sam asks "What do I need to do today?", D.D. starts with the Level 1 item.
 
 ### 6.6 Component 5: Conversation Constraints (Fixed)
 
@@ -725,7 +734,7 @@ The single most important notification. Delivered daily at the user's configured
    "That's everything for now. I'm here if you need me."
 ```
 
-**Batching rule:** When multiple Level 2 items exist, Arlo groups them:
+**Batching rule:** When multiple Level 2 items exist, D.D. groups them:
 
 ```
 "You have 3 things that need attention today. Let's go through them one at a time."
@@ -734,7 +743,7 @@ The single most important notification. Delivered daily at the user's configured
 [Presents item 3, waits for acknowledgment]
 ```
 
-Each item is presented individually. Arlo waits for an acknowledgment (verbal "okay", "got it", "next", or tap) before proceeding to the next item.
+Each item is presented individually. D.D. waits for an acknowledgment (verbal "okay", "got it", "next", or tap) before proceeding to the next item.
 
 **Assembly logic:**
 
@@ -775,7 +784,7 @@ async function assembleMorningCheckIn(userId: UUID): Promise<CheckInScript> {
 
 **Context sensitivity.** Non-urgent notifications are deferred when:
 
-- Sam is mid-conversation with Arlo (active session, last turn < 2 minutes ago)
+- Sam is mid-conversation with D.D. (active session, last turn < 2 minutes ago)
 - Sam is in a guided flow (Forms, Travel, Medication)
 - A Level 1 notification is currently being presented
 
@@ -789,13 +798,13 @@ Deferred notifications are delivered after the current interaction ends or durin
 | 2nd delivery (Level 1-2 only) | 4 hours later or end of day | "Just a reminder — [item]" |
 | 3rd delivery | None as standalone | Rolls into next morning check-in |
 
-After the 2nd standalone delivery, the item is not delivered again as a standalone notification. It appears in morning check-ins until acknowledged or resolved. Arlo never nags.
+After the 2nd standalone delivery, the item is not delivered again as a standalone notification. It appears in morning check-ins until acknowledged or resolved. D.D. never nags.
 
 ### 7.4 Notification Channels
 
 | Channel | When Used | Format |
 |---|---|---|
-| **Voice (Arlo speaks)** | App is open and active | Full conversational delivery with SSML |
+| **Voice (D.D. speaks)** | App is open and active | Full conversational delivery with SSML |
 | **Push notification** | App is in background | Plain language, max 2 sentences. Calm tone. No urgency theater. |
 | **In-app card** | Always | Persistent record in the notification center. Reviewable anytime. Shows item, status, and actions. |
 | **Caregiver alert** | Escalations only | Sent to Tier 1 contacts only. Contains: category, urgency label, and days since last acknowledgment. Never contains dollar amounts, document contents, or medical details. |
@@ -816,22 +825,22 @@ The internal 4-level model is simplified to 3 user-facing labels. Sam never sees
 | Level 3 | **Soon** | Blue | Calendar |
 | Level 4 | **Can Wait** | Gray | Info circle |
 
-These labels appear on in-app notification cards and are used in Arlo's speech: "This is a 'today' item" or "This can wait — no rush."
+These labels appear on in-app notification cards and are used in D.D.'s speech: "This is a 'today' item" or "This can wait — no rush."
 
 ---
 
 ## 8. Silence & Safety Protocol
 
-Arlo monitors engagement patterns and responds to prolonged silence with a graduated escalation model. The core principle: Sam is always in control. Arlo asks before escalating. Sam is never bypassed except at the extreme end of the Away mode threshold.
+D.D. monitors engagement patterns and responds to prolonged silence with a graduated escalation model. The core principle: Sam is always in control. D.D. asks before escalating. Sam is never bypassed except at the extreme end of the Away mode threshold.
 
 ### 8.1 Engagement Monitoring
 
-| Scenario | Arlo Response |
+| Scenario | D.D. Response |
 |---|---|
 | Misses a single morning check-in | No action. Try one more check-in 2 hours later. This is normal. |
 | No interaction for 2 days | Warm check-in: "I haven't heard from you in a couple of days. Everything okay? No rush — just checking in." |
 | No response to any check-in for 12 hours after the 2-day message | Notify Tier 1 trusted contact(s). Message is calm and factual: "Sam hasn't responded to check-ins for about 3 days. You may want to check in." |
-| Away mode set by Sam | All silence-based alerts suppressed. Arlo asks for expected duration. Auto-expires after the stated duration. |
+| Away mode set by Sam | All silence-based alerts suppressed. D.D. asks for expected duration. Auto-expires after the stated duration. |
 | Away mode active 7+ days with no check-in | Tier 1 alert: "Sam set away status 7 days ago and hasn't checked in since. You may want to reach out." |
 
 ### 8.2 Away Mode
@@ -850,10 +859,10 @@ interface AwayMode {
 **Activation flow:**
 
 ```
-Sam: "Arlo, I'm going to be away for a few days."
-Arlo: "Got it. How long do you think you'll be away?"
+Sam: "D.D., I'm going to be away for a few days."
+D.D.: "Got it. How long do you think you'll be away?"
 Sam: "Until Sunday."
-Arlo: "Okay, I'll keep things quiet until Sunday. If anything urgent comes in
+D.D.: "Okay, I'll keep things quiet until Sunday. If anything urgent comes in
        I'll still let you know when you're back. Have a good time, Sam."
 ```
 
@@ -862,7 +871,7 @@ During Away mode:
 - Morning check-ins are suspended.
 - All notifications queue silently (except Level 1, which queues but is delivered immediately when Sam returns).
 - The 2-day silence protocol is suspended.
-- The 7-day safety threshold is NOT suspended. This is the only case where Arlo escalates without Sam's explicit permission, and it is documented clearly during onboarding.
+- The 7-day safety threshold is NOT suspended. This is the only case where D.D. escalates without Sam's explicit permission, and it is documented clearly during onboarding.
 
 ### 8.3 Escalation Message Format (Caregiver Alerts)
 
@@ -870,7 +879,7 @@ All caregiver alerts follow this template:
 
 ```
 To: [Contact name]
-From: Companion (Arlo)
+From: D.D. Companion
 Subject: Check-in about Sam
 
 Hi [Contact first name],
@@ -878,7 +887,7 @@ Hi [Contact first name],
 Sam hasn't responded to check-ins for [duration]. This is an automated message
 from Companion. You may want to reach out.
 
-— Arlo (Sam's Companion assistant)
+— D.D., Sam's Companion assistant
 ```
 
 The message never includes:
@@ -901,7 +910,7 @@ All latency targets measured at P95 (95th percentile) under normal operating con
 | STT recognition latency | < 1 second | From end of user speech to final transcript available |
 | LLM response generation | < 3 seconds | From prompt sent to first token received (streaming) |
 | Wake word detection | < 300ms | From utterance completion to callback fired |
-| Full turn latency (user stops speaking to Arlo starts speaking) | < 5 seconds | End-to-end, includes STT + LLM + TTS first byte |
+| Full turn latency (user stops speaking to D.D. starts speaking) | < 5 seconds | End-to-end, includes STT + LLM + TTS first byte |
 | Morning check-in assembly | < 2 seconds | From scheduler trigger to complete script ready for TTS |
 | Notification delivery (push) | < 10 seconds | From event firing to push notification received on device |
 | Conversation state serialization | < 200ms | Session save to database on pause/end |

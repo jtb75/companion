@@ -217,7 +217,7 @@ CREATE TABLE users (
         -- { street, unit, city, state, zip, coordinates: {lat, lng} }
     primary_language  TEXT NOT NULL DEFAULT 'en',
 
-    -- Arlo personality preferences
+    -- D.D. personality preferences
     voice_id          TEXT NOT NULL DEFAULT 'arlo_default',
     pace_setting      TEXT NOT NULL DEFAULT 'normal'
                       CHECK (pace_setting IN ('slow', 'normal', 'fast')),
@@ -342,7 +342,7 @@ CREATE TABLE documents (
         -- medical: { "provider", "date_of_service", "diagnosis_codes" }
         -- legal:   { "case_number", "court", "hearing_date", "parties" }
     spoken_summary      TEXT,
-        -- Plain-language summary Arlo reads aloud
+        -- Plain-language summary D.D. reads aloud
     card_summary        TEXT,
         -- Short text for the document card in the UI
     routing_destination routing_destination,
@@ -575,8 +575,8 @@ CREATE TABLE deletion_audit_log (
 -- Used by Config Admin UI. Changes emit config.updated events.
 
 CREATE TYPE config_category AS ENUM (
-    'arlo_persona',           -- Arlo persona prompt, constraints
-    'arlo_voice',             -- TTS voice profile configurations
+    'dd_persona',             -- D.D. persona prompt, constraints
+    'dd_voice',               -- TTS voice profile configurations
     'pipeline_threshold',     -- Classification confidence, junk cutoff
     'escalation_threshold',   -- Per-question-type escalation windows
     'notification_default',   -- Quiet hours, check-in time defaults
@@ -639,6 +639,40 @@ CREATE TABLE admin_users (
 );
 ```
 
+### 2.15 Additional Tables and Columns (Migrations 002–019)
+
+The following tables and schema changes were added after the initial schema via Alembic migrations:
+
+**New tables:**
+
+| Table | Migration | Purpose |
+|---|---|---|
+| `device_tokens` | 009 | FCM push notification tokens per user/device. Columns: `user_id`, `fcm_token` (unique), `device_platform`, `device_name`, `is_active`, `created_at`, `last_used_at`. |
+| `chat_sessions` | 010 | Persistent conversation session records. Columns: `user_id`, `session_id` (unique), `started_at`, `ended_at`, `message_count`, `firestore_path`. |
+| `document_chunks` | 011 | pgvector-backed RAG embeddings. Columns: `document_id`, `user_id`, `chunk_index`, `chunk_text`, `source_field`, `embedding` (vector), `created_at`. Uses cosine similarity for retrieval. |
+| `pending_reviews` | 013 + 015 | Document review queue — pipeline proposes records (bills, appointments, medications) and the user confirms or rejects. Columns: `user_id`, `document_id`, `review_status`, `recommended_action`, `proposed_record_data` (KMS-encrypted JSONB), `target_table`, `target_record_id`, `short_id`, `spoken_summary` (KMS-encrypted), `card_summary` (KMS-encrypted), `presented_at`, `resolved_at`. |
+| `caregiver_assignment_requests` | (initial schema extension) | Tracks pending caregiver-to-member assignment requests for self-directed members. |
+
+**Column additions to existing tables:**
+
+| Table | Column(s) | Migration | Purpose |
+|---|---|---|---|
+| `users` | `first_name`, `last_name` | 002 | Split name fields for formal documents |
+| `users` | `deactivated_at`, `deletion_scheduled_at` | 004 | Account deactivation and scheduled deletion lifecycle |
+| `trusted_contacts` | `invitation_status`, `invitation_token`, `invited_at`, `invited_by_admin_id`, `invited_by_user_id`, `accepted_at` | 003 | Caregiver invitation flow (pending/accepted/declined/expired) |
+| `documents` | `reading_grade` | 016 | Flesch-Kincaid reading grade level of spoken summaries |
+| `documents` | `page_count` | 018 | Number of pages in scanned document |
+| `documents` | `spoken_summary`, `card_summary`, `extracted_fields` | 017 | Migrated to KMS-encrypted columns (`EncryptedText`, `EncryptedJSON`) |
+| `todos` | `related_bill_id` | 019 | Links auto-generated bill payment to-dos to their source bill |
+
+**Enum additions:**
+
+| Enum | Values Added | Migration |
+|---|---|---|
+| `config_category` | `dd_persona`, `dd_voice`, `deletion_settings` | 006, 007 |
+| `document_status` | `pending_review` | 014 |
+| `deletion_reason` | `admin_request` | 008 |
+
 ---
 
 ## 3. Redis Namespace Design
@@ -649,7 +683,7 @@ All Redis keys are prefixed by namespace for isolation. TTLs are enforced at wri
 
 | Key Pattern | Value Type | TTL | Purpose |
 |---|---|---|---|
-| `ctx:{user_id}:{memory_id}` | JSON | 48 hours | Contextual memory window. Short-lived facts Arlo uses mid-conversation (e.g., "user just mentioned they have a headache"). Evicts automatically; not persisted to PostgreSQL. |
+| `ctx:{user_id}:{memory_id}` | JSON | 48 hours | Contextual memory window. Short-lived facts D.D. uses mid-conversation (e.g., "user just mentioned they have a headache"). Evicts automatically; not persisted to PostgreSQL. |
 | `session:{user_id}:{session_id}` | JSON | 2 hours | Conversation session state. Holds current topic, slot-filling progress, pending confirmations. Renewed on each interaction; expires after inactivity. |
 | `rate:{api_surface}:{user_id}` | Sorted set | Sliding window (varies) | Rate limiting. Members are timestamps; scored by epoch ms. Surface examples: `sms`, `voice`, `document_upload`, `caregiver_api`. |
 | `cache:section:{user_id}:{section}` | JSON | 5 minutes | Pre-rendered section data for the home screen (e.g., bills summary, medication schedule). Invalidated on write; TTL is a safety net. Section values: `home`, `my_health`, `bills`, `plans`. |
@@ -709,8 +743,8 @@ Events are published to a message broker (Google Cloud Pub/Sub or NATS, TBD base
 | `document.received` | `{ document_id, source_channel, raw_text_ref }` | Ingest API, Email Watcher, Mail Station Agent | Document Pipeline |
 | `document.processed` | `{ document_id, classification, confidence_score, urgency_level, extracted_fields }` | Document Pipeline | Routing Engine, Notification Service |
 | `document.routed` | `{ document_id, routing_destination, card_summary, spoken_summary }` | Routing Engine | Home Screen Cache, Notification Service |
-| `question.asked` | `{ question_id, question_text, context_type, context_ref_id, urgency_level }` | Arlo Conversation Engine | Questions Tracker, Notification Service |
-| `question.answered` | `{ question_id, answer_source }` | Arlo Conversation Engine, User Input | Questions Tracker |
+| `question.asked` | `{ question_id, question_text, context_type, context_ref_id, urgency_level }` | D.D. Conversation Engine | Questions Tracker, Notification Service |
+| `question.answered` | `{ question_id, answer_source }` | D.D. Conversation Engine, User Input | Questions Tracker |
 | `question.threshold_crossed` | `{ question_id, hours_open, escalation_threshold_hours, trusted_contact_ids }` | Escalation Scheduler | Caregiver Alert Service, Notification Service |
 | `medication.confirmed` | `{ confirmation_id, medication_id, scheduled_at, confirmed_at }` | User Input (SMS/Voice/App) | Medication Tracker, Home Screen Cache |
 | `medication.missed` | `{ confirmation_id, medication_id, scheduled_at }` | Medication Scheduler | Caregiver Alert Service, Notification Service |
@@ -720,13 +754,13 @@ Events are published to a message broker (Google Cloud Pub/Sub or NATS, TBD base
 | `trip.completed` | `{ appointment_id, arrived_at }` | Travel Service | Home Screen Cache |
 | `away.mode.set` | `{ user_id, away_expires_at }` | User Input, Caregiver Input | Notification Service, All Schedulers |
 | `away.mode.extended` | `{ user_id, previous_expires_at, new_expires_at }` | User Input | Notification Service, All Schedulers |
-| `memory.updated` | `{ memory_id, category, key, source }` | Arlo Conversation Engine, Document Pipeline, Onboarding | Functional Memory Store, Home Screen Cache |
+| `memory.updated` | `{ memory_id, category, key, source }` | D.D. Conversation Engine, Document Pipeline, Onboarding | Functional Memory Store, Home Screen Cache |
 | `memory.deleted` | `{ memory_id, category, key, reason }` | User Input, Retention Worker | Deletion Audit Logger, Home Screen Cache |
 | `caregiver.alert.triggered` | `{ trusted_contact_id, alert_type, context }` | Caregiver Alert Service | Notification Service (SMS/Email to caregiver) |
 | `caregiver.dashboard.viewed` | `{ trusted_contact_id, user_id, sections_viewed }` | Caregiver API | Caregiver Activity Logger |
 | `notification.delivered` | `{ notification_id, channel, user_id, content_type }` | Notification Service | Analytics |
 | `notification.dismissed` | `{ notification_id, user_id, dismissed_at }` | User Input | Analytics |
-| `checkin.morning.triggered` | `{ user_id, checkin_time, items_count }` | Morning Checkin Scheduler | Notification Service, Arlo Conversation Engine |
+| `checkin.morning.triggered` | `{ user_id, checkin_time, items_count }` | Morning Checkin Scheduler | Notification Service, D.D. Conversation Engine |
 | `checkin.morning.acknowledged` | `{ user_id, acknowledged_at, items_reviewed }` | User Input | Home Screen Cache, Analytics |
 | `config.updated` | `{ config_id, category, key, old_value, new_value, changed_by }` | Admin Service | Conversation Service (reload prompts), Pipeline Service (reload thresholds), Notification Service (reload defaults) |
 
@@ -829,7 +863,7 @@ CREATE INDEX idx_trusted_contacts_user_active
     ON trusted_contacts (user_id, access_tier)
     WHERE is_active = TRUE;
 
--- Functional memory lookup (Arlo conversation context)
+-- Functional memory lookup (D.D. conversation context)
 CREATE INDEX idx_functional_memory_user_category
     ON functional_memory (user_id, category);
 
@@ -910,7 +944,7 @@ The schema is designed with the following V2 additions in mind. Commented-out co
 
 The V1 migration includes seed data for:
 
-- Default Arlo voice/personality settings
+- Default D.D. voice/personality settings
 - Enum values (handled by the `CREATE TYPE` statements above)
 - A test user for development environments (gated behind `COMPANION_ENV = 'development'`)
 

@@ -1,12 +1,12 @@
 # 03 — Document Intelligence Pipeline
 
-Technical specification for the Document Intelligence Pipeline. This pipeline reads physical mail (via phone camera) and email (via Gmail API), normalizes both into a single processing path, and transforms raw documents into structured, actionable intelligence surfaced through the Arlo AI persona.
+Technical specification for the Document Intelligence Pipeline. This pipeline reads physical mail (via phone camera) and email (via Gmail API), normalizes both into a single processing path, and transforms raw documents into structured, actionable intelligence surfaced through the D.D. AI persona.
 
 ---
 
 ## 1. Pipeline Overview
 
-Two input channels converge into one unified processing path of six stages. Processing is fully async. Arlo acknowledges receipt immediately ("Got it, I'm reading this now") and delivers results when the pipeline completes.
+Two input channels converge into one unified processing path of eight stages (the original six plus chunking/embedding and pending review). Processing is fully async. D.D. acknowledges receipt immediately ("Got it, I'm reading this now") and delivers results when the pipeline completes.
 
 ```
                          INGESTION
@@ -43,25 +43,39 @@ Two input channels converge into one unified processing path of six stages. Proc
                       per doc type
                              |
                     STAGE 4: SUMMARIZE
-                      spoken + card
+                      spoken + card +
+                      Flesch-Kincaid check
                              |
                     STAGE 5: ROUTE
                       section assignment
                       + action generation
                              |
-                    STAGE 6: QUESTION TRACKER
+                    STAGE 6: CHUNK & EMBED
+                      split into chunks,
+                      generate pgvector embeddings
+                      (for RAG retrieval)
+                             |
+                    STAGE 7: PENDING REVIEW
+                      propose records (bills,
+                      appointments, meds),
+                      await user confirmation
+                             |
+                    STAGE 8: QUESTION TRACKER
                       log questions,
                       track responses,
                       escalation timers
                              |
                          DELIVERED
-                        (to user via Arlo)
+                        (to user via D.D.)
 ```
 
 **Key invariants:**
 - Every document that enters the pipeline exits the pipeline. Nothing is silently dropped.
-- Arlo acknowledges receipt within 2 seconds of ingestion, before any classification.
+- D.D. acknowledges receipt within 2 seconds of ingestion, before any classification.
 - Every stage has a defined input schema and output schema. Stages are independently deployable.
+- Spoken summaries are validated for reading level via Flesch-Kincaid grade scoring (`pipeline/text_complexity.py`). Target: 4th–6th grade.
+- After summarization, documents are chunked and embedded into `document_chunks` (pgvector) for RAG retrieval during conversation.
+- Extracted data goes through a pending review flow: the pipeline proposes records, and D.D. presents them to the user for confirmation before creating bills/appointments/medications.
 
 ---
 
@@ -168,7 +182,7 @@ EmailOutput {
 - User-configurable via Settings > Mail > Blocked Senders.
 - Stored as a list of email addresses and domains.
 - Permanent until user removes. No auto-expiry.
-- Arlo can suggest additions: "You've gotten 5 emails from retailer.com this month and ignored all of them. Want me to stop showing those?"
+- D.D. can suggest additions: "You've gotten 5 emails from retailer.com this month and ignored all of them. Want me to stop showing those?"
 
 ### 2.3 Normalized Document Schema
 
@@ -199,7 +213,7 @@ Both input channels produce a single `NormalizedDocument` for downstream stages.
 }
 ```
 
-**At this point, Arlo acknowledges receipt.** The user sees a brief message ("Got it, I'm looking at this now") and a processing indicator. The pipeline continues async.
+**At this point, D.D. acknowledges receipt.** The user sees a brief message ("Got it, I'm looking at this now") and a processing indicator. The pipeline continues async.
 
 ---
 
@@ -425,9 +439,9 @@ These rules apply AFTER both tiers and cannot be overridden by model output:
 
 ### 5.2 Spoken Summary Rules
 
-Target audience: adults with developmental disabilities. The summary is delivered via Arlo's TTS voice.
+Target audience: adults with developmental disabilities. The summary is delivered via D.D.'s TTS voice.
 
-- **Reading level:** 4th-6th grade. Short sentences. Common words.
+- **Reading level:** 4th-6th grade (validated via Flesch-Kincaid grade level scoring in `pipeline/text_complexity.py`; `reading_grade` stored on the document record). Short sentences. Common words.
 - **Structure:** What it IS, then what it MEANS, then what to DO.
 - **Bills:** Lead with amount and due date in the first sentence. Always.
 - **Legal:** Calm but honest. Do not minimize seriousness. Do not panic the user.
@@ -647,7 +661,7 @@ Every failure mode has a defined recovery path. The user should never see a dead
 | OCR partial failure | Quality score 0.3-0.6 | Process what was extracted. Flag low-confidence sections. Generate questions for unreadable parts. | "I got most of it but some parts were hard to read. Let me tell you what I found." |
 | Classification low confidence | Confidence < 0.7 after both tiers | Surface with hedge language. Classify as `unknown`, urgency `needs_attention`. | "This looks like it might be [type]. Let me know if that's wrong." |
 | Extraction partial | `extraction_completeness` = `partial` | Surface extracted fields. Generate questions for missing critical fields. | (Included naturally in summary: "I can see the amount but not the due date.") |
-| Pipeline timeout | Stage exceeds 60s wall clock | Arlo acknowledges delay. Retry full pipeline async. Notify user on completion. | "This one's taking me a bit longer. I'll let you know when I've figured it out." |
+| Pipeline timeout | Stage exceeds 60s wall clock | D.D. acknowledges delay. Retry full pipeline async. Notify user on completion. | "This one's taking me a bit longer. I'll let you know when I've figured it out." |
 | Gmail API rate limit | HTTP 429 response | Exponential backoff: 1s, 2s, 4s, 8s, 16s. Max 5 retries. Fall back to batch window (next 5-min poll). | (Silent -- user is not aware of polling schedule) |
 | Gmail OAuth token expired | HTTP 401 response | Attempt silent token refresh. If refresh fails, prompt user to re-authorize. | "I need you to reconnect your email. It'll just take a sec." |
 | Attachment too large | Attachment > 25MB | Skip attachment. Process email body only. Log skipped attachment. | "There was a big file attached that I couldn't read. The email itself says [summary]." |
@@ -659,7 +673,7 @@ Every failure mode has a defined recovery path. The user should never see a dead
 
 | Metric | Target | Measurement Point |
 |--------|--------|-------------------|
-| Ingestion to acknowledgment | < 2 seconds | Time from scan/email arrival to Arlo's "Got it" message |
+| Ingestion to acknowledgment | < 2 seconds | Time from scan/email arrival to D.D.'s "Got it" message |
 | Full pipeline completion (simple doc) | < 15 seconds | Junk, clear bills, known formats -- Tier 1 classification path |
 | Full pipeline completion (complex doc) | < 45 seconds | Legal, multi-page, unknown type -- Tier 2 classification path |
 | Email pre-filter throughput | 100 emails/minute per user | Tier 1 rule-based filter only (no LLM) |
@@ -677,7 +691,8 @@ Every document carries a `pipeline_status` field updated as it progresses:
 
 ```
 ingested -> classifying -> classified -> extracting -> extracted ->
-summarizing -> summarized -> routing -> routed -> delivered
+summarizing -> summarized -> routing -> routed -> embedding -> embedded ->
+pending_review -> delivered
 ```
 
 Failed states: `ocr_failed`, `classification_failed`, `extraction_failed`, `timeout`.

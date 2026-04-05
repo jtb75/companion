@@ -64,7 +64,7 @@ The application has matured from a conceptual framework into a functional "cogni
 | :--- | :--- | :--- | :--- | :--- |
 | **Phase 1: Integrity** | Truth & Persistence | Confidence-based hedging, Visual confirmation cards, To-do persistence hardening. | **Trust.** Users feel safe knowing D.D. won't "make things up" or lose data. | Hedging done. Cards not started. |
 | **Phase 2: Security** | Data Protection | KMS Field-Level Encryption, Logging sanitization (strip PII from GCP logs). | **Compliance.** Ready for pilot deployment with real member data. | **Done.** KMS + PII masking deployed. |
-| **Phase 3: Smoothness** | UX Refinement | Real-time camera feedback, LLM morning briefing, Admin worker dashboard. | **Engagement.** The app feels "alive" and frictionless to use daily. | **Done.** Camera analysis, Morning Briefing, and Admin Workers UI deployed. |
+| **Phase 3: Smoothness** | UX Refinement | Real-time camera feedback, LLM morning briefing, Admin worker dashboard, medication reminders. | **Engagement.** The app feels "alive" and frictionless to use daily. | **Done.** Camera analysis, Morning Briefing, Medication Reminders, and Admin Workers UI deployed. |
 | **Phase 4: Connection** | Caregiver Loop | "Closed-loop" notifications (Member notified when Caregiver acts), Dashboard pagination, Recent documents on caregiver dashboard. | **Autonomy.** Member feels supported by their human network without losing privacy. | Recent documents on dashboard done. Closed-loop not started. |
 
 ---
@@ -74,8 +74,8 @@ The application has matured from a conceptual framework into a functional "cogni
 | # | Item | Priority |
 | :--- | :--- | :--- |
 | 20 | Gmail OAuth: email document ingestion | Medium |
-| 21 | Morning check-in: LLM briefing + push notification | High |
-| 22 | Medication reminders: scheduled push notifications | High |
+| ~~21~~ | ~~Morning check-in: LLM briefing + push notification~~ | ~~High~~ — **Done.** Morning briefing worker (`workers/morning_trigger.py`) generates LLM briefing and sends push notification via FCM. |
+| ~~22~~ | ~~Medication reminders: scheduled push notifications~~ | ~~High~~ — **Done.** Medication reminder worker (`workers/medication_reminder.py`) sends scheduled push notifications via FCM. |
 | 23 | Deploy to production: Firebase, Terraform, DNS | High |
 | — | Voice interaction with wake word "D.D." (Porcupine + RN Voice + TTS) | Future |
 | — | Visual confirmation cards in chat UI | Future |
@@ -85,7 +85,7 @@ The application has matured from a conceptual framework into a functional "cogni
 ---
 
 ## 6. Conclusion
-Phase 2 (Security) is complete. Phase 1 (Integrity) is partially complete — confidence hedging is live but visual confirmation cards remain. The foundation is ready for pilot deployment once the remaining production deploy tasks (#23) are completed.
+Phase 2 (Security) is complete. Phase 3 (Smoothness) is complete — morning briefing, medication reminders, and admin worker dashboard are all deployed. Phase 1 (Integrity) is partially complete — confidence hedging is live but visual confirmation cards remain. The foundation is ready for pilot deployment once the remaining production deploy tasks (#23) are completed.
 
 ---
 *Analysis updated April 2026*

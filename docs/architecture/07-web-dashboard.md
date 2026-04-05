@@ -1,7 +1,7 @@
 # 07 — Web Dashboard
 
 > Companion is an AI-powered independence assistant for adults with developmental disabilities.
-> The user is called "Sam." The AI assistant is called "Arlo."
+> The user is called "Sam." The AI assistant is called "D.D."
 > This document is the authoritative specification for the web dashboard — a React SPA
 > serving the Caregiver Dashboard, Ops Dashboard, and Config Admin under a single deployment.
 
@@ -13,7 +13,7 @@ The web dashboard is a React (Vite) single-page application deployed alongside t
 
 1. **Caregiver Dashboard** — for trusted contacts (family, case workers, agency staff). Consumes the existing Caregiver API defined in `04-api-design.md` and the privacy model defined in `06-caregiver-access-and-privacy.md`.
 2. **Ops Dashboard** — for the internal Companion team. Pipeline health, escalation monitoring, pilot metrics.
-3. **Config Admin** — for the internal team. Runtime configuration management for Arlo prompts, pipeline thresholds, notification settings, voice profiles.
+3. **Config Admin** — for the internal team. Runtime configuration management for D.D. prompts, pipeline thresholds, notification settings, voice profiles.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
@@ -25,11 +25,16 @@ The web dashboard is a React (Vite) single-page application deployed alongside t
 │  │                  │  │                  │  │                   │  │
 │  │ - Alerts         │  │ - Pipeline       │  │ - Prompts         │  │
 │  │ - Dashboard      │  │ - Escalations    │  │ - Thresholds      │  │
-│  │ - Activity Log   │  │ - Metrics        │  │ - Escalation Rules│  │
-│  │ - Collaborate    │  │ - System Health  │  │ - Voices          │  │
+│  │ - Activity Log   │  │ - Metrics        │  │ - Voices          │  │
 │  │                  │  │                  │  │ - Notifications   │  │
-│  │                  │  │                  │  │ - Email Rules     │  │
+│  │                  │  │                  │  │ - Settings        │  │
 │  │                  │  │                  │  │ - Audit Log       │  │
+│  │                  │  │                  │  │ - Admin Users     │  │
+│  │                  │  │                  │  │ - Users           │  │
+│  │                  │  │                  │  │ - People          │  │
+│  │                  │  │                  │  │ - Contacts        │  │
+│  │                  │  │                  │  │ - Conversations   │  │
+│  │                  │  │                  │  │ - Workers         │  │
 │  └───────┬──────────┘  └───────┬──────────┘  └────────┬──────────┘  │
 │          │                     │                      │              │
 │  ┌───────┴──────────────────────┴──────────────────────┴──────────┐  │
@@ -126,28 +131,14 @@ Content:
 - Example entry: *"You viewed the dashboard on March 27 at 2:15 PM"*
 - Purpose: transparency. The caregiver knows their access is logged.
 
-#### Tier 3 — Collaboration View (`/caregiver/collaborate/:scope_id`)
-
-| Attribute       | Detail                                                                 |
-|-----------------|------------------------------------------------------------------------|
-| Data source     | `GET /api/v1/caregiver/scopes/:scope_id/resource`                     |
-| Access          | Tier 3, valid scope required                                           |
-| Refresh         | On page load + manual refresh                                          |
-
-Content:
-
-- Rendered **only** when Sam has granted a specific Tier 3 scope
-- Shows the scoped resource (form, document, list, calendar entry)
-- Comment thread for caregiver to add notes
-- Session timer showing when access expires
-- Permanent banner: *"This access was granted by Sam and expires in 2 hours"*
-
 ### 3.3 Design Principles
+
+> **Note:** The Collaboration View (`/caregiver/collaborate/:scope_id`, `CollaboratePage.tsx`) described in the original spec has not been implemented in the current build. The caregiver sub-app currently has three pages: Alerts, Dashboard, and Activity.
 
 - **Mobile-first responsive** — case workers use phones and tablets
 - **Large text, high contrast** — accessible by default (WCAG AA minimum)
 - **No raw data** — only API-summarized views. Ever.
-- **Calm, professional tone** — not the warm Arlo tone. This UI is for professionals.
+- **Calm, professional tone** — not the warm D.D. tone. This UI is for professionals.
 - Every page shows the footer banner: *"Sam controls what you can see. Contact Sam to change your access level."*
 
 ---
@@ -213,21 +204,7 @@ Content (maps directly to the pilot outcome package):
 | Morning check-in     | Acknowledgment rate over time, skip rate, avg response time          |
 | Document intelligence| Total processed, classification distribution (pie), confidence trend |
 
-#### System Health (`/ops/system`)
-
-| Attribute       | Detail                                                                  |
-|-----------------|-------------------------------------------------------------------------|
-| Data source     | Cloud Monitoring API or custom metrics endpoints                        |
-| Access          | Admin JWT (any role)                                                    |
-| Refresh         | Every 30 seconds                                                        |
-
-Content:
-
-- API latency: P50 / P95 / P99 per surface
-- Error rates per surface
-- Active WebSocket connections
-- Redis memory usage, Postgres connection pool utilization
-- Background job status: last run, next run, success/failure
+> **Note:** The System Health page (`/ops/system`, `SystemPage.tsx`) described in the original spec has not been implemented in the current build. The ops sub-app currently has three pages: Pipeline, Escalations, and Metrics.
 
 ### 4.3 Design Principles
 
@@ -262,10 +239,10 @@ Content:
 - List all `arlo_persona` and `summarization_prompt` configs
 - Editor with syntax highlighting for prompt text
 - Side-by-side diff view when editing (old value vs new value)
-- **"Test prompt"** button: sends a test input through the conversation service, displays Arlo's response inline
+- **"Test prompt"** button: sends a test input through the conversation service, displays D.D.'s response inline
 - Version history with rollback capability
 - Every save requires a `reason` field (free-text, minimum 10 characters)
-- Confirmation dialog before save: *"Changing the Arlo persona prompt affects all active users. Are you sure?"*
+- Confirmation dialog before save: *"Changing the D.D. persona prompt affects all active users. Are you sure?"*
 
 #### Pipeline Thresholds (`/admin/thresholds`)
 
@@ -283,7 +260,9 @@ Content:
 - Each slider shows the **current value** alongside a chart of the **last 7 days of classification distribution**, so the operator can see the impact before changing
 - Every save requires a `reason` field
 
-#### Escalation Rules (`/admin/escalation`)
+> **Note:** The Escalation Rules page (`/admin/escalation`, `EscalationRulesPage.tsx`) described in the original spec has been removed. Escalation configuration is now managed through the Settings page.
+
+#### ~~Escalation Rules (`/admin/escalation`)~~ — Removed
 
 | Attribute       | Detail                                                                 |
 |-----------------|------------------------------------------------------------------------|
@@ -335,7 +314,9 @@ Content:
 - Notification batching rules (e.g., batch non-urgent notifications every N minutes)
 - Every save requires a `reason` field
 
-#### Email Pre-filter Rules (`/admin/email-rules`)
+> **Note:** The Email Pre-filter Rules page (`/admin/email-rules`, `EmailRulesPage.tsx`) described in the original spec has been removed. Email filtering configuration is now managed through the Settings page.
+
+#### ~~Email Pre-filter Rules (`/admin/email-rules`)~~ — Removed
 
 | Attribute       | Detail                                                                 |
 |-----------------|------------------------------------------------------------------------|
@@ -362,6 +343,69 @@ Content:
 - Filterable by: category, user, date range
 - Each entry shows: **who** changed **what**, old value, new value, reason, timestamp
 - Read-only — no edits
+
+#### Settings (`/admin/settings`)
+
+| Attribute       | Detail                                                                 |
+|-----------------|------------------------------------------------------------------------|
+| Data source     | `GET/PATCH /api/v1/admin/config` (various categories)                  |
+| Access          | Editor or Admin                                                        |
+
+Content: Consolidated configuration page for escalation thresholds, email pre-filter rules, and other system settings that were originally separate pages.
+
+#### Admin Users (`/admin/admin-users`)
+
+| Attribute       | Detail                                                                 |
+|-----------------|------------------------------------------------------------------------|
+| Data source     | `GET/POST/PATCH/DELETE /api/v1/admin/users`                            |
+| Access          | Admin only                                                             |
+
+Content: Manage internal admin accounts — create, update roles, deactivate.
+
+#### Member Users (`/admin/users`)
+
+| Attribute       | Detail                                                                 |
+|-----------------|------------------------------------------------------------------------|
+| Data source     | `GET /api/v1/admin/users-management`                                   |
+| Access          | Editor or Admin                                                        |
+
+Content: List and manage member (Sam) accounts — view account status, deactivation, scheduled deletion.
+
+#### People (`/admin/people`)
+
+| Attribute       | Detail                                                                 |
+|-----------------|------------------------------------------------------------------------|
+| Data source     | `GET /api/v1/admin/people`                                             |
+| Access          | Editor or Admin                                                        |
+
+Content: Unified view of all people in the system (members and their contacts/caregivers).
+
+#### Contacts (`/admin/contacts`)
+
+| Attribute       | Detail                                                                 |
+|-----------------|------------------------------------------------------------------------|
+| Data source     | `GET /api/v1/admin/contacts`                                           |
+| Access          | Editor or Admin                                                        |
+
+Content: List all trusted contacts across all members. View invitation status, access tiers.
+
+#### Conversations (`/admin/conversations`)
+
+| Attribute       | Detail                                                                 |
+|-----------------|------------------------------------------------------------------------|
+| Data source     | `GET /api/v1/admin/conversations`                                      |
+| Access          | Editor or Admin                                                        |
+
+Content: View conversation sessions across members — session counts, durations, message counts. No PII/transcript content.
+
+#### Workers (`/admin/workers`)
+
+| Attribute       | Detail                                                                 |
+|-----------------|------------------------------------------------------------------------|
+| Data source     | `GET /api/v1/admin/workers`, `POST /api/v1/admin/workers/:name/trigger`|
+| Access          | Editor or Admin                                                        |
+
+Content: Background worker dashboard showing all registered workers, their last run time, status, and a manual trigger button. Workers include: morning_trigger, medication_reminder, escalation_check, ttl_purge, retention, away_monitor, deletion.
 
 ### 5.3 Design Principles
 
@@ -402,27 +446,30 @@ web/
 │   │   ├── pages/
 │   │   │   ├── AlertsPage.tsx
 │   │   │   ├── DashboardPage.tsx
-│   │   │   ├── ActivityPage.tsx
-│   │   │   └── CollaboratePage.tsx
-│   │   └── components/           — SummaryCard, AlertCard, SessionTimer
+│   │   │   └── ActivityPage.tsx
+│   │   └── components/           — SummaryCard, AlertCard
 │   ├── ops/
 │   │   ├── OpsLayout.tsx         — dense nav, status indicator bar
 │   │   ├── pages/
 │   │   │   ├── PipelinePage.tsx
 │   │   │   ├── EscalationsPage.tsx
-│   │   │   ├── MetricsPage.tsx
-│   │   │   └── SystemPage.tsx
+│   │   │   └── MetricsPage.tsx
 │   │   └── components/           — charts, status boards, countdown timers
 │   └── admin/
 │       ├── AdminLayout.tsx       — nav with category links, role indicator
 │       ├── pages/
 │       │   ├── PromptsPage.tsx
 │       │   ├── ThresholdsPage.tsx
-│       │   ├── EscalationRulesPage.tsx
 │       │   ├── VoicesPage.tsx
 │       │   ├── NotificationsPage.tsx
-│       │   ├── EmailRulesPage.tsx
-│       │   └── AuditPage.tsx
+│       │   ├── SettingsPage.tsx
+│       │   ├── AuditPage.tsx
+│       │   ├── AdminUsersPage.tsx
+│       │   ├── UsersPage.tsx
+│       │   ├── PeoplePage.tsx
+│       │   ├── ContactsPage.tsx
+│       │   ├── ConversationsPage.tsx
+│       │   └── WorkersPage.tsx
 │       └── components/           — ConfigEditor, DiffView, AudioPreview, ReasonDialog
 └── public/
     └── favicon.svg
@@ -440,7 +487,6 @@ Router setup in `main.tsx` using React Router v6 with layout routes:
       <Route path="alerts" element={<RequireTier min={1}><AlertsPage /></RequireTier>} />
       <Route path="dashboard" element={<RequireTier min={2}><DashboardPage /></RequireTier>} />
       <Route path="activity" element={<RequireTier min={2}><ActivityPage /></RequireTier>} />
-      <Route path="collaborate/:scopeId" element={<RequireTier min={3}><CollaboratePage /></RequireTier>} />
     </Route>
   </Route>
 
@@ -450,7 +496,6 @@ Router setup in `main.tsx` using React Router v6 with layout routes:
       <Route path="pipeline" element={<PipelinePage />} />
       <Route path="escalations" element={<EscalationsPage />} />
       <Route path="metrics" element={<MetricsPage />} />
-      <Route path="system" element={<SystemPage />} />
     </Route>
   </Route>
 
@@ -459,11 +504,16 @@ Router setup in `main.tsx` using React Router v6 with layout routes:
     <Route path="/admin" element={<AdminLayout />}>
       <Route path="prompts" element={<PromptsPage />} />
       <Route path="thresholds" element={<ThresholdsPage />} />
-      <Route path="escalation" element={<EscalationRulesPage />} />
       <Route path="voices" element={<VoicesPage />} />
       <Route path="notifications" element={<NotificationsPage />} />
-      <Route path="email-rules" element={<EmailRulesPage />} />
+      <Route path="settings" element={<SettingsPage />} />
       <Route path="audit" element={<AuditPage />} />
+      <Route path="admin-users" element={<AdminUsersPage />} />
+      <Route path="users" element={<UsersPage />} />
+      <Route path="people" element={<PeoplePage />} />
+      <Route path="contacts" element={<ContactsPage />} />
+      <Route path="conversations" element={<ConversationsPage />} />
+      <Route path="workers" element={<WorkersPage />} />
     </Route>
   </Route>
 </Routes>
@@ -475,20 +525,23 @@ Route summary:
 /caregiver/alerts              Tier 1+
 /caregiver/dashboard           Tier 2+
 /caregiver/activity            Tier 2+
-/caregiver/collaborate/:id     Tier 3 + valid scope
 
 /ops/pipeline                  Admin JWT (any role)
 /ops/escalations               Admin JWT (any role)
 /ops/metrics                   Admin JWT (any role)
-/ops/system                    Admin JWT (any role)
 
 /admin/prompts                 Admin JWT (editor | admin)
 /admin/thresholds              Admin JWT (editor | admin)
-/admin/escalation              Admin JWT (editor | admin)
 /admin/voices                  Admin JWT (editor | admin)
 /admin/notifications           Admin JWT (editor | admin)
-/admin/email-rules             Admin JWT (editor | admin)
+/admin/settings                Admin JWT (editor | admin)
 /admin/audit                   Admin JWT (viewer | editor | admin)
+/admin/admin-users             Admin JWT (editor | admin)
+/admin/users                   Admin JWT (editor | admin)
+/admin/people                  Admin JWT (editor | admin)
+/admin/contacts                Admin JWT (editor | admin)
+/admin/conversations           Admin JWT (editor | admin)
+/admin/workers                 Admin JWT (editor | admin)
 ```
 
 ### 6.3 API Client

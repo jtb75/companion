@@ -12,7 +12,7 @@
 
 ## 1. System Context
 
-Companion is a mobile application that helps adults with developmental disabilities manage daily life tasks — bills, health information, mail, and upcoming events — with guidance from an AI persona named Arlo. The system ingests documents (physical mail via camera, email via Gmail), extracts structured data, and surfaces actionable items through a conversational interface tuned for plain language. A parallel caregiver surface provides scoped visibility without undermining the user's autonomy.
+Companion is a mobile application that helps adults with developmental disabilities manage daily life tasks — bills, health information, mail, and upcoming events ��� with guidance from an AI persona named D.D. The system ingests documents (physical mail via camera, email via Gmail), extracts structured data, and surfaces actionable items through a conversational interface tuned for plain language. A parallel caregiver surface provides scoped visibility without undermining the user's autonomy.
 
 ### Component Diagram
 
@@ -91,15 +91,15 @@ Companion is a mobile application that helps adults with developmental disabilit
 | Cache / TTL Store | Redis 7+ | Session state, conversation context window, TTL-based expiry for sensitive data purges |
 | Event Bus | Google Cloud Pub/Sub | Decouples pipeline from API surface, at-least-once delivery, dead-letter support, native GCP integration |
 | Object Storage | Google Cloud Storage | Raw document images, audio recordings (temporary), pipeline artifacts |
-| API Framework | **Decision pending** | *Option A: Node.js/Express* — team familiarity, large middleware ecosystem, straightforward WebSocket support for streaming TTS/STT. *Option B: Python FastAPI* — async-native, better ML/NLP library ecosystem, Pydantic validation. **Recommendation**: evaluate based on team composition. If team skews frontend-heavy, Node. If pipeline work dominates early sprints, Python. A split (Node for App/Caregiver API, Python for Pipeline API) is acceptable but adds operational cost. |
+| API Framework | Python / FastAPI | Async-native, Pydantic validation, strong ML/NLP library ecosystem. Single backend serves all API surfaces. |
 | Auth | Firebase Auth | Biometric/PIN support on mobile, anonymous-to-authenticated upgrade path, integrates with GCP IAM |
-| Background Jobs | Cloud Scheduler + Cloud Functions | Cron-triggered jobs (morning check-in, TTL purge) without managing a scheduler process |
+| Background Jobs | FastAPI workers triggered via Cloud Scheduler HTTP + Pub/Sub push subscriptions | Cron-triggered jobs (morning check-in, TTL purge, medication reminders) run as endpoints within the same Cloud Run backend, invoked by Cloud Scheduler HTTP targets and Pub/Sub push subscriptions |
 | OCR / Document AI | Google Document AI | Form parsing, entity extraction, handles poor-quality camera scans, pre-trained processors for invoices/receipts |
-| TTS | Google Cloud TTS (WaveNet / Neural2) | Natural-sounding voice for Arlo persona, SSML support for pacing and emphasis, multiple voice options |
+| TTS | Google Cloud TTS (WaveNet / Neural2) | Natural-sounding voice for D.D. persona, SSML support for pacing and emphasis, multiple voice options |
 | STT | Google Cloud Speech-to-Text | Streaming recognition for real-time conversation, phrase hints for domain vocabulary (medication names, bill types) |
-| Wake Word | Picovoice Porcupine | On-device processing (no audio sent until wake word detected), custom wake word ("Hey Arlo"), low power consumption |
-| LLM | **Decision pending** | *Requirements*: (1) plain language output at 5th-grade reading level, (2) consistent Arlo persona across sessions, (3) guided action responses (not open-ended), (4) structured output for UI rendering. *Candidates*: Claude (strong instruction following, longer context window for conversation history) vs GPT-4 (function calling maturity, wider deployment precedent). **Evaluate on**: persona consistency over 100+ turns, cost per conversation, latency at P95, ability to refuse off-topic requests gracefully. |
-| Mobile | React Native 0.73+ | Cross-platform from single codebase, accessibility APIs on both platforms, Expo for faster iteration |
+| Wake Word | Picovoice Porcupine | On-device processing (no audio sent until wake word detected), custom wake word ("D.D."), low power consumption |
+| LLM | Gemini 2.5 Flash (via Vertex AI) | Primary model for all conversation and pipeline LLM calls. Function calling for tool use (medications, bills, todos, appointments, contacts). Anthropic Claude and OpenAI available as alternative backends via `LLMClient` abstraction. |
+| Mobile | React Native 0.84 | Cross-platform from single codebase (`companion-app/` directory), accessibility APIs on both platforms, React Navigation, Firebase Auth + Messaging |
 | Web Dashboard | React (Vite) | Lightweight SPA, shared component library potential with React Native, Vite for fast builds. Three sub-apps under one deployment. |
 | Monitoring | **To be selected** | Evaluate: Datadog, Google Cloud Operations Suite, Grafana Cloud. Must support structured log queries, distributed tracing, and custom SLO dashboards. |
 
@@ -150,7 +150,7 @@ Stage 6: Finalize       — write structured data, emit events, queue notificati
 
 ### 3.3 Conversation Service
 
-Manages all Arlo interactions. Owns prompt assembly, conversation state, and LLM orchestration.
+Manages all D.D. interactions. Owns prompt assembly, conversation state, and LLM orchestration.
 
 | | |
 |---|---|
@@ -160,7 +160,7 @@ Manages all Arlo interactions. Owns prompt assembly, conversation state, and LLM
 | **Emits** | `conversation.completed`, `action.requested`, `question.logged` (feeds escalation tracker) |
 
 Responsibilities:
-- Arlo persona prompt management (system prompt, few-shot examples, guardrails)
+- D.D. persona prompt management (system prompt, few-shot examples, guardrails)
 - Conversation context window management (Redis-backed, sliding window)
 - Multi-turn state tracking (e.g., bill payment confirmation flow)
 - Plain-language response enforcement (reading level checks)
@@ -174,7 +174,7 @@ Evaluates, prioritizes, schedules, and delivers notifications. Respects user con
 | | |
 |---|---|
 | **Inputs** | `notification.evaluate` events from other services |
-| **Outputs** | Push notifications, in-app banners, Arlo-spoken alerts, caregiver alerts |
+| **Outputs** | Push notifications, in-app banners, D.D.-spoken alerts, caregiver alerts |
 | **Subscribes to** | `notification.evaluate`, `user.preference.updated`, `away_mode.changed` |
 | **Emits** | `notification.delivered`, `notification.escalated`, `notification.suppressed` |
 
@@ -182,7 +182,7 @@ Responsibilities:
 - Priority scoring (urgency x recency x section)
 - Deduplication (same bill reminder within 24h window)
 - Scheduling (respect quiet hours, batch low-priority items for morning check-in)
-- Delivery channel selection (push vs. in-app vs. Arlo voice)
+- Delivery channel selection (push vs. in-app vs. D.D. voice)
 - Away mode suppression with caregiver forwarding
 - Escalation handoff to Caregiver Service when thresholds are met
 
@@ -209,7 +209,7 @@ Handles recurring maintenance, enforcement, and monitoring tasks that do not nee
 
 | | |
 |---|---|
-| **Inputs** | Cloud Scheduler cron triggers, event-driven invocations |
+| **Inputs** | Cloud Scheduler HTTP triggers + Pub/Sub push subscriptions to FastAPI endpoints (`/api/internal/workers/*`), event-driven invocations |
 | **Subscribes to** | `schedule.tick`, `retention.check` |
 | **Emits** | `checkin.trigger`, `data.purged`, `escalation.check.completed`, `away_mode.alert` |
 
@@ -237,7 +237,7 @@ Responsibilities:
 - Pilot metrics computation
 - system_config CRUD
 - Config change audit logging
-- Arlo prompt version management
+- D.D. prompt version management
 
 ---
 
@@ -318,7 +318,7 @@ Responsibilities:
           ┌─────────────────────┐
           │   Prompt Assembly    │
           │                      │
-          │  System prompt (Arlo │
+          │  System prompt (D.D. │
           │  persona + rules)    │
           │  + aggregated items  │
           │  + user history      │
@@ -336,7 +336,7 @@ Responsibilities:
           └──────────┬──────────┘
                      │
                      ▼
-          Push notification: "Arlo has your morning update"
+          Push notification: "D.D. has your morning update"
                      │
                      ▼
           ┌─────────────────────┐
@@ -372,7 +372,7 @@ Responsibilities:
          │
          ▼
   emit: question.logged
-  (each time Sam asks a question Arlo can't resolve)
+  (each time Sam asks a question D.D. can't resolve)
          │
          ▼
   ┌──────────────────────────────────┐
@@ -445,7 +445,7 @@ Responsibilities:
          │
          ▼
   Reset question counter
-  Optionally: Arlo tells Sam
+  Optionally: D.D. tells Sam
   "Your caregiver is looking into this"
 ```
 
@@ -518,10 +518,10 @@ All services containerized (Docker). CI/CD via Cloud Build. Environments: `dev`,
 | **Transportation** | Calendar-linked reminders ("you have a ride at 2pm") | In-app Uber/Lyft booking, ride status tracking |
 | **Health tracking** | Medication reminders, appointment tracking, provider contact list | Vitals logging, pharmacy integration, telehealth links |
 | **Conversation** | Structured flows (check-in, bill review, calendar review) | Open-ended conversation, multi-topic, proactive suggestions |
-| **Arlo voice** | Pre-selected voice, fixed pacing | User-selectable voice, adjustable speed, emotion modulation |
-| **Notifications** | Push + in-app + Arlo voice | SMS, email to user directly, smart speaker integration |
+| **D.D. voice** | Pre-selected voice, fixed pacing | User-selectable voice, adjustable speed, emotion modulation |
+| **Notifications** | Push + in-app + D.D. voice | SMS, email to user directly, smart speaker integration |
 | **Caregiver access** | Web dashboard (Tier 1/2 views, responsive), push alerts | Native caregiver app, shared calendar editing, direct messaging |
-| **Admin tooling** | Ops dashboard (pipeline health, escalation monitor, pilot metrics) + Config admin (Arlo prompts, thresholds, voice profiles) | Agency admin panel, multi-tenant config, A/B testing for prompts |
+| **Admin tooling** | Ops dashboard (pipeline health, escalation monitor, pilot metrics) + Config admin (D.D. prompts, thresholds, voice profiles) + Worker dashboard (manual triggers, status) | Agency admin panel, multi-tenant config, A/B testing for prompts |
 | **Offline support** | None (requires connectivity) | Cached section data, queued actions, offline voice playback |
 | **Localization** | English only | Spanish, other languages (TTS/STT + LLM prompt localization) |
 | **Monitoring** | Basic structured logging + alerting | Full observability stack, SLO dashboards, cost attribution |
