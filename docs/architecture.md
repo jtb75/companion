@@ -305,36 +305,77 @@ Escalation alerts go to Tier 1 caregivers with minimum context (category + urgen
 
 ---
 
-## 8. Event System
+## 8. Event System & Communication Patterns
 
-Google Cloud Pub/Sub decouples services. Events are delivered via push subscriptions to FastAPI endpoints.
+The backend uses two communication patterns. The choice depends on whether the work crosses a service boundary or is self-contained.
 
-### 8.1 Key Topics and Flows
+### 8.1 Pattern Selection Guide
 
-| Event | Published By | Triggers |
+| Pattern | When to Use | Retry? | Example |
+|---------|-------------|--------|---------|
+| **Pub/Sub Push** | Work crosses service boundaries, is long-running, needs retry/durability, or has multiple consumers | Yes (Pub/Sub retries failed deliveries) | Document received → pipeline processes asynchronously |
+| **Direct Call** | Worker already has full context and the notification is a side-effect of the work it just completed | No (caller handles errors) | Morning briefing: worker generates briefing → sends push in same request |
+
+**Decision criteria:**
+
+Use **Pub/Sub Push** when:
+- The publisher doesn't need to wait for the result (fire-and-forget)
+- The consumer might fail and needs automatic retry
+- Multiple consumers need to react to the same event
+- The work is long-running (> 30 seconds) and could outlive the request
+- The publisher and consumer may be in different services in the future
+
+Use **Direct Call** when:
+- The caller already has the database session, user context, and computed result
+- The notification is a simple side-effect (one FCM push, one email)
+- Failure is acceptable and can be logged without retry
+- Adding Pub/Sub infrastructure would add complexity without value
+- Everything runs in the same backend process
+
+**Anti-pattern:** Publishing to Pub/Sub when no push subscription exists for the topic. The event goes to Pub/Sub and is never delivered. If the only consumer is in the same process, call it directly.
+
+### 8.2 Pub/Sub Topics and Subscriptions
+
+Events that use the Pub/Sub push pattern:
+
+| Event | Published By | Push Subscription | Endpoint |
+|---|---|---|---|
+| `document.received` | App API (camera scan) | `document-received-push` | `/api/pipeline/document-received` |
+| `document.processed` | Pipeline | Local handler (in-process) | — |
+| `config.updated` | Admin API | Local handler (Redis cache invalidation) | — |
+
+Events published for audit/logging only (no active consumer required):
+
+| Event | Published By | Purpose |
 |---|---|---|
-| `document.uploaded` | App API (camera scan), Gmail integration | Pipeline ingestion |
-| `document.processed` | Pipeline | Section update, notification evaluation |
-| `section.updated` | Pipeline, services | Mobile app refresh |
-| `notification.evaluate` | Pipeline, workers | Notification priority scoring and delivery |
-| `notification.escalated` | Notification engine | Caregiver alert delivery |
-| `question.threshold.crossed` | Question tracker | Caregiver escalation (tiered) |
-| `checkin.trigger` | Cloud Scheduler (cron) | Morning check-in assembly |
-| `config.updated` | Admin API | Service config reload (no restart) |
-| `user.action` | App API | State updates, conversation continuation |
-| `away_mode.changed` | App API | Notification suppression, caregiver forwarding |
+| `medication.confirmed` | App API | Audit trail |
+| `medication.missed` | Medication worker | Audit trail |
+| `bill.overdue` | Document review | Audit trail |
+| `question.threshold.crossed` | Question tracker | Audit trail |
 
-### 8.2 Worker Schedule
+### 8.3 Direct Call Flows
 
-| Worker | Trigger | Purpose |
-|---|---|---|
-| `morning_trigger` | Cloud Scheduler, daily at user's check-in time | Generate LLM briefing, send push via FCM |
-| `medication_reminder` | Cloud Scheduler, per medication schedule | Send medication reminder push notifications |
-| `escalation_check` | Cloud Scheduler, every 15 min | Evaluate question tracker thresholds |
-| `ttl_purge` | Cloud Scheduler, hourly | Clean expired Redis keys, temp audio files |
-| `retention` | Cloud Scheduler, daily | Enforce data retention phases (full -> metadata-only -> delete) |
-| `away_monitor` | Cloud Scheduler, daily | Check for extended inactivity, alert caregivers |
-| `deletion_worker` | Event-driven | Enforce account deletion (30-day purge) |
+Workers that send notifications directly (no Pub/Sub):
+
+| Worker | Generates | Then Calls | Rationale |
+|---|---|---|---|
+| `morning_trigger` | LLM briefing | `notify_morning_briefing()` | Worker has DB session, user context, and briefing text — push is a one-line call |
+| `medication_reminder` | Confirmation records | `notify_medication_reminder()` | Same — worker already queried meds and user |
+| `escalation_check` | Escalation evaluation | `notify_caregiver_status_change()` | Evaluation and notification are one logical unit |
+| Document pipeline (post-process) | Pipeline result | `notify_document_processed()` | Called at end of pipeline handler, has summary text |
+| Admin alert | User-specified message | `send_push()` | Admin action, immediate delivery expected |
+
+### 8.4 Worker Schedule
+
+| Worker | Trigger | Frequency | Purpose |
+|---|---|---|---|
+| `morning_trigger` | Cloud Scheduler | Every minute (checks user's configured time) | Generate LLM briefing, send push via FCM |
+| `medication_reminder` | Cloud Scheduler | Every minute (checks medication schedules) | Create confirmation records, send push |
+| `escalation_check` | Cloud Scheduler | Every 15 min | Evaluate question tracker thresholds |
+| `ttl_purge` | Cloud Scheduler | Hourly | Clean expired Redis keys, temp audio files |
+| `retention` | Cloud Scheduler | Daily | Enforce data retention phases (full -> metadata-only -> delete) |
+| `away_monitor` | Cloud Scheduler | Daily | Check for extended inactivity, alert caregivers |
+| `deletion_worker` | Cloud Scheduler | Daily | Enforce account deletion (30-day purge) |
 
 ---
 
