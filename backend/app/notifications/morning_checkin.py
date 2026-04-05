@@ -39,15 +39,19 @@ async def assemble_morning_checkin(
 
     items = []
 
-    # Gather bills
+    # Gather bills: overdue always, pending/acknowledged within 7 days
+    from sqlalchemy import or_
+
     result = await db.execute(
         select(Bill).where(
             Bill.user_id == user_id,
-            Bill.payment_status.in_([
-                PaymentStatus.PENDING,
-                PaymentStatus.ACKNOWLEDGED,
-            ]),
-            Bill.due_date <= week_end,
+            or_(
+                Bill.payment_status == PaymentStatus.OVERDUE,
+                Bill.payment_status.in_([
+                    PaymentStatus.PENDING,
+                    PaymentStatus.ACKNOWLEDGED,
+                ]) & (Bill.due_date <= week_end),
+            ),
         ).order_by(Bill.due_date)
     )
     for bill in result.scalars().all():
@@ -117,6 +121,32 @@ async def assemble_morning_checkin(
                 detail=med.frequency,
                 relevant_date=today,
                 category="missed" if datetime.utcnow().hour > 12 else "",
+            ))
+
+    # Gather active todos (due soon or no due date)
+    from app.models.todo import Todo
+
+    result = await db.execute(
+        select(Todo).where(
+            Todo.user_id == user_id,
+            Todo.is_active.is_(True),
+            Todo.completed_at.is_(None),
+        ).order_by(Todo.due_date.asc().nullslast())
+        .limit(5)
+    )
+    for todo in result.scalars().all():
+        due = todo.due_date
+        # Include if due within 7 days or no due date
+        if due is None or due <= week_end:
+            items.append(NotificationItem(
+                id=todo.id,
+                user_id=user_id,
+                item_type="todo",
+                title=todo.title,
+                detail=(
+                    f"due {due}" if due else "no due date"
+                ),
+                relevant_date=due or today,
             ))
 
     # Assign priorities
