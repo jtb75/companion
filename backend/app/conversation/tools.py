@@ -88,13 +88,26 @@ def get_dd_tools():
 
     mark_bill_paid = FunctionDeclaration(
         name="mark_bill_paid",
-        description="Mark a bill as paid.",
+        description=(
+            "Mark a bill as paid. HIGH RISK — requires "
+            "member confirmation. First call without "
+            "confirmed=true to get confirmation prompt, "
+            "then call again with confirmed=true after "
+            "member confirms."
+        ),
         parameters={
             "type": "object",
             "properties": {
                 "bill_id": {
                     "type": "string",
                     "description": "UUID of the bill.",
+                },
+                "confirmed": {
+                    "type": "boolean",
+                    "description": (
+                        "Set to true only after the member "
+                        "has explicitly confirmed the action."
+                    ),
                 },
             },
             "required": ["bill_id"],
@@ -104,7 +117,8 @@ def get_dd_tools():
     confirm_medication_taken = FunctionDeclaration(
         name="confirm_medication_taken",
         description=(
-            "Record that the user took a medication dose."
+            "Record that the user took a medication dose. "
+            "HIGH RISK — requires member confirmation."
         ),
         parameters={
             "type": "object",
@@ -115,6 +129,13 @@ def get_dd_tools():
                         "UUID of the medication."
                     ),
                 },
+                "confirmed": {
+                    "type": "boolean",
+                    "description": (
+                        "Set to true only after the member "
+                        "has explicitly confirmed."
+                    ),
+                },
             },
             "required": ["medication_id"],
         },
@@ -122,7 +143,10 @@ def get_dd_tools():
 
     add_appointment = FunctionDeclaration(
         name="add_appointment",
-        description="Add a new appointment.",
+        description=(
+            "Add a new appointment. HIGH RISK — requires "
+            "member confirmation."
+        ),
         parameters={
             "type": "object",
             "properties": {
@@ -150,6 +174,13 @@ def get_dd_tools():
                     "description": (
                         "Optional ID of the document review "
                         "this appointment is related to."
+                    ),
+                },
+                "confirmed": {
+                    "type": "boolean",
+                    "description": (
+                        "Set to true only after the member "
+                        "has explicitly confirmed."
                     ),
                 },
             },
@@ -236,7 +267,8 @@ def get_dd_tools():
             "Confirm or skip a pending document review. "
             "Use 'confirm' to create the recommended "
             "record, 'skip' to dismiss, or 'mark_paid' "
-            "for bills the user already paid."
+            "for bills the user already paid. "
+            "HIGH RISK — requires member confirmation."
         ),
         parameters={
             "type": "object",
@@ -257,6 +289,13 @@ def get_dd_tools():
                         "skip",
                         "mark_paid",
                     ],
+                },
+                "confirmed": {
+                    "type": "boolean",
+                    "description": (
+                        "Set to true only after the member "
+                        "has explicitly confirmed."
+                    ),
                 },
             },
             "required": ["review_id", "action"],

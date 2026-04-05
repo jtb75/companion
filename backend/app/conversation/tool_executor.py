@@ -20,13 +20,63 @@ from app.services.section_service import get_today_section
 logger = logging.getLogger(__name__)
 
 
+# ── Risk Tier Classification ──────────────────────────────────────
+# Per DD Assistant Guidelines Section 9.1:
+# LOW: read-only lookups, no confirmation needed
+# MEDIUM: single confirmation (LLM asks, member says yes)
+# HIGH: teach-back confirmation enforced by backend
+
+RISK_TIERS: dict[str, str] = {
+    # Low risk — read only
+    "list_medications": "low",
+    "list_bills": "low",
+    "list_appointments": "low",
+    "list_todos": "low",
+    "get_today_summary": "low",
+    "get_pending_reviews": "low",
+    # Medium risk — single confirmation (LLM-enforced)
+    "add_todo": "medium",
+    "complete_todo": "medium",
+    "update_review_fields": "medium",
+    # High risk — backend-enforced confirmation
+    "mark_bill_paid": "high",
+    "confirm_medication_taken": "high",
+    "add_appointment": "high",
+    "confirm_document_action": "high",
+}
+
+# Track pending high-risk actions per user (in-process, session-lived)
+# Maps user_id -> {tool_name -> args_hash}
+_pending_confirmations: dict[str, dict[str, str]] = {}
+
+
+def _args_hash(function_name: str, args: dict) -> str:
+    """Create a simple hash of tool + key args for dedup."""
+    import hashlib
+    import json
+
+    key_data = json.dumps(
+        {"fn": function_name, **args},
+        sort_keys=True,
+        default=str,
+    )
+    return hashlib.md5(  # noqa: S324
+        key_data.encode()
+    ).hexdigest()[:12]
+
+
 async def execute_tool(
     function_name: str,
     arguments: dict,
     db: AsyncSession,
     user_id: UUID,
 ) -> dict:
-    """Dispatch a tool call to the right handler."""
+    """Dispatch a tool call to the right handler.
+
+    High-risk tools require backend-enforced confirmation:
+    first call returns a confirmation prompt, second call
+    (with confirmed=true) executes the action.
+    """
     handlers = {
         "list_medications": _list_medications,
         "list_bills": _list_bills,
@@ -48,6 +98,59 @@ async def execute_tool(
             "error": True,
             "message": f"Unknown tool: {function_name}",
         }
+
+    # Risk tier enforcement for high-risk actions
+    # Skip action on document reviews is non-destructive (medium)
+    tier = RISK_TIERS.get(function_name, "medium")
+    if (
+        function_name == "confirm_document_action"
+        and arguments.get("action") == "skip"
+    ):
+        tier = "medium"
+
+    if tier == "high":
+        confirmed = arguments.pop("confirmed", False)
+        if confirmed in (True, "true", "True", "yes"):
+            # Member confirmed — clear pending and execute
+            uid = str(user_id)
+            if uid in _pending_confirmations:
+                _pending_confirmations[uid].pop(
+                    function_name, None
+                )
+            logger.info(
+                "HIGH_RISK_CONFIRMED: %s user=%s",
+                function_name,
+                user_id,
+            )
+        else:
+            # First call — store as pending, return confirmation
+            uid = str(user_id)
+            _pending_confirmations.setdefault(uid, {})[
+                function_name
+            ] = _args_hash(function_name, arguments)
+
+            logger.info(
+                "HIGH_RISK_PENDING: %s user=%s args=%s",
+                function_name,
+                user_id,
+                list(arguments.keys()),
+            )
+            return {
+                "requires_confirmation": True,
+                "risk_tier": "high",
+                "action": function_name,
+                "action_description": _describe_action(
+                    function_name, arguments
+                ),
+                "instruction": (
+                    "This is a high-risk action. You MUST "
+                    "confirm with the member using teach-back "
+                    "before calling this tool again with "
+                    "confirmed=true. Example: 'Just to make "
+                    "sure — I'll [action]. Is that right?'"
+                ),
+            }
+
     try:
         return await handler(db, user_id, arguments)
     except Exception:
@@ -62,6 +165,32 @@ async def execute_tool(
                 f"Failed to execute {function_name}."
             ),
         }
+
+
+def _describe_action(function_name: str, args: dict) -> str:
+    """Generate a human-readable description of an action."""
+    descriptions = {
+        "mark_bill_paid": (
+            f"mark the {args.get('sender', 'bill')} bill "
+            f"as paid"
+        ),
+        "confirm_medication_taken": (
+            f"confirm {args.get('medication_name', 'medication')} "
+            f"as taken"
+        ),
+        "add_appointment": (
+            f"add an appointment with "
+            f"{args.get('provider', 'provider')}"
+        ),
+        "confirm_document_action": (
+            f"confirm document action: "
+            f"{args.get('action', 'unknown')}"
+        ),
+    }
+    return descriptions.get(
+        function_name,
+        f"execute {function_name}",
+    )
 
 
 # ── Lookup handlers ──────────────────────────────────

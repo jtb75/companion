@@ -222,6 +222,8 @@ Every LLM response passes through `conversation/safety.py` before reaching the m
 
 See [D.D. Assistant Guidelines Section 7](dd-assistant-guidelines.md) for the full exploitation playbook.
 
+**Backend risk-tier enforcement:** Every tool call is classified by risk tier (low/medium/high). High-risk actions (mark bill paid, confirm medication, add appointment, confirm document action) require backend-enforced confirmation — the first call returns a confirmation prompt, the second call with `confirmed=true` executes. This ensures the LLM cannot skip the confirmation step even if prompt injection succeeds. See [D.D. Assistant Guidelines Section 9](dd-assistant-guidelines.md) for tier definitions.
+
 ### 5.6 Voice
 
 - **TTS**: four curated voice profiles (Warm, Calm, Bright, Clear) with user-adjustable pace and warmth. SSML markup for emphasis on amounts, dates, names, and wider pauses between sentences.

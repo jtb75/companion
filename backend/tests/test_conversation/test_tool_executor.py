@@ -89,3 +89,53 @@ async def test_unknown_tool_returns_error():
     )
 
     assert "error" in result or "unknown" in str(result).lower()
+
+
+async def test_high_risk_tool_requires_confirmation():
+    """High-risk tools should return confirmation prompt first."""
+    db = AsyncMock()
+    user_id = uuid.uuid4()
+
+    result = await execute_tool(
+        "mark_bill_paid",
+        {"bill_id": str(uuid.uuid4())},
+        db,
+        user_id,
+    )
+
+    assert result["requires_confirmation"] is True
+    assert result["risk_tier"] == "high"
+    assert "teach-back" in result["instruction"].lower()
+
+
+async def test_high_risk_tool_executes_when_confirmed():
+    """High-risk tools with confirmed=true should execute."""
+    bill = _make_bill()
+    db = _mock_db_with_scalars([])
+    db.get.return_value = bill
+    db.flush = AsyncMock()
+    user_id = uuid.uuid4()
+
+    result = await execute_tool(
+        "mark_bill_paid",
+        {"bill_id": str(bill.id), "confirmed": True},
+        db,
+        user_id,
+    )
+
+    # Should execute, not return confirmation prompt
+    assert "requires_confirmation" not in result
+
+
+async def test_low_risk_tool_no_confirmation():
+    """Low-risk tools should execute immediately."""
+    med = _make_med()
+    db = _mock_db_with_scalars([med])
+    user_id = uuid.uuid4()
+
+    result = await execute_tool(
+        "list_medications", {}, db, user_id
+    )
+
+    assert "requires_confirmation" not in result
+    assert "medications" in result
