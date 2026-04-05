@@ -49,13 +49,22 @@ async def send_push(
     with open(cred_path) as f:
         sa_info = _json.load(f)
 
-    credentials = service_account.Credentials.from_service_account_info(
-        sa_info,
-        scopes=[
-            "https://www.googleapis.com/auth/firebase.messaging",
-        ],
+    # Temporarily unset GOOGLE_APPLICATION_CREDENTIALS to prevent
+    # google-auth from using ADC instead of our explicit credentials
+    saved_gac = os.environ.pop(
+        "GOOGLE_APPLICATION_CREDENTIALS", None
     )
-    credentials.refresh(Request())
+    try:
+        credentials = service_account.Credentials.from_service_account_info(
+            sa_info,
+            scopes=[
+                "https://www.googleapis.com/auth/firebase.messaging",
+            ],
+        )
+        credentials.refresh(Request())
+    finally:
+        if saved_gac:
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = saved_gac
     access_token = credentials.token
     logger.info(
         "FCM: sa=%s, token_valid=%s, token_len=%d",
