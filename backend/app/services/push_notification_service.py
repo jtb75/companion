@@ -1,13 +1,64 @@
 """Service layer for sending FCM push notifications."""
 
+import json
 import logging
+import os
 from uuid import UUID
 
+import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services import device_token_service
 
 logger = logging.getLogger(__name__)
+
+# Cache the access token across calls
+_fcm_token_cache: dict[str, str] = {}
+
+
+async def _get_access_token() -> str | None:
+    """Get an OAuth2 access token for FCM.
+
+    On Cloud Run, uses the metadata server.
+    Locally, uses the SA key file from GOOGLE_APPLICATION_CREDENTIALS.
+    """
+    # Try metadata server first (Cloud Run)
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            resp = await client.get(
+                "http://metadata.google.internal/computeMetadata/v1"
+                "/instance/service-accounts/default/token"
+                "?scopes=https://www.googleapis.com/auth"
+                "/firebase.messaging",
+                headers={"Metadata-Flavor": "Google"},
+            )
+            if resp.status_code == 200:
+                token = resp.json()["access_token"]
+                logger.info("FCM: got token from metadata server")
+                return token
+    except Exception:
+        pass  # Not on Cloud Run, try SA key file
+
+    # Fall back to SA key file
+    cred_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+    if cred_path and os.path.exists(cred_path):
+        from google.auth.transport.requests import Request
+        from google.oauth2 import service_account
+
+        with open(cred_path) as f:
+            sa_info = json.load(f)
+        credentials = service_account.Credentials.from_service_account_info(
+            sa_info,
+            scopes=[
+                "https://www.googleapis.com/auth/firebase.messaging",
+            ],
+        )
+        credentials.refresh(Request())
+        logger.info("FCM: got token from SA key file")
+        return credentials.token
+
+    logger.error("FCM: no credentials available")
+    return None
 
 
 async def send_push(
@@ -29,99 +80,61 @@ async def send_push(
         )
         return 0
 
-    # Use google-auth + httpx to call FCM v1 API directly
-    # (firebase_admin SDK has auth issues on Cloud Run)
-    import json as _json
-    import os
+    access_token = await _get_access_token()
+    if not access_token:
+        return 0
 
-    from google.auth.transport.requests import Request
-    from google.oauth2 import service_account
-
-    cred_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
     project_id = os.environ.get(
         "COMPANION_FIREBASE_PROJECT_ID", "companion-staging-491606"
     )
-
-    if not cred_path or not os.path.exists(cred_path):
-        logger.error("No SA key file at %s", cred_path)
-        return 0
-
-    with open(cred_path) as f:
-        sa_info = _json.load(f)
-
-    # Temporarily unset GOOGLE_APPLICATION_CREDENTIALS to prevent
-    # google-auth from using ADC instead of our explicit credentials
-    saved_gac = os.environ.pop(
-        "GOOGLE_APPLICATION_CREDENTIALS", None
-    )
-    try:
-        credentials = service_account.Credentials.from_service_account_info(
-            sa_info,
-            scopes=[
-                "https://www.googleapis.com/auth/firebase.messaging",
-            ],
-        )
-        credentials.refresh(Request())
-    finally:
-        if saved_gac:
-            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = saved_gac
-    access_token = credentials.token
-    logger.info(
-        "FCM: sa=%s, token_valid=%s, token_len=%d",
-        sa_info["client_email"][:40],
-        credentials.valid,
-        len(access_token) if access_token else 0,
-    )
-
     url = (
         f"https://fcm.googleapis.com/v1/projects/{project_id}"
         f"/messages:send"
     )
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+    }
 
     sent = 0
     failed_tokens: list[str] = []
 
-    # Use AuthorizedSession which handles auth automatically
-    from google.auth.transport.requests import AuthorizedSession
-
-    session = AuthorizedSession(credentials)
-
-    for token_str in tokens:
-        payload = {
-            "message": {
-                "token": token_str,
-                "notification": {
-                    "title": title,
-                    "body": body,
-                },
-                "data": data or {},
+    async with httpx.AsyncClient() as client:
+        for token_str in tokens:
+            payload = {
+                "message": {
+                    "token": token_str,
+                    "notification": {
+                        "title": title,
+                        "body": body,
+                    },
+                    "data": data or {},
+                }
             }
-        }
-
-        import asyncio
-
-        def _send(p=payload):
-            return session.post(url, json=p)
-
-        resp = await asyncio.to_thread(_send)
-
-        if resp.status_code == 200:
-            sent += 1
-            logger.info("FCM sent to %s...", token_str[:20])
-        elif resp.status_code in (400, 404):
-            failed_tokens.append(token_str)
-            logger.warning(
-                "FCM token invalid %s...: %s",
-                token_str[:20],
-                resp.text[:200],
+            resp = await client.post(
+                url,
+                headers=headers,
+                content=json.dumps(payload),
             )
-        else:
-            logger.warning(
-                "FCM send failed for %s...: %d %s",
-                token_str[:20],
-                resp.status_code,
-                resp.text[:500],
-            )
+            if resp.status_code == 200:
+                sent += 1
+                logger.info(
+                    "FCM sent to %s...", token_str[:20]
+                )
+            elif resp.status_code in (400, 404):
+                failed_tokens.append(token_str)
+                logger.warning(
+                    "FCM token invalid %s...: %s",
+                    token_str[:20],
+                    resp.text[:200],
+                )
+            else:
+                logger.warning(
+                    "FCM send failed for %s...: %d %s",
+                    token_str[:20],
+                    resp.status_code,
+                    resp.text[:500],
+                )
 
     for bad_token in failed_tokens:
         await device_token_service.deactivate_token(
@@ -184,6 +197,7 @@ async def notify_checkin_prompt(
         data={"type": "checkin_prompt"},
     )
 
+
 async def notify_morning_briefing(
     db: AsyncSession,
     user_id: UUID,
@@ -221,7 +235,6 @@ async def notify_overdue_bill(
     amount: str,
 ) -> int:
     """Notify member and caregivers about an overdue bill."""
-    # Notify member
     body = (
         f"Your {sender} bill for ${amount} is past due. "
         "I've added a task to help you get it paid."
@@ -236,12 +249,10 @@ async def notify_overdue_bill(
 
     # Notify caregivers
     from app.services.caregiver_service import list_contacts
+
     contacts = await list_contacts(db, user_id)
     for contact in contacts:
         if contact.is_active:
-            # We don't have caregiver device tokens yet in the model, 
-            # but this is where we'd send to them.
-            # For now, we ensure it shows up in their dashboard alerts.
             pass
 
     return count
