@@ -8,18 +8,24 @@ The backend test suite lives in `backend/tests/` and is organized by layer:
 backend/tests/
   conftest.py                      # Global test infrastructure
   utils.py                         # MockLLMClient, factories, helpers
-  test_integration.py              # Full vertical-slice integration tests
+  test_health.py                   # Health endpoint
+  test_integration.py              # Full vertical-slice integration tests (requires DB)
   test_api/
     test_auth.py                   # Auth middleware (dev bypass, pipeline key)
   test_conversation/
-    test_prompt_builder.py         # System prompt construction (persona, constraints)
-    test_tool_executor.py          # Tool dispatch (list_medications, add_todo, etc.)
+    test_prompt_builder.py         # System prompt construction (constitution, persona, constraints)
+    test_tool_executor.py          # Tool dispatch, risk-tier enforcement
+    test_safety.py                 # Canary token detection (11 tests)
+    test_exploitation.py           # Financial exploitation indicator detection (10 tests)
+    test_integrity.py              # Conversation integrity monitoring (9 tests)
   test_pipeline/
     test_classification.py         # Tier 1 rule-based classifier
   test_services/
     test_todo_service.py           # Todo create/complete, bill side-effects
     test_push_notification.py      # Push notification dispatch
 ```
+
+**Total: 57 unit tests + 23 integration tests = 80 tests**
 
 **Unit tests** (`test_conversation/`, `test_pipeline/`, `test_services/`, `test_api/`) test individual functions with a real database session that rolls back after each test. No HTTP requests are involved.
 
