@@ -43,26 +43,26 @@ async def send_push(
         "COMPANION_FIREBASE_PROJECT_ID", "companion-staging-491606"
     )
 
-    if cred_path and os.path.exists(cred_path):
-        with open(cred_path) as f:
-            sa_info = _json.load(f)
-        credentials = service_account.Credentials.from_service_account_info(
-            sa_info,
-            scopes=["https://www.googleapis.com/auth/cloud-platform"],
-        )
-    else:
-        from google.auth import default
+    if not cred_path or not os.path.exists(cred_path):
+        logger.error("No SA key file at %s", cred_path)
+        return 0
 
-        credentials, _ = default(
-            scopes=["https://www.googleapis.com/auth/cloud-platform"]
-        )
+    with open(cred_path) as f:
+        sa_info = _json.load(f)
 
+    credentials = service_account.Credentials.from_service_account_info(
+        sa_info,
+        scopes=[
+            "https://www.googleapis.com/auth/firebase.messaging",
+        ],
+    )
     credentials.refresh(Request())
     access_token = credentials.token
     logger.info(
-        "FCM credential: type=%s, sa=%s",
-        type(credentials).__name__,
-        getattr(credentials, "service_account_email", "?"),
+        "FCM: sa=%s, token_valid=%s, token_len=%d",
+        sa_info["client_email"][:40],
+        credentials.valid,
+        len(access_token) if access_token else 0,
     )
 
     url = (
@@ -73,6 +73,11 @@ async def send_push(
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
     }
+    logger.info(
+        "FCM request: url=%s, auth_header_len=%d",
+        url,
+        len(headers["Authorization"]),
+    )
 
     sent = 0
     failed_tokens: list[str] = []
