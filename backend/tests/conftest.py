@@ -10,7 +10,6 @@ tests are skipped but pure unit tests still run.
 """
 
 import asyncio
-import os
 
 import pytest
 from sqlalchemy import pool, select
