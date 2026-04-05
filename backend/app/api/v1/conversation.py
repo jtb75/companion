@@ -347,6 +347,11 @@ async def send_message(
         llm, system_prompt, llm_messages, db, user.id
     )
 
+    # Commit tool executor changes (review confirmations, bill
+    # creation, etc.) before chat persistence — so they survive
+    # even if chat persistence fails.
+    await db.commit()
+
     # Add assistant response to session
     session.add_message("assistant", response_text)
     await state_manager.update_session(session)
