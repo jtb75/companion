@@ -42,24 +42,12 @@ async def send_push(
     project_id = os.environ.get(
         "COMPANION_FIREBASE_PROJECT_ID", "companion-staging-491606"
     )
-    logger.info(
-        "FCM cred_path=%s exists=%s",
-        cred_path,
-        os.path.exists(cred_path) if cred_path else "no_path",
-    )
-    if cred_path and not os.path.exists(cred_path):
-        # List what's in /secrets
-        secrets_dir = os.path.dirname(cred_path)
-        if os.path.exists(secrets_dir):
-            logger.info(
-                "Files in %s: %s",
-                secrets_dir,
-                os.listdir(secrets_dir),
-            )
 
     if cred_path and os.path.exists(cred_path):
-        credentials = service_account.Credentials.from_service_account_file(
-            cred_path,
+        with open(cred_path) as f:
+            sa_info = _json.load(f)
+        credentials = service_account.Credentials.from_service_account_info(
+            sa_info,
             scopes=["https://www.googleapis.com/auth/cloud-platform"],
         )
     else:
@@ -72,10 +60,9 @@ async def send_push(
     credentials.refresh(Request())
     access_token = credentials.token
     logger.info(
-        "FCM credential: type=%s, sa=%s, scopes=%s",
+        "FCM credential: type=%s, sa=%s",
         type(credentials).__name__,
         getattr(credentials, "service_account_email", "?"),
-        getattr(credentials, "scopes", "?"),
     )
 
     url = (
