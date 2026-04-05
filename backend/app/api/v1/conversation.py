@@ -199,10 +199,13 @@ async def start_conversation(
     )
 
     try:
+        from datetime import datetime, timezone
+
         db_session = ChatSession(
             user_id=user.id,
             session_id=session.session_id,
             message_count=1,
+            started_at=datetime.now(timezone.utc),
         )
         db.add(db_session)
         await db.flush()
