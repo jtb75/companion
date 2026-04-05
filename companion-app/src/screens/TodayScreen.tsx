@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react'
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { AppState, View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
+import messaging from '@react-native-firebase/messaging'
 import { api } from '../api/client'
 import { colors, brand } from '../theme/colors'
 import { useAuth } from '../auth/AuthProvider'
@@ -66,6 +67,22 @@ export function TodayScreen() {
       loadData()
     }, [])
   )
+
+  // Refresh when a push notification arrives in the foreground
+  useEffect(() => {
+    const unsubscribe = messaging().onMessage(() => {
+      loadData()
+    })
+    return unsubscribe
+  }, [])
+
+  // Refresh when app returns from background
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') loadData()
+    })
+    return () => sub.remove()
+  }, [])
 
   const loadData = async () => {
     try {
