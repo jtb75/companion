@@ -19,27 +19,10 @@ _fcm_token_cache: dict[str, str] = {}
 async def _get_access_token() -> str | None:
     """Get an OAuth2 access token for FCM.
 
-    On Cloud Run, uses the metadata server.
-    Locally, uses the SA key file from GOOGLE_APPLICATION_CREDENTIALS.
+    Uses the Firebase Admin SDK SA key file (preferred), falling
+    back to the Cloud Run metadata server.
     """
-    # Try metadata server first (Cloud Run)
-    try:
-        async with httpx.AsyncClient(timeout=5) as client:
-            resp = await client.get(
-                "http://metadata.google.internal/computeMetadata/v1"
-                "/instance/service-accounts/default/token"
-                "?scopes=https://www.googleapis.com/auth"
-                "/firebase.messaging",
-                headers={"Metadata-Flavor": "Google"},
-            )
-            if resp.status_code == 200:
-                token = resp.json()["access_token"]
-                logger.info("FCM: got token from metadata server")
-                return token
-    except Exception:
-        pass  # Not on Cloud Run, try SA key file
-
-    # Fall back to SA key file
+    # Try SA key file first (Firebase Admin SDK SA)
     cred_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
     if cred_path and os.path.exists(cred_path):
         from google.auth.transport.requests import Request
@@ -54,8 +37,28 @@ async def _get_access_token() -> str | None:
             ],
         )
         credentials.refresh(Request())
-        logger.info("FCM: got token from SA key file")
+        logger.info(
+            "FCM: token from SA key (%s)",
+            sa_info.get("client_email", "?")[:40],
+        )
         return credentials.token
+
+    # Fall back to metadata server
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            resp = await client.get(
+                "http://metadata.google.internal/computeMetadata/v1"
+                "/instance/service-accounts/default/token"
+                "?scopes=https://www.googleapis.com/auth"
+                "/firebase.messaging",
+                headers={"Metadata-Flavor": "Google"},
+            )
+            if resp.status_code == 200:
+                token = resp.json()["access_token"]
+                logger.info("FCM: token from metadata server")
+                return token
+    except Exception:
+        pass
 
     logger.error("FCM: no credentials available")
     return None
