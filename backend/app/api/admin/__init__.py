@@ -7,7 +7,6 @@ from app.api.admin import (
     config,
     contacts,
     conversations,
-    debug_fcm,
     documents,
     escalations,
     metrics,
@@ -32,4 +31,4 @@ router.include_router(people.router)
 router.include_router(test_email.router)
 router.include_router(workers.router)
 router.include_router(documents.router)
-router.include_router(debug_fcm.router)
+

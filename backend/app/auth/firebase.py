@@ -26,35 +26,13 @@ def _ensure_initialized():
         project_id = (
             settings.firebase_project_id
             or os.environ.get("GOOGLE_CLOUD_PROJECT")
-            or os.environ.get("GCLOUD_PROJECT")
         )
 
         cred_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
         if cred_path and os.path.exists(cred_path):
-            # Verify the key file is readable
-            with open(cred_path) as f:
-                import json as _json
-                key_data = _json.load(f)
-            logger.info(
-                "SA key file: type=%s, project=%s, "
-                "client=%s, size=%d bytes",
-                key_data.get("type"),
-                key_data.get("project_id"),
-                key_data.get("client_email", "")[:30],
-                os.path.getsize(cred_path),
-            )
             cred = firebase_admin.credentials.Certificate(cred_path)
-            logger.info(
-                "Initializing Firebase with SA key file, "
-                "project=%s",
-                project_id,
-            )
         else:
             cred = firebase_admin.credentials.ApplicationDefault()
-            logger.info(
-                "Initializing Firebase with ADC, project=%s",
-                project_id,
-            )
 
         firebase_admin.initialize_app(
             credential=cred,
