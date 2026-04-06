@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		119673428545BAF7BD28B36C /* AudioPlayerModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3F19A66107F42C812B071BF /* AudioPlayerModule.swift */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
+		4C2157CF128101C6BC3F3E68 /* AudioRecorderModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 9256016D7EB6A8C85C8227AF /* AudioRecorderModule.m */; };
+		5B47C384268153BBB6932087 /* AudioRecorderModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E796C8A32C0AC455EE141D9 /* AudioRecorderModule.swift */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
 		A1D3F0012D4A000000000001 /* DocumentScannerModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D3F0012D4A000000000002 /* DocumentScannerModule.swift */; };
@@ -20,6 +22,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		0E796C8A32C0AC455EE141D9 /* AudioRecorderModule.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = AudioRecorderModule.swift; path = CompanionApp/AudioRecorderModule.swift; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* CompanionApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CompanionApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = CompanionApp/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = CompanionApp/Info.plist; sourceTree = "<group>"; };
@@ -31,6 +34,7 @@
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = CompanionApp/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		8723C5AD71ABDEB0FBE4E316 /* AudioPlayerModule.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = AudioPlayerModule.m; path = CompanionApp/AudioPlayerModule.m; sourceTree = "<group>"; };
 		90FE61E3CC46FA436DF195FA /* GoogleService-Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = "GoogleService-Info.plist"; path = "CompanionApp/GoogleService-Info.plist"; sourceTree = SOURCE_ROOT; };
+		9256016D7EB6A8C85C8227AF /* AudioRecorderModule.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = AudioRecorderModule.m; path = CompanionApp/AudioRecorderModule.m; sourceTree = "<group>"; };
 		A1D3F0012D4A000000000002 /* DocumentScannerModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DocumentScannerModule.swift; path = CompanionApp/DocumentScannerModule.swift; sourceTree = "<group>"; };
 		A1D3F0012D4A000000000004 /* DocumentScannerModule.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = DocumentScannerModule.m; path = CompanionApp/DocumentScannerModule.m; sourceTree = "<group>"; };
 		DFFE05FFEC6C4FD8DBDC0D33 /* Pods-CompanionApp.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-CompanionApp.release.xcconfig"; path = "Target Support Files/Pods-CompanionApp/Pods-CompanionApp.release.xcconfig"; sourceTree = "<group>"; };
@@ -64,6 +68,8 @@
 				90FE61E3CC46FA436DF195FA /* GoogleService-Info.plist */,
 				F3F19A66107F42C812B071BF /* AudioPlayerModule.swift */,
 				8723C5AD71ABDEB0FBE4E316 /* AudioPlayerModule.m */,
+				0E796C8A32C0AC455EE141D9 /* AudioRecorderModule.swift */,
+				9256016D7EB6A8C85C8227AF /* AudioRecorderModule.m */,
 			);
 			name = CompanionApp;
 			sourceTree = "<group>";
@@ -284,6 +290,8 @@
 				A1D3F0012D4A000000000003 /* DocumentScannerModule.m in Sources */,
 				119673428545BAF7BD28B36C /* AudioPlayerModule.swift in Sources */,
 				F9B2002F5896A199907852F9 /* AudioPlayerModule.m in Sources */,
+				5B47C384268153BBB6932087 /* AudioRecorderModule.swift in Sources */,
+				4C2157CF128101C6BC3F3E68 /* AudioRecorderModule.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

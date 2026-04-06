@@ -7,7 +7,7 @@ import { useRoute } from '@react-navigation/native'
 import { NativeModules } from 'react-native'
 import { api } from '../api/client'
 
-const { AudioPlayerModule } = NativeModules
+const { AudioPlayerModule, AudioRecorderModule } = NativeModules
 import { colors, brand } from '../theme/colors'
 
 interface Message {
@@ -93,13 +93,67 @@ export function ChatScreen() {
   }
 
   const startRecording = async () => {
-    // TODO: implement native recording module
-    Alert.alert('Coming Soon', 'Voice recording is coming in a future update. Use text for now.')
+    try {
+      setRecording(true)
+      await AudioRecorderModule.startRecording()
+    } catch (err: any) {
+      console.log('[ChatScreen] Recording start error:', err)
+      Alert.alert('Mic Error', String(err?.message || err))
+      setRecording(false)
+    }
   }
 
   const stopRecordingAndSend = async () => {
-    // Recording not yet implemented — placeholder
-    setRecording(false)
+    try {
+      const audioBase64 = await AudioRecorderModule.stopRecording()
+      setRecording(false)
+
+      if (!audioBase64 || !sessionIdRef.current) return
+
+      const userMsg: Message = {
+        id: Date.now().toString(),
+        role: 'user',
+        content: '\ud83c\udfa4 Voice message',
+      }
+      setMessages((prev) => [...prev, userMsg])
+      setSending(true)
+
+      const res = await api<{ response: string; audio_data?: string }>(
+        '/api/v1/conversation/message',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            text: '',
+            audio_data: audioBase64,
+          }),
+        },
+      )
+
+      const assistantMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: res.response,
+        audioData: res.audio_data || undefined,
+      }
+      setMessages((prev) => [...prev, assistantMsg])
+
+      if (res.audio_data) {
+        playAudio(res.audio_data, assistantMsg.id)
+      }
+    } catch (err: any) {
+      console.log('[ChatScreen] Voice send error:', err)
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: "Sorry, I couldn't hear that clearly. Could you try again?",
+        },
+      ])
+    } finally {
+      setRecording(false)
+      setSending(false)
+    }
   }
 
   const sendMessage = useCallback(async () => {
