@@ -400,11 +400,28 @@ async def send_message(
     audio_b64 = None
     try:
         voice_id = getattr(user, "voice_id", None) or "warm"
-        audio_bytes = await synthesize_speech(response_text, voice_id)
+        logger.info(
+            "TTS: synthesizing for voice=%s text_len=%d",
+            voice_id,
+            len(response_text),
+        )
+        audio_bytes = await synthesize_speech(
+            response_text, voice_id
+        )
         if audio_bytes:
-            audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
+            audio_b64 = base64.b64encode(
+                audio_bytes
+            ).decode("utf-8")
+            logger.info(
+                "TTS: generated %d bytes of audio",
+                len(audio_bytes),
+            )
+        else:
+            logger.warning("TTS: returned no audio bytes")
     except Exception:
-        logger.warning("TTS failed for response, returning text only")
+        logger.exception(
+            "TTS failed for response, returning text only"
+        )
 
     return {
         "session_id": session.session_id,
