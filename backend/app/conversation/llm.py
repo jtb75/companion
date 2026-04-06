@@ -148,7 +148,25 @@ class GeminiClient(LLMClient):
                 contents,
                 generation_config=GenerationConfig(**gen_kwargs),
             )
-            return response.text
+            # Try response.text first, fall back to extracting
+            # from candidates if the model returned thinking
+            # tokens but no direct text
+            try:
+                return response.text
+            except ValueError:
+                # Try to get text from candidate parts
+                if response.candidates:
+                    for part in response.candidates[0].content.parts:
+                        if hasattr(part, "text") and part.text:
+                            return part.text
+                logger.warning(
+                    "Gemini returned no text content. "
+                    "Candidates: %s",
+                    len(response.candidates)
+                    if response.candidates
+                    else 0,
+                )
+                return self._fallback_response(messages)
         except Exception:
             logger.exception("Gemini API call failed")
             return self._fallback_response(messages)
