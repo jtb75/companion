@@ -1,7 +1,7 @@
 """Execute Gemini function calls against the service layer."""
 
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -403,10 +403,10 @@ async def _add_appointment(
         "id": str(appt.id),
         "provider": appt.provider_name,
         "at": appt.appointment_at.isoformat(),
-        "requires_confirmation": True,
-        "confirmation_message": (
-            f"Add appointment with {appt.provider_name} "
-            f"on {appt.appointment_at.strftime('%B %d')}?"
+        "message": (
+            f"Done. Appointment with {appt.provider_name} "
+            f"on {appt.appointment_at.strftime('%B %d')} "
+            f"has been added."
         ),
     }
 
@@ -478,24 +478,15 @@ async def _add_todo(
             await _mark_document_reviewed(db, review.document_id)
 
     await db.flush()
-    
-    # Determine confirmation message with relative date if possible
-    conf_msg = f"Add '{todo.title}' to your list?"
-    if due:
-        today = date.today()
-        if due == today:
-            conf_msg = f"Add '{todo.title}' to your list for today?"
-        elif due == today + timedelta(days=1):
-            conf_msg = f"Add '{todo.title}' to your list for tomorrow?"
-        else:
-            conf_msg = f"Add '{todo.title}' to your list for {due.strftime('%A')}?"
 
     return {
         "success": True,
         "id": str(todo.id),
         "title": todo.title,
-        "requires_confirmation": True,
-        "confirmation_message": conf_msg,
+        "message": (
+            f"Done. '{todo.title}' has been added to "
+            f"your to-do list."
+        ),
     }
 
 
@@ -522,8 +513,7 @@ async def _complete_todo(
         "success": True,
         "id": str(todo.id),
         "title": todo.title,
-        "requires_confirmation": True,
-        "confirmation_message": f"Add '{todo.title}' to your list?",
+        "message": f"Done. '{todo.title}' is checked off.",
     }
 
 
