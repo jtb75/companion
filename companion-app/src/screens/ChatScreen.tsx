@@ -1,15 +1,14 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
 import {
-  View, Text, TextInput, TouchableOpacity, FlatList,
+  View, Text, TextInput, TouchableOpacity, FlatList, Alert,
   StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native'
 import { useRoute } from '@react-navigation/native'
-import AudioRecorderPlayer from 'react-native-audio-recorder-player'
-import RNFS from 'react-native-fs'
+import { NativeModules } from 'react-native'
 import { api } from '../api/client'
-import { colors, brand } from '../theme/colors'
 
-const audioRecorderPlayer = new AudioRecorderPlayer()
+const { AudioPlayerModule } = NativeModules
+import { colors, brand } from '../theme/colors'
 
 interface Message {
   id: string
@@ -35,9 +34,7 @@ export function ChatScreen() {
   useEffect(() => {
     startSession()
     return () => {
-      // Clean up audio on unmount
-      audioRecorderPlayer.stopPlayer().catch(() => {})
-      audioRecorderPlayer.stopRecorder().catch(() => {})
+      AudioPlayerModule?.stopAudio().catch(() => {})
     }
   }, [reviewId])
 
@@ -83,98 +80,26 @@ export function ChatScreen() {
   const playAudio = async (base64Audio: string, messageId: string) => {
     try {
       setPlaying(messageId)
-      // Write base64 to temp file
-      const path = `${RNFS.TemporaryDirectoryPath}/dd_tts_${messageId}.mp3`
-      await RNFS.writeFile(path, base64Audio, 'base64')
-      await audioRecorderPlayer.startPlayer(path)
-      audioRecorderPlayer.addPlayBackListener((e) => {
-        if (e.currentPosition >= e.duration - 100) {
-          audioRecorderPlayer.stopPlayer()
-          audioRecorderPlayer.removePlayBackListener()
-          setPlaying(null)
-          // Clean up temp file
-          RNFS.unlink(path).catch(() => {})
-        }
-      })
-    } catch (err) {
+      await AudioPlayerModule.playBase64Audio(base64Audio)
+      // Auto-reset playing state after estimated duration
+      // (native module doesn't provide playback completion callback)
+      const estimatedDuration = Math.max(2000, base64Audio.length / 50)
+      setTimeout(() => setPlaying(null), estimatedDuration)
+    } catch (err: any) {
       console.log('[ChatScreen] Audio playback error:', err)
+      Alert.alert('Audio Error', String(err?.message || err))
       setPlaying(null)
     }
   }
 
   const startRecording = async () => {
-    try {
-      setRecording(true)
-      await audioRecorderPlayer.startRecorder(undefined, {
-        AVFormatIDKeyIOS: 'lpcm',
-        AVSampleRateKeyIOS: 16000,
-        AVNumberOfChannelsKeyIOS: 1,
-        AVLinearPCMBitDepthKeyIOS: 16,
-      })
-    } catch (err) {
-      console.log('[ChatScreen] Recording start error:', err)
-      setRecording(false)
-    }
+    // TODO: implement native recording module
+    Alert.alert('Coming Soon', 'Voice recording is coming in a future update. Use text for now.')
   }
 
   const stopRecordingAndSend = async () => {
-    try {
-      const result = await audioRecorderPlayer.stopRecorder()
-      setRecording(false)
-
-      if (!result || !sessionIdRef.current) return
-
-      // Read the recorded file as base64
-      const audioBase64 = await RNFS.readFile(result, 'base64')
-
-      // Show a "sending voice..." message
-      const userMsg: Message = {
-        id: Date.now().toString(),
-        role: 'user',
-        content: '🎤 Voice message',
-      }
-      setMessages((prev) => [...prev, userMsg])
-      setSending(true)
-
-      const res = await api<{ response: string; audio_data?: string }>(
-        '/api/v1/conversation/message',
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            text: '',
-            audio_data: audioBase64,
-          }),
-        },
-      )
-
-      // Update user message with transcribed text if available
-      const assistantMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: res.response,
-        audioData: res.audio_data || undefined,
-      }
-      setMessages((prev) => [...prev, assistantMsg])
-
-      // Auto-play response audio
-      if (res.audio_data) {
-        playAudio(res.audio_data, assistantMsg.id)
-      }
-    } catch (err) {
-      console.log('[ChatScreen] Voice send error:', err)
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: "Sorry, I couldn't hear that clearly. Could you try again?",
-        },
-      ])
-    } finally {
-      setSending(false)
-      // Clean up recorded file
-      RNFS.unlink(`${RNFS.TemporaryDirectoryPath}/sound.wav`).catch(() => {})
-    }
+    // Recording not yet implemented — placeholder
+    setRecording(false)
   }
 
   const sendMessage = useCallback(async () => {

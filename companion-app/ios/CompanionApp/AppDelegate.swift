@@ -1,3 +1,4 @@
+import AVFoundation
 import UIKit
 import UserNotifications
 import React
@@ -20,6 +21,18 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     FirebaseApp.configure()
     UNUserNotificationCenter.current().delegate = self
     application.registerForRemoteNotifications()
+
+    // Configure audio session for TTS playback
+    do {
+      try AVAudioSession.sharedInstance().setCategory(
+        .playback,
+        mode: .spokenAudio,
+        options: [.duckOthers]
+      )
+      try AVAudioSession.sharedInstance().setActive(true)
+    } catch {
+      print("Failed to configure audio session: \(error)")
+    }
     let delegate = ReactNativeDelegate()
     let factory = RCTReactNativeFactory(delegate: delegate)
     delegate.dependencyProvider = RCTAppDependencyProvider()
