@@ -126,6 +126,12 @@ jobs:
           terraform state rm 'module.networking.google_compute_firewall.deny_all_ingress' \
             2>/dev/null || echo "Deny-all firewall not in state"
 
+          # CI/CD module (WIF pool/provider) — don't destroy our own auth mechanism
+          terraform state rm 'module.cicd.google_iam_workload_identity_pool_provider.github' \
+            2>/dev/null || echo "WIF provider not in state"
+          terraform state rm 'module.cicd.google_iam_workload_identity_pool.github' \
+            2>/dev/null || echo "WIF pool not in state"
+
       # ── Terraform destroy ────────────────────────────────────────────────
       - name: Terraform destroy
         working-directory: infrastructure/terraform
