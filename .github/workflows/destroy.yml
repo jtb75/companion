@@ -1,0 +1,143 @@
+name: Destroy Infrastructure
+
+permissions:
+  contents: read
+  id-token: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to destroy'
+        required: true
+        type: choice
+        options:
+          - staging
+          - prod
+      confirm:
+        description: 'Type "destroy-ENVIRONMENT" to confirm (e.g. "destroy-staging")'
+        required: true
+        type: string
+
+env:
+  GCP_REGION: us-central1
+
+jobs:
+  # ── Safety gate ───────────────────────────────────────────────────────────
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      project_id: ${{ steps.env.outputs.project_id }}
+      wif_provider: ${{ steps.env.outputs.wif_provider }}
+      sa_email: ${{ steps.env.outputs.sa_email }}
+    steps:
+      - name: Confirm destruction
+        if: inputs.confirm != format('destroy-{0}', inputs.environment)
+        run: |
+          echo "::error::Destruction not confirmed. You must type 'destroy-${{ inputs.environment }}' to proceed."
+          exit 1
+
+      - name: Set environment-specific vars
+        id: env
+        run: |
+          if [ "${{ inputs.environment }}" = "staging" ]; then
+            echo "project_id=companion-staging-491606" >> "$GITHUB_OUTPUT"
+            echo "wif_provider=STAGING_WIF_PROVIDER" >> "$GITHUB_OUTPUT"
+            echo "sa_email=STAGING_SA_EMAIL" >> "$GITHUB_OUTPUT"
+          elif [ "${{ inputs.environment }}" = "prod" ]; then
+            echo "project_id=companion-prod-491606" >> "$GITHUB_OUTPUT"
+            echo "wif_provider=PROD_WIF_PROVIDER" >> "$GITHUB_OUTPUT"
+            echo "sa_email=PROD_SA_EMAIL" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Confirmed
+        run: echo "Destruction of ${{ inputs.environment }} confirmed"
+
+  # ── Destroy ───────────────────────────────────────────────────────────────
+  destroy:
+    needs: validate
+    runs-on: ubuntu-latest
+    env:
+      ENVIRONMENT: ${{ inputs.environment }}
+      GCP_PROJECT_ID: ${{ needs.validate.outputs.project_id }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets[needs.validate.outputs.wif_provider] }}
+          service_account: ${{ secrets[needs.validate.outputs.sa_email] }}
+
+      - uses: google-github-actions/setup-gcloud@v3
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.9.0"
+
+      - name: Terraform init
+        working-directory: infrastructure/terraform
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ env.GCP_PROJECT_ID }}-tf-state" \
+            -backend-config="prefix=${{ env.ENVIRONMENT }}"
+
+      # ── Pre-destroy: relax safeguards ────────────────────────────────────
+      - name: Disable Cloud SQL deletion protection
+        run: |
+          gcloud sql instances patch "companion-${{ env.ENVIRONMENT }}-db" \
+            --no-deletion-protection \
+            --project "${{ env.GCP_PROJECT_ID }}" \
+            --quiet \
+            2>/dev/null || echo "Cloud SQL instance not found (may already be deleted)"
+
+      - name: Empty GCS bucket (prod has force_destroy=false)
+        if: inputs.environment == 'prod'
+        run: |
+          gsutil -m rm -r "gs://companion-${{ env.ENVIRONMENT }}-documents/**" \
+            2>/dev/null || echo "Bucket empty or not found"
+
+      - name: Remove KMS key from Terraform state (cannot be destroyed)
+        working-directory: infrastructure/terraform
+        run: |
+          terraform state rm 'module.storage.google_kms_crypto_key.documents' \
+            2>/dev/null || echo "KMS key not in state"
+          terraform state rm 'module.storage.google_kms_key_ring.companion' \
+            2>/dev/null || echo "KMS keyring not in state"
+          terraform state rm 'module.storage.google_kms_crypto_key_iam_member.gcs_encrypt' \
+            2>/dev/null || echo "KMS IAM binding not in state"
+
+      # ── Terraform destroy ────────────────────────────────────────────────
+      - name: Terraform destroy
+        working-directory: infrastructure/terraform
+        run: |
+          terraform destroy -auto-approve \
+            -var-file="environments/${{ env.ENVIRONMENT }}.tfvars" \
+            -var="project_id=${{ env.GCP_PROJECT_ID }}" \
+            -var="backend_image=placeholder" \
+            -var="web_image=placeholder"
+
+      # ── Post-destroy: clean up resources outside Terraform ───────────────
+      - name: Delete Cloud Run migration job
+        run: |
+          gcloud run jobs delete "companion-${{ env.ENVIRONMENT }}-migrate" \
+            --region "${{ env.GCP_REGION }}" \
+            --project "${{ env.GCP_PROJECT_ID }}" \
+            --quiet \
+            2>/dev/null || echo "Migration job not found"
+
+      - name: Summary
+        run: |
+          echo "## Destruction complete" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Environment:** ${{ env.ENVIRONMENT }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Project:** ${{ env.GCP_PROJECT_ID }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Preserved (for redeployment)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Terraform state bucket: \`${{ env.GCP_PROJECT_ID }}-tf-state\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- GCP project: \`${{ env.GCP_PROJECT_ID }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- CI/CD service account: \`companion-cicd\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- KMS keyring & key (cannot be deleted by GCP)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### To redeploy" >> "$GITHUB_STEP_SUMMARY"
+          echo "Run the staging or prod deploy workflow — Terraform will recreate everything." >> "$GITHUB_STEP_SUMMARY"
